@@ -77,6 +77,31 @@ func (w *Worker) fetchTraces() (interface{}, error) {
 	return result, err
 }
 
+func queryRows() {
+	conn, err := Connect()
+	if err != nil {
+		log.Printf("Error connecting to ClickHouse: %v", err)
+	}
+	rows, err := conn.Query(context.Background(), "SELECT version()")
+	if err != nil {
+		log.Printf("Error querying ClickHouse: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var version string
+		err = rows.Scan(&version)
+		if err != nil {
+			log.Printf("Error scanning version: %v", err)
+		}
+		log.Printf("ClickHouse version: %s", version)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating rows: %v", err)
+	}
+}
+
 func (w *Worker) processData(block *types.Block, logs []types.Log, traces interface{}) {
 	log.Printf("Processing data for block %d", w.blockNumber)
 	log.Printf("Block %d has %d transactions and %d logs", w.blockNumber, len(block.Transactions()), len(logs))
@@ -84,6 +109,7 @@ func (w *Worker) processData(block *types.Block, logs []types.Log, traces interf
 	// TODO: Implement data processing logic
 	// This is where you would parse and store the block data, logs, and traces
 	// For now, we'll just log some basic information
+	queryRows()
 
 	if traces != nil {
 		log.Printf("Traces fetched for block %d", w.blockNumber)
