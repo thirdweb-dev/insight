@@ -7,6 +7,7 @@ import (
 type ConnectorConfig struct {
 	Driver string
 	Memory *MemoryConnectorConfig
+	Clickhouse *ClickhouseConnectorConfig
 }
 
 type StorageConnector interface {
@@ -21,6 +22,8 @@ func NewStorageConnector(
 	switch cfg.Driver {
 	case "memory":
 		return NewMemoryConnector(cfg.Memory)
+	case "clickhouse":
+		return NewClickHouseConnector(cfg.Clickhouse)
 	}
 
 	return nil, fmt.Errorf("invalid connector driver: %s", cfg.Driver)

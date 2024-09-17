@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/schema"
 	log "github.com/sirupsen/logrus"
 	"github.com/thirdweb-dev/indexer/api"
-	"github.com/thirdweb-dev/indexer/internal/tools"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 func GetBlocks(w http.ResponseWriter, r *http.Request) {
@@ -25,17 +25,16 @@ func GetBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := tools.ConnectDB()
+	conn, err := storage.ConnectDB()
 	if err != nil {
 		log.Error(err)
 		api.InternalErrorHandler(w)
 		return
 	}
 
-	row := conn.QueryRow(context.Background(), "SELECT block_hash FROM chainsaw.blocks LIMIT 1")
+	row := conn.QueryRow(context.Background(), "SELECT block_number FROM chainsaw.blocks LIMIT 1")
 	var blockNumber uint64
     err = row.Scan(&blockNumber)
-	fmt.Printf("valoue %v\n", blockNumber)
     if err != nil {
         log.Error(err)
         api.RequestErrorHandler(w, err)
