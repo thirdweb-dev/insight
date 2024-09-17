@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"os"
+
+	"github.com/thirdweb-dev/data-layer/src/internal/orchestrator"
 )
 
 func main() {
@@ -11,7 +13,7 @@ func main() {
 	if rpcURL == "" {
 		log.Fatalf("RPC_URL environment variable is not set")
 	}
-	orchestrator, err := NewOrchestrator(rpcURL)
+	orchestrator, err := orchestrator.NewOrchestrator(rpcURL)
 	if err != nil {
 		log.Fatalf("Failed to create orchestrator: %v", err)
 	}

@@ -1,4 +1,4 @@
-package main
+package orchestrator
 
 import (
 	"fmt"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/thirdweb-dev/data-layer/src/internal/worker"
 )
 
 const DEFAULT_FAILURES_PER_POLL = 10
@@ -81,7 +82,7 @@ func (fr *FailureRecoverer) Start() error {
 }
 
 func (fr *FailureRecoverer) triggerWorker(blockNumber uint64) {
-	worker := NewWorker(fr.rpcClient, fr.ethClient, blockNumber, fr.chainID, fr.supportsTracing)
+	worker := worker.NewWorker(fr.rpcClient, fr.ethClient, blockNumber, fr.chainID, fr.supportsTracing)
 	err := worker.FetchData()
 	if err != nil {
 		log.Printf("Error retrying block %d: %v", blockNumber, err)

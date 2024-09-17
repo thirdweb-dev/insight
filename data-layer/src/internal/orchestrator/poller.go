@@ -1,4 +1,4 @@
-package main
+package orchestrator
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/thirdweb-dev/data-layer/src/internal/worker"
 )
 
 const DEFAULT_BLOCKS_PER_POLL = 10
@@ -111,7 +112,7 @@ func (p *Poller) poll() {
 
 func (p *Poller) triggerWorker(blockNumber uint64) {
 	log.Printf("Processing block %d", blockNumber)
-	worker := NewWorker(p.rpcClient, p.ethClient, blockNumber, p.chainID, p.supportsTracing)
+	worker := worker.NewWorker(p.rpcClient, p.ethClient, blockNumber, p.chainID, p.supportsTracing)
 	err := worker.FetchData()
 	if err != nil {
 		log.Printf("Error processing block %d: %v", blockNumber, err)

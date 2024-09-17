@@ -1,15 +1,17 @@
-package main
+package orchestrator
 
 import (
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/thirdweb-dev/data-layer/src/internal/storage"
 )
 
 type OrchestratorStorageConfig struct {
 	Driver string
-	Memory *MemoryConnectorConfig
+	Memory *storage.MemoryConnectorConfig
 }
 
 type BlockFailure struct {
@@ -20,13 +22,13 @@ type BlockFailure struct {
 }
 
 type OrchestratorStorage struct {
-	storage StorageConnector
+	storage storage.StorageConnector
 }
 
 func NewOrchestratorStorage(
 	cfg *OrchestratorStorageConfig,
 ) (*OrchestratorStorage, error) {
-	storage, err := NewStorageConnector(&ConnectorConfig{
+	storage, err := storage.NewStorageConnector(&storage.ConnectorConfig{
 		Driver: cfg.Driver,
 		Memory: cfg.Memory,
 	})
