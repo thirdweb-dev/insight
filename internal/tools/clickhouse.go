@@ -11,7 +11,7 @@ import (
 )
 
 func ConnectDB() (clickhouse.Conn, error) {
-	// Load .env file
+	// TODO load .env in the mapi main file
 	err := godotenv.Load()
 	if err != nil {
 		return nil, fmt.Errorf("error loading .env file: %w", err)
