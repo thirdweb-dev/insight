@@ -26,7 +26,5 @@ func main() {
 		log.Fatalf("Failed to create orchestrator: %v", err)
 	}
 
-	if err := orchestrator.Start(); err != nil {
-		log.Fatalf("Orchestrator failed: %v", err)
-	}
+	orchestrator.Start()
 }

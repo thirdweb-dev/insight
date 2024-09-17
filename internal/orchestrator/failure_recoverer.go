@@ -39,16 +39,15 @@ func NewFailureRecoverer(rpc common.RPC, orchestratorStorage OrchestratorStorage
 	}
 }
 
-func (fr *FailureRecoverer) Start() error {
+func (fr *FailureRecoverer) Start() {
 	interval := time.Duration(fr.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	go func() error {
+	go func() {
 		for t := range ticker.C {
 			fmt.Println("Failure Recovery running at", t)
 
 			blockFailures, err := fr.orchestratorStorage.GetBlockFailures()
-
 			if err != nil {
 				log.Printf("Failed to get block failures: %s", err)
 				continue
@@ -57,28 +56,31 @@ func (fr *FailureRecoverer) Start() error {
 			log.Printf("Triggering workers for %d block failures", len(blockFailures))
 
 			var wg sync.WaitGroup
-			for _, failure := range blockFailures {
+			for _, blockFailure := range blockFailures {
 				wg.Add(1)
-				go func(failure BlockFailure) {
+				go func(blockFailure BlockFailure) {
 					defer wg.Done()
-					fr.triggerWorker(failure.BlockNumber)
-				}(failure)
+					err := fr.triggerWorker(blockFailure.BlockNumber)
+					if err != nil {
+						log.Printf("Error retrying block %d: %v", blockFailure.BlockNumber, err)
+						fr.orchestratorStorage.SaveBlockFailure(blockFailure)
+					} else {
+						err = fr.orchestratorStorage.DeleteBlockFailure(blockFailure.BlockNumber)
+						if err != nil {
+							log.Printf("Error deleting block failure for block %d: %v", blockFailure.BlockNumber, err)
+						}
+					}
+				}(blockFailure)
 			}
 			wg.Wait()
 		}
-		return nil
 	}()
 
 	// Keep the program running (otherwise it will exit)
 	select {}
 }
 
-func (fr *FailureRecoverer) triggerWorker(blockNumber uint64) {
+func (fr *FailureRecoverer) triggerWorker(blockNumber uint64) (err error) {
 	worker := worker.NewWorker(fr.rpc, blockNumber)
-	err := worker.FetchData()
-	if err != nil {
-		log.Printf("Error retrying block %d: %v", blockNumber, err)
-	} else {
-		log.Printf("Successfully retried block %d", blockNumber)
-	}
+	return worker.FetchData()
 }
