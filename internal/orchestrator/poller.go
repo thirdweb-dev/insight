@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/thirdweb-dev/data-layer/src/internal/worker"
+	"github.com/thirdweb-dev/data-layer/internal/worker"
 )
 
 const DEFAULT_BLOCKS_PER_POLL = 10

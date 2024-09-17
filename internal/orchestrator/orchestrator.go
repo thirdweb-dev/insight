@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/thirdweb-dev/data-layer/internal/worker"
 )
 
 // TODO: we should move this to CMD
@@ -128,7 +129,7 @@ func (o *Orchestrator) startPolling() error {
 
 func (o *Orchestrator) triggerWorker(blockNumber uint64) {
 	log.Printf("Processing block %d", blockNumber)
-	worker := NewWorker(o.rpcClient, o.ethClient, blockNumber, o.chainID, o.supportsTracing)
+	worker := worker.NewWorker(o.rpcClient, o.ethClient, blockNumber, o.chainID, o.supportsTracing)
 	err := worker.FetchData()
 	if err != nil {
 		log.Printf("Error processing block %d: %v", blockNumber, err)
