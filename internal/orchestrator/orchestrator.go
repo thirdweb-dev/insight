@@ -2,14 +2,18 @@ package orchestrator
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
 type Orchestrator struct {
-	rpc                 common.RPC
-	orchestratorStorage *OrchestratorStorage
+	rpc                     common.RPC
+	orchestratorStorage     *OrchestratorStorage
+	pollerEnabled           bool
+	failureRecovererEnabled bool
+	committerEnabled        bool
 }
 
 func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
@@ -21,39 +25,48 @@ func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
 	}
 
 	return &Orchestrator{
-		rpc:                 rpc,
-		orchestratorStorage: orchestratorStorage,
+		rpc:                     rpc,
+		orchestratorStorage:     orchestratorStorage,
+		pollerEnabled:           os.Getenv("DISABLE_POLLER") != "true",
+		failureRecovererEnabled: os.Getenv("DISABLE_FAILURE_RECOVERY") != "true",
+		committerEnabled:        os.Getenv("DISABLE_COMMITTER") != "true",
 	}, nil
 }
 
 func (o *Orchestrator) Start() error {
 	var wg sync.WaitGroup
-	wg.Add(3)
 
 	var pollerErr, recovererErr, commiterErr error
 
-	go func() {
-		defer wg.Done()
-		poller := NewPoller(o.rpc, *o.orchestratorStorage)
-		pollerErr = poller.Start()
-	}()
+	if o.pollerEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			poller := NewPoller(o.rpc, *o.orchestratorStorage)
+			pollerErr = poller.Start()
+		}()
+	}
 
-	go func() {
-		defer wg.Done()
-		failureRecoverer := NewFailureRecoverer(o.rpc, *o.orchestratorStorage)
-		recovererErr = failureRecoverer.Start()
-	}()
+	if o.failureRecovererEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			failureRecoverer := NewFailureRecoverer(o.rpc, *o.orchestratorStorage)
+			recovererErr = failureRecoverer.Start()
+		}()
+	}
 
-	go func() {
-		defer wg.Done()
-		commiter := NewCommiter()
-		commiterErr = commiter.Start()
-	}()
+	if o.committerEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			commiter := NewCommiter()
+			commiterErr = commiter.Start()
+		}()
+	}
 
-	// Wait for both goroutines to complete
 	wg.Wait()
 
-	// Check for errors
 	if pollerErr != nil {
 		return fmt.Errorf("poller error: %v", pollerErr)
 	}
