@@ -4,16 +4,24 @@ import (
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 )
 
 func main() {
-	log.SetOutput(os.Stdout)
-	rpcURL := os.Getenv("RPC_URL")
-	if rpcURL == "" {
-		log.Fatalf("RPC_URL environment variable is not set")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("error loading .env file: %v", err)
 	}
-	orchestrator, err := orchestrator.NewOrchestrator(rpcURL)
+
+	log.SetOutput(os.Stdout)
+	rpc, err := common.InitializeRPC()
+	if err != nil {
+		log.Fatalf("Failed to initialize RPC: %v", err)
+	}
+
+	orchestrator, err := orchestrator.NewOrchestrator(*rpc)
 	if err != nil {
 		log.Fatalf("Failed to create orchestrator: %v", err)
 	}

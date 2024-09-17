@@ -8,30 +8,24 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/tools"
 )
 
 type Worker struct {
-	rpcClient       *rpc.Client
-	ethClient       *ethclient.Client
-	blockNumber     uint64
-	chainID         *big.Int
-	supportsTracing bool
+	rpc         common.RPC
+	blockNumber uint64
 }
 
-func NewWorker(rpcClient *rpc.Client, ethClient *ethclient.Client, blockNumber uint64, chainID *big.Int, supportsTracing bool) *Worker {
+func NewWorker(rpc common.RPC, blockNumber uint64) *Worker {
 	return &Worker{
-		rpcClient:       rpcClient,
-		ethClient:       ethClient,
-		blockNumber:     blockNumber,
-		chainID:         chainID,
-		supportsTracing: supportsTracing,
+		rpc:         rpc,
+		blockNumber: blockNumber,
 	}
 }
 
 func (w *Worker) FetchData() error {
-	log.Printf("Fetching data for block %d (Chain ID: %v)", w.blockNumber, w.chainID)
+	log.Printf("Fetching data for block %d (Chain ID: %v)", w.blockNumber, w.rpc.ChainID)
 
 	// Fetch block data
 	block, err := w.fetchBlock()
@@ -47,7 +41,7 @@ func (w *Worker) FetchData() error {
 
 	// Fetch traces if supported
 	var traces interface{}
-	if w.supportsTracing {
+	if w.rpc.SupportsTraceBlock {
 		traces, err = w.fetchTraces()
 		if err != nil {
 			log.Printf("Error fetching traces for block %d: %v", w.blockNumber, err)
@@ -61,11 +55,11 @@ func (w *Worker) FetchData() error {
 }
 
 func (w *Worker) fetchBlock() (*types.Block, error) {
-	return w.ethClient.BlockByNumber(context.Background(), big.NewInt(int64(w.blockNumber)))
+	return w.rpc.EthClient.BlockByNumber(context.Background(), big.NewInt(int64(w.blockNumber)))
 }
 
 func (w *Worker) fetchLogs() ([]types.Log, error) {
-	return w.ethClient.FilterLogs(context.Background(), ethereum.FilterQuery{
+	return w.rpc.EthClient.FilterLogs(context.Background(), ethereum.FilterQuery{
 		FromBlock: big.NewInt(int64(w.blockNumber)),
 		ToBlock:   big.NewInt(int64(w.blockNumber)),
 	})
@@ -73,12 +67,12 @@ func (w *Worker) fetchLogs() ([]types.Log, error) {
 
 func (w *Worker) fetchTraces() (interface{}, error) {
 	var result interface{}
-	err := w.rpcClient.Call(&result, "trace_block", fmt.Sprintf("0x%x", w.blockNumber))
+	err := w.rpc.RPCClient.Call(&result, "trace_block", fmt.Sprintf("0x%x", w.blockNumber))
 	return result, err
 }
 
 func queryRows() {
-	conn, err := Connect()
+	conn, err := tools.ConnectDB()
 	if err != nil {
 		log.Printf("Error connecting to ClickHouse: %v", err)
 	}

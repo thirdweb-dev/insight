@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
@@ -19,17 +17,14 @@ const DEFAULT_BLOCKS_PER_POLL = 10
 const DEFAULT_TRIGGER_INTERVAL = 1000
 
 type Poller struct {
-	rpcClient           *rpc.Client
-	ethClient           *ethclient.Client
-	chainID             *big.Int
-	supportsTracing     bool
+	rpc                 common.RPC
 	blocksPerPoll       int
 	triggerIntervalMs   int
 	orchestratorStorage OrchestratorStorage
 	lastPolledBlock     uint64
 }
 
-func NewPoller(rpcClient *rpc.Client, ethClient *ethclient.Client, chainID *big.Int, supportsTracing bool, orchestratorStorage OrchestratorStorage) *Poller {
+func NewPoller(rpc common.RPC, orchestratorStorage OrchestratorStorage) *Poller {
 	blocksPerPoll, err := strconv.Atoi(os.Getenv("BLOCKS_PER_POLL"))
 	if err != nil || blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -39,10 +34,7 @@ func NewPoller(rpcClient *rpc.Client, ethClient *ethclient.Client, chainID *big.
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
 	return &Poller{
-		rpcClient:           rpcClient,
-		ethClient:           ethClient,
-		chainID:             chainID,
-		supportsTracing:     supportsTracing,
+		rpc:                 rpc,
 		triggerIntervalMs:   triggerInterval,
 		blocksPerPoll:       blocksPerPoll,
 		orchestratorStorage: orchestratorStorage,
@@ -57,7 +49,7 @@ func (p *Poller) Start() error {
 		for t := range ticker.C {
 			fmt.Println("Poller running at", t)
 
-			latestBlock, err := p.ethClient.BlockNumber(context.Background())
+			latestBlock, err := p.rpc.EthClient.BlockNumber(context.Background())
 			if err != nil {
 				return fmt.Errorf("failed to get latest block number: %v", err)
 			}
@@ -112,7 +104,7 @@ func (p *Poller) poll() {
 
 func (p *Poller) triggerWorker(blockNumber uint64) {
 	log.Printf("Processing block %d", blockNumber)
-	worker := worker.NewWorker(p.rpcClient, p.ethClient, blockNumber, p.chainID, p.supportsTracing)
+	worker := worker.NewWorker(p.rpc, blockNumber)
 	err := worker.FetchData()
 	if err != nil {
 		log.Printf("Error processing block %d: %v", blockNumber, err)

@@ -3,14 +3,12 @@ package orchestrator
 import (
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
@@ -21,13 +19,10 @@ type FailureRecoverer struct {
 	failuresPerPoll     int
 	triggerIntervalMs   int
 	orchestratorStorage OrchestratorStorage
-	rpcClient           *rpc.Client
-	ethClient           *ethclient.Client
-	chainID             *big.Int
-	supportsTracing     bool
+	rpc                 common.RPC
 }
 
-func NewFailureRecoverer(rpcClient *rpc.Client, ethClient *ethclient.Client, chainID *big.Int, supportsTracing bool, orchestratorStorage OrchestratorStorage) *FailureRecoverer {
+func NewFailureRecoverer(rpc common.RPC, orchestratorStorage OrchestratorStorage) *FailureRecoverer {
 	failuresPerPoll, err := strconv.Atoi(os.Getenv("FAILURES_PER_POLL"))
 	if err != nil || failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
@@ -40,10 +35,7 @@ func NewFailureRecoverer(rpcClient *rpc.Client, ethClient *ethclient.Client, cha
 		triggerIntervalMs:   triggerInterval,
 		failuresPerPoll:     failuresPerPoll,
 		orchestratorStorage: orchestratorStorage,
-		rpcClient:           rpcClient,
-		ethClient:           ethClient,
-		chainID:             chainID,
-		supportsTracing:     supportsTracing,
+		rpc:                 rpc,
 	}
 }
 
@@ -82,7 +74,7 @@ func (fr *FailureRecoverer) Start() error {
 }
 
 func (fr *FailureRecoverer) triggerWorker(blockNumber uint64) {
-	worker := worker.NewWorker(fr.rpcClient, fr.ethClient, blockNumber, fr.chainID, fr.supportsTracing)
+	worker := worker.NewWorker(fr.rpc, blockNumber)
 	err := worker.FetchData()
 	if err != nil {
 		log.Printf("Error retrying block %d: %v", blockNumber, err)
