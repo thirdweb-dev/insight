@@ -36,14 +36,14 @@ func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
 func (o *Orchestrator) Start() error {
 	var wg sync.WaitGroup
 
-	var pollerErr, recovererErr, commiterErr error
+	var recovererErr, commiterErr error
 
 	if o.pollerEnabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			poller := NewPoller(o.rpc, *o.orchestratorStorage)
-			pollerErr = poller.Start()
+			poller.Start()
 		}()
 	}
 
@@ -67,9 +67,6 @@ func (o *Orchestrator) Start() error {
 
 	wg.Wait()
 
-	if pollerErr != nil {
-		return fmt.Errorf("poller error: %v", pollerErr)
-	}
 	if recovererErr != nil {
 		return fmt.Errorf("failure recoverer error: %v", recovererErr)
 	}
