@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// TODO: we should move this to CMD
 type Orchestrator struct {
 	rpcClient       *rpc.Client
 	ethClient       *ethclient.Client
