@@ -4,16 +4,18 @@ import (
 	"log"
 	"os"
 
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 )
 
 func main() {
 	log.SetOutput(os.Stdout)
-	rpcURL := os.Getenv("RPC_URL")
-	if rpcURL == "" {
-		log.Fatalf("RPC_URL environment variable is not set")
+	rpc, err := common.InitializeRPC()
+	if err != nil {
+		log.Fatalf("Failed to initialize RPC: %v", err)
 	}
-	orchestrator, err := orchestrator.NewOrchestrator(rpcURL)
+
+	orchestrator, err := orchestrator.NewOrchestrator(*rpc)
 	if err != nil {
 		log.Fatalf("Failed to create orchestrator: %v", err)
 	}
