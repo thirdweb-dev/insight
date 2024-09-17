@@ -10,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func Connect() (clickhouse.Conn, error) {
+func ConnectDB() (clickhouse.Conn, error) {
 	// Load .env file
 	err := godotenv.Load()
 	if err != nil {
@@ -25,8 +25,9 @@ func Connect() (clickhouse.Conn, error) {
 
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%d", os.Getenv("CLICKHOUSE_HOST"), port)},
+		// Protocol: clickhouse.Native,
+		// TLS: &tls.Config{}, // enable secure TLS
 		Auth: clickhouse.Auth{
-			Database: os.Getenv("CLICKHOUSE_DATABASE"),
 			Username: os.Getenv("CLICKHOUSE_USERNAME"),
 			Password: os.Getenv("CLICKHOUSE_PASSWORD"),
 		},
