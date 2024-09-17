@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"fmt"
 	"os"
 	"sync"
 
@@ -33,10 +32,8 @@ func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
 	}, nil
 }
 
-func (o *Orchestrator) Start() error {
+func (o *Orchestrator) Start() {
 	var wg sync.WaitGroup
-
-	var recovererErr error
 
 	if o.pollerEnabled {
 		wg.Add(1)
@@ -52,7 +49,7 @@ func (o *Orchestrator) Start() error {
 		go func() {
 			defer wg.Done()
 			failureRecoverer := NewFailureRecoverer(o.rpc, *o.orchestratorStorage)
-			recovererErr = failureRecoverer.Start()
+			failureRecoverer.Start()
 		}()
 	}
 
@@ -66,9 +63,4 @@ func (o *Orchestrator) Start() error {
 	}
 
 	wg.Wait()
-
-	if recovererErr != nil {
-		return fmt.Errorf("failure recoverer error: %v", recovererErr)
-	}
-	return nil
 }

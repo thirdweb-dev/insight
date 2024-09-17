@@ -73,14 +73,26 @@ func (s *OrchestratorStorage) GetBlockFailures() ([]BlockFailure, error) {
 
 func (s *OrchestratorStorage) SaveBlockFailures(blockFailures []BlockFailure) error {
 	for _, failure := range blockFailures {
-		failureJson, err := marshalJSON(failure)
+		err := s.SaveBlockFailure(failure)
 		if err != nil {
-			return fmt.Errorf("failed to marshal block failure for block %d: %v", failure.BlockNumber, err)
+			return err
 		}
-
-		s.storage.Set("block_failures", string(failure.BlockNumber), string(failureJson))
 	}
 	return nil
+}
+
+func (s *OrchestratorStorage) SaveBlockFailure(blockFailure BlockFailure) error {
+	failureJson, err := marshalJSON(blockFailure)
+	if err != nil {
+		return fmt.Errorf("failed to marshal block failure for block %d: %v", blockFailure.BlockNumber, err)
+	}
+
+	s.storage.Set("block_failures", string(blockFailure.BlockNumber), string(failureJson))
+	return nil
+}
+
+func (s *OrchestratorStorage) DeleteBlockFailure(blockNumber uint64) error {
+	return s.storage.Delete("", "block_failures", strconv.FormatUint(blockNumber, 10))
 }
 
 func marshalJSON(blockFailure BlockFailure) (string, error) {

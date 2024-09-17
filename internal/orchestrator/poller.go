@@ -109,13 +109,11 @@ func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error)
 }
 
 func (p *Poller) markBlockAsErrored(blockNumber uint64, blockError error) {
-	err := p.orchestratorStorage.SaveBlockFailures([]BlockFailure{
-		{
-			BlockNumber:   blockNumber,
-			FailureReason: blockError.Error(),
-			FailureTime:   time.Now(),
-			ChainId:       p.rpc.ChainID,
-		},
+	err := p.orchestratorStorage.SaveBlockFailure(BlockFailure{
+		BlockNumber:   blockNumber,
+		FailureReason: blockError.Error(),
+		FailureTime:   time.Now(),
+		ChainId:       p.rpc.ChainID,
 	})
 	if err != nil {
 		log.Fatalf("Error setting block %d as errored: %v", blockNumber, err)
