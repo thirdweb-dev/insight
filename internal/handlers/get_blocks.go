@@ -31,7 +31,7 @@ func GetBlocks(w http.ResponseWriter, r *http.Request) {
 		api.InternalErrorHandler(w)
 		return
 	}
-	defer conn.Close()
+	// defer conn.Close()
 
 	row := conn.QueryRow(context.Background(), "SELECT block_hash FROM chainsaw.blocks LIMIT 1")
 	var blockHash string
@@ -55,4 +55,6 @@ func GetBlocks(w http.ResponseWriter, r *http.Request) {
 		api.InternalErrorHandler(w)
 		return
 	}
+	
+	defer conn.Close()
 }
