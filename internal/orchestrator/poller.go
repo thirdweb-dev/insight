@@ -41,37 +41,19 @@ func NewPoller(rpc common.RPC, orchestratorStorage OrchestratorStorage) *Poller 
 	}
 }
 
-func (p *Poller) Start() error {
+func (p *Poller) Start() {
 	interval := time.Duration(p.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	go func() error {
+	go func() {
 		for t := range ticker.C {
 			fmt.Println("Poller running at", t)
 
-			latestBlock, err := p.rpc.EthClient.BlockNumber(context.Background())
+			startBlock, endBlock, err := p.getBlockRange()
 			if err != nil {
-				return fmt.Errorf("failed to get latest block number: %v", err)
+				log.Printf("Error getting block range: %v", err)
+				continue
 			}
-			log.Printf("Latest block: %v", latestBlock)
-
-			lastPolledBlock, err := p.orchestratorStorage.GetLastPolledBlock()
-			log.Printf("Last polled block: %v", lastPolledBlock)
-			if err != nil {
-				log.Printf("No last polled block found, starting from genesis %s", err)
-				lastPolledBlock = 0
-			}
-
-			startBlock := lastPolledBlock
-			if startBlock != 0 {
-				startBlock = startBlock + 1
-			}
-			log.Printf("Starting at block %v", startBlock)
-			endBlock := startBlock + uint64(p.blocksPerPoll)
-			if endBlock > latestBlock {
-				endBlock = latestBlock
-			}
-			log.Printf("Ending at block %v", endBlock)
 
 			var wg sync.WaitGroup
 			for blockNumber := startBlock; blockNumber <= endBlock; blockNumber++ {
@@ -79,7 +61,13 @@ func (p *Poller) Start() error {
 				wg.Add(1)
 				go func(bn uint64) {
 					defer wg.Done()
-					p.triggerWorker(bn)
+					err := p.triggerWorker(bn)
+					if err != nil {
+						log.Printf("Error processing block %d: %v", blockNumber, err)
+						p.markBlockAsErrored(bn, err)
+					} else {
+						log.Printf("Successfully processed block %d", blockNumber)
+					}
 				}(blockNumber)
 			}
 			wg.Wait()
@@ -91,24 +79,51 @@ func (p *Poller) Start() error {
 				p.lastPolledBlock = endBlock
 			}
 		}
-		return nil
 	}()
 
 	// Keep the program running (otherwise it will exit)
 	select {}
 }
 
-func (p *Poller) poll() {
+func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error) {
+	latestBlock, err := p.rpc.EthClient.BlockNumber(context.Background())
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get latest block number: %v", err)
+	}
 
+	lastPolledBlock, err := p.orchestratorStorage.GetLastPolledBlock()
+	if err != nil {
+		log.Printf("No last polled block found, starting from genesis %s", err)
+		lastPolledBlock = 0
+	}
+
+	startBlock = lastPolledBlock
+	if startBlock != 0 {
+		startBlock = startBlock + 1 // do not skip genesis
+	}
+	endBlock = startBlock + uint64(p.blocksPerPoll)
+	if endBlock > latestBlock {
+		endBlock = latestBlock
+	}
+	return startBlock, endBlock, nil
 }
 
-func (p *Poller) triggerWorker(blockNumber uint64) {
+func (p *Poller) markBlockAsErrored(blockNumber uint64, blockError error) {
+	err := p.orchestratorStorage.SaveBlockFailures([]BlockFailure{
+		{
+			BlockNumber:   blockNumber,
+			FailureReason: blockError.Error(),
+			FailureTime:   time.Now(),
+			ChainId:       p.rpc.ChainID,
+		},
+	})
+	if err != nil {
+		log.Fatalf("Error setting block %d as errored: %v", blockNumber, err)
+	}
+}
+
+func (p *Poller) triggerWorker(blockNumber uint64) (err error) {
 	log.Printf("Processing block %d", blockNumber)
 	worker := worker.NewWorker(p.rpc, blockNumber)
-	err := worker.FetchData()
-	if err != nil {
-		log.Printf("Error processing block %d: %v", blockNumber, err)
-	} else {
-		log.Printf("Successfully processed block %d", blockNumber)
-	}
+	return worker.FetchData()
 }
