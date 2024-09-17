@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
-	storage "github.com/thirdweb-dev/indexer/internal/storage/orchestrator"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
@@ -17,13 +17,13 @@ const DEFAULT_FAILURES_PER_POLL = 10
 const DEFAULT_FAILURE_TRIGGER_INTERVAL = 1000
 
 type FailureRecoverer struct {
-	failuresPerPoll     int
-	triggerIntervalMs   int
-	orchestratorStorage storage.OrchestratorStorage
-	rpc                 common.RPC
+	failuresPerPoll   int
+	triggerIntervalMs int
+	storage           storage.IStorage
+	rpc               common.RPC
 }
 
-func NewFailureRecoverer(rpc common.RPC, orchestratorStorage storage.OrchestratorStorage) *FailureRecoverer {
+func NewFailureRecoverer(rpc common.RPC, storage storage.IStorage) *FailureRecoverer {
 	failuresPerPoll, err := strconv.Atoi(os.Getenv("FAILURES_PER_POLL"))
 	if err != nil || failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
@@ -33,10 +33,10 @@ func NewFailureRecoverer(rpc common.RPC, orchestratorStorage storage.Orchestrato
 		triggerInterval = DEFAULT_FAILURE_TRIGGER_INTERVAL
 	}
 	return &FailureRecoverer{
-		triggerIntervalMs:   triggerInterval,
-		failuresPerPoll:     failuresPerPoll,
-		orchestratorStorage: orchestratorStorage,
-		rpc:                 rpc,
+		triggerIntervalMs: triggerInterval,
+		failuresPerPoll:   failuresPerPoll,
+		storage:           storage,
+		rpc:               rpc,
 	}
 }
 
@@ -48,7 +48,7 @@ func (fr *FailureRecoverer) Start() {
 		for t := range ticker.C {
 			fmt.Println("Failure Recovery running at", t)
 
-			blockFailures, err := fr.orchestratorStorage.GetBlockFailures(fr.failuresPerPoll)
+			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(fr.failuresPerPoll)
 			if err != nil {
 				log.Printf("Failed to get block failures: %s", err)
 				continue
@@ -64,9 +64,9 @@ func (fr *FailureRecoverer) Start() {
 					err := fr.triggerWorker(blockFailure.BlockNumber)
 					if err != nil {
 						log.Printf("Error retrying block %d: %v", blockFailure.BlockNumber, err)
-						fr.orchestratorStorage.StoreBlockFailures([]common.BlockFailure{blockFailure})
+						fr.storage.OrchestratorStorage.StoreBlockFailures([]common.BlockFailure{blockFailure})
 					} else {
-						err = fr.orchestratorStorage.DeleteBlockFailures([]common.BlockFailure{blockFailure})
+						err = fr.storage.OrchestratorStorage.DeleteBlockFailures([]common.BlockFailure{blockFailure})
 						if err != nil {
 							log.Printf("Error deleting block failure for block %d: %v", blockFailure.BlockNumber, err)
 						}
@@ -82,6 +82,6 @@ func (fr *FailureRecoverer) Start() {
 }
 
 func (fr *FailureRecoverer) triggerWorker(blockNumber uint64) (err error) {
-	worker := worker.NewWorker(fr.rpc, blockNumber)
+	worker := worker.NewWorker(fr.rpc, fr.storage, blockNumber)
 	return worker.FetchData()
 }

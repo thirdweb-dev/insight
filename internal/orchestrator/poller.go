@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
-	storage "github.com/thirdweb-dev/indexer/internal/storage/orchestrator"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
@@ -18,14 +18,14 @@ const DEFAULT_BLOCKS_PER_POLL = 10
 const DEFAULT_TRIGGER_INTERVAL = 1000
 
 type Poller struct {
-	rpc                 common.RPC
-	blocksPerPoll       int
-	triggerIntervalMs   int
-	orchestratorStorage storage.OrchestratorStorage
-	lastPolledBlock     uint64
+	rpc               common.RPC
+	blocksPerPoll     int
+	triggerIntervalMs int
+	storage           storage.IStorage
+	lastPolledBlock   uint64
 }
 
-func NewPoller(rpc common.RPC, orchestratorStorage storage.OrchestratorStorage) *Poller {
+func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 	blocksPerPoll, err := strconv.Atoi(os.Getenv("BLOCKS_PER_POLL"))
 	if err != nil || blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -35,10 +35,10 @@ func NewPoller(rpc common.RPC, orchestratorStorage storage.OrchestratorStorage) 
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
 	return &Poller{
-		rpc:                 rpc,
-		triggerIntervalMs:   triggerInterval,
-		blocksPerPoll:       blocksPerPoll,
-		orchestratorStorage: orchestratorStorage,
+		rpc:               rpc,
+		triggerIntervalMs: triggerInterval,
+		blocksPerPoll:     blocksPerPoll,
+		storage:           storage,
 	}
 }
 
@@ -73,7 +73,7 @@ func (p *Poller) Start() {
 			}
 			wg.Wait()
 
-			saveErr := p.orchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
+			saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
 			if saveErr != nil {
 				log.Printf("Error updating last polled block: %v", saveErr)
 			} else {
@@ -92,7 +92,7 @@ func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error)
 		return 0, 0, fmt.Errorf("failed to get latest block number: %v", err)
 	}
 
-	lastPolledBlock, err := p.orchestratorStorage.GetLatestPolledBlockNumber()
+	lastPolledBlock, err := p.storage.OrchestratorStorage.GetLatestPolledBlockNumber()
 	if err != nil {
 		log.Printf("No last polled block found, starting from genesis %s", err)
 		lastPolledBlock = 0
@@ -110,7 +110,7 @@ func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error)
 }
 
 func (p *Poller) markBlockAsErrored(blockNumber uint64, blockError error) {
-	err := p.orchestratorStorage.StoreBlockFailures([]common.BlockFailure{
+	err := p.storage.OrchestratorStorage.StoreBlockFailures([]common.BlockFailure{
 		{
 			BlockNumber:   blockNumber,
 			FailureReason: blockError.Error(),
@@ -126,6 +126,6 @@ func (p *Poller) markBlockAsErrored(blockNumber uint64, blockError error) {
 
 func (p *Poller) triggerWorker(blockNumber uint64) (err error) {
 	log.Printf("Processing block %d", blockNumber)
-	worker := worker.NewWorker(p.rpc, blockNumber)
+	worker := worker.NewWorker(p.rpc, p.storage, blockNumber)
 	return worker.FetchData()
 }
