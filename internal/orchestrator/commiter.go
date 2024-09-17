@@ -30,11 +30,11 @@ func NewCommiter() *Commiter {
 	}
 }
 
-func (c *Commiter) Start() error {
+func (c *Commiter) Start() {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	go func() error {
+	go func() {
 		for t := range ticker.C {
 			fmt.Println("Commiter running at", t)
 			// TODO: fetch max block number from main table
@@ -42,7 +42,6 @@ func (c *Commiter) Start() error {
 			// TODO: save to main table
 			// TODO: delete from staging table
 		}
-		return nil
 	}()
 
 	// Keep the program running (otherwise it will exit)
