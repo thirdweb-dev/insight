@@ -5,18 +5,19 @@ import (
 	"sync"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
+	storage "github.com/thirdweb-dev/indexer/internal/storage/orchestrator"
 )
 
 type Orchestrator struct {
 	rpc                     common.RPC
-	orchestratorStorage     *OrchestratorStorage
+	orchestratorStorage     storage.OrchestratorStorage
 	pollerEnabled           bool
 	failureRecovererEnabled bool
 	committerEnabled        bool
 }
 
 func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
-	orchestratorStorage, err := NewOrchestratorStorage(&OrchestratorStorageConfig{
+	orchestratorStorage, err := storage.NewOrchestratorStorage(&storage.StorageConfig{
 		Driver: "memory",
 	})
 	if err != nil {
@@ -39,7 +40,7 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			poller := NewPoller(o.rpc, *o.orchestratorStorage)
+			poller := NewPoller(o.rpc, o.orchestratorStorage)
 			poller.Start()
 		}()
 	}
@@ -48,7 +49,7 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			failureRecoverer := NewFailureRecoverer(o.rpc, *o.orchestratorStorage)
+			failureRecoverer := NewFailureRecoverer(o.rpc, o.orchestratorStorage)
 			failureRecoverer.Start()
 		}()
 	}
