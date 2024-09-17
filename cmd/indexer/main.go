@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/thirdweb-dev/data-layer/internal/orchestrator"
+	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 )
 
 func main() {

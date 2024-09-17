@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/thirdweb-dev/data-layer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 type OrchestratorStorageConfig struct {

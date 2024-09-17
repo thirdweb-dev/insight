@@ -1,12 +1,12 @@
 package main
 
 import (
-    "fmt"
-    "net/http"
+	"fmt"
+	"net/http"
 
-    "github.com/go-chi/chi/v5"
-    log "github.com/sirupsen/logrus"
-    "github.com/thirdweb-dev/data-layer/internal/handlers"
+	"github.com/go-chi/chi/v5"
+	log "github.com/sirupsen/logrus"
+	"github.com/thirdweb-dev/indexer/internal/handlers"
 )
 
 func main() {

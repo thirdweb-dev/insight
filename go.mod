@@ -1,4 +1,4 @@
-module github.com/thirdweb-dev/data-layer
+module github.com/thirdweb-dev/indexer
 
 go 1.22.0
 
@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/chi v1.5.4
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/gorilla/schema v1.2.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/joho/godotenv v1.5.1
 	github.com/sirupsen/logrus v1.9.3
 )
@@ -29,7 +30,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect

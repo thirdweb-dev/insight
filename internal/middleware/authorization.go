@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/thirdweb-dev/data-layer/api"
+	"github.com/thirdweb-dev/indexer/api"
 )
 
 var ErrUnauthorized = fmt.Errorf("invalid username or password")

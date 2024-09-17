@@ -8,8 +8,8 @@ import (
 
 	"github.com/gorilla/schema"
 	log "github.com/sirupsen/logrus"
-	"github.com/thirdweb-dev/data-layer/api"
-	"github.com/thirdweb-dev/data-layer/internal/tools"
+	"github.com/thirdweb-dev/indexer/api"
+	"github.com/thirdweb-dev/indexer/internal/tools"
 )
 
 func GetBlocks(w http.ResponseWriter, r *http.Request) {
@@ -31,20 +31,19 @@ func GetBlocks(w http.ResponseWriter, r *http.Request) {
 		api.InternalErrorHandler(w)
 		return
 	}
-	// defer conn.Close()
 
 	row := conn.QueryRow(context.Background(), "SELECT block_hash FROM chainsaw.blocks LIMIT 1")
-	var blockHash string
-    err = row.Scan(&blockHash)
-	fmt.Printf("valoue %v\n", blockHash)
+	var blockNumber uint64
+    err = row.Scan(&blockNumber)
+	fmt.Printf("valoue %v\n", blockNumber)
     if err != nil {
         log.Error(err)
-        api.InternalErrorHandler(w)
+        api.RequestErrorHandler(w, err)
         return
     }
 
     var response = api.QueryResponse{
-        Result: blockHash,
+        Result: fmt.Sprintf("%d", blockNumber),
         Code:   http.StatusOK,
     }
 
@@ -55,6 +54,6 @@ func GetBlocks(w http.ResponseWriter, r *http.Request) {
 		api.InternalErrorHandler(w)
 		return
 	}
-	
+
 	defer conn.Close()
 }
