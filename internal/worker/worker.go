@@ -9,17 +9,19 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/thirdweb-dev/indexer/internal/common"
-	"github.com/thirdweb-dev/indexer/internal/tools"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 type Worker struct {
 	rpc         common.RPC
+	storage     storage.IStorage
 	blockNumber uint64
 }
 
-func NewWorker(rpc common.RPC, blockNumber uint64) *Worker {
+func NewWorker(rpc common.RPC, storage storage.IStorage, blockNumber uint64) *Worker {
 	return &Worker{
 		rpc:         rpc,
+		storage:     storage,
 		blockNumber: blockNumber,
 	}
 }
@@ -71,12 +73,9 @@ func (w *Worker) fetchTraces() (interface{}, error) {
 	return result, err
 }
 
-func queryRows() {
-	conn, err := tools.ConnectDB()
-	if err != nil {
-		log.Printf("Error connecting to ClickHouse: %v", err)
-	}
-	rows, err := conn.Query(context.Background(), "SELECT version()")
+func (w *Worker) queryRows() {
+	// TODO: Implement this
+	/*rows, err := w.storage.DBStorage.Query(context.Background(), "SELECT version()")
 	if err != nil {
 		log.Printf("Error querying ClickHouse: %v", err)
 	}
@@ -94,6 +93,7 @@ func queryRows() {
 	if err := rows.Err(); err != nil {
 		log.Printf("Error iterating rows: %v", err)
 	}
+	*/
 }
 
 func (w *Worker) processData(block *types.Block, logs []types.Log, traces interface{}) {
@@ -103,7 +103,7 @@ func (w *Worker) processData(block *types.Block, logs []types.Log, traces interf
 	// TODO: Implement data processing logic
 	// This is where you would parse and store the block data, logs, and traces
 	// For now, we'll just log some basic information
-	queryRows()
+	// queryRows()
 
 	if traces != nil {
 		log.Printf("Traces fetched for block %d", w.blockNumber)

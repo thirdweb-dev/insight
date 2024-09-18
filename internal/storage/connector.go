@@ -2,18 +2,21 @@ package storage
 
 import (
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
 type ConnectorConfig struct {
-	Driver string
-	Memory *MemoryConnectorConfig
+	Driver     string
+	Memory     *MemoryConnectorConfig
 	Clickhouse *ClickhouseConnectorConfig
 }
 
 type IStorage struct {
 	IStorageBase
-	Cache 	IStorageCache
-	DB 		IStorageDB
+	OrchestratorStorage IOrchestratorStorage
+	DBStorage           IDBStorage
 }
 
 type IStorageBase interface {
@@ -21,18 +24,25 @@ type IStorageBase interface {
 	close() error
 }
 
-type IStorageCache interface {
-	queryCache(index, partitionKey, rangeKey string) (string, error)
-	setCache(partitionKey, rangeKey, value string) error
-	purgeCache(index, partitionKey, rangeKey string) error
+type IOrchestratorStorage interface {
+	GetLatestPolledBlockNumber() (blockNumber uint64, err error)
+	StoreLatestPolledBlockNumber(blockNumber uint64) error
+
+	GetBlockFailures(limit int) ([]common.BlockFailure, error)
+	StoreBlockFailures(failures []common.BlockFailure) error
+	DeleteBlockFailures(failures []common.BlockFailure) error
 }
 
-type IStorageDB interface {
-	query(query string) (string, error)
-	insert(query string) error
-	delete(query string) error
-}
+type IDBStorage interface {
+	InsertBlocks(blocks []types.Block) error
+	InsertTransactions(txs []types.Transaction) error
+	InsertEvents(events []types.Log) error
 
+	GetBlocks(limit int) (events []*types.Block, err error)
+	GetTransactions(blockNumber uint64, limit int) (events []*types.Transaction, err error)
+	GetEvents(blockNumber uint64, limit int) (events []*types.Log, err error)
+	GetMaxBlockNumber() (maxBlockNumber uint64, err error)
+}
 
 func NewStorageConnector(
 	cfg *ConnectorConfig,
@@ -40,10 +50,10 @@ func NewStorageConnector(
 	switch cfg.Driver {
 	case "memory":
 		connector, err := NewMemoryConnector(cfg.Memory)
-		return IStorage{Cache: connector}, err
+		return IStorage{OrchestratorStorage: connector}, err
 	case "clickhouse":
 		connector, err := NewClickHouseConnector(cfg.Clickhouse)
-		return IStorage{DB: connector, Cache: connector}, err
+		return IStorage{DBStorage: connector, OrchestratorStorage: connector}, err
 	}
 
 	return IStorage{}, fmt.Errorf("invalid connector driver: %s", cfg.Driver)

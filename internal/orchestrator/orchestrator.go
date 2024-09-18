@@ -5,19 +5,19 @@ import (
 	"sync"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
-	storage "github.com/thirdweb-dev/indexer/internal/storage/orchestrator"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 type Orchestrator struct {
 	rpc                     common.RPC
-	orchestratorStorage     storage.OrchestratorStorage
+	storage                 storage.IStorage
 	pollerEnabled           bool
 	failureRecovererEnabled bool
 	committerEnabled        bool
 }
 
 func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
-	orchestratorStorage, err := storage.NewOrchestratorStorage(&storage.StorageConfig{
+	storage, err := storage.NewStorageConnector(&storage.ConnectorConfig{
 		Driver: "memory",
 	})
 	if err != nil {
@@ -26,7 +26,7 @@ func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
 
 	return &Orchestrator{
 		rpc:                     rpc,
-		orchestratorStorage:     orchestratorStorage,
+		storage:                 storage,
 		pollerEnabled:           os.Getenv("DISABLE_POLLER") != "true",
 		failureRecovererEnabled: os.Getenv("DISABLE_FAILURE_RECOVERY") != "true",
 		committerEnabled:        os.Getenv("DISABLE_COMMITTER") != "true",
@@ -40,7 +40,7 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			poller := NewPoller(o.rpc, o.orchestratorStorage)
+			poller := NewPoller(o.rpc, o.storage)
 			poller.Start()
 		}()
 	}
@@ -49,7 +49,7 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			failureRecoverer := NewFailureRecoverer(o.rpc, o.orchestratorStorage)
+			failureRecoverer := NewFailureRecoverer(o.rpc, o.storage)
 			failureRecoverer.Start()
 		}()
 	}
