@@ -90,3 +90,33 @@ func ConnectDB() (clickhouse.Conn, error) {
 	}
 	return conn, nil
 }
+
+func (c *ClickHouseConnector) query(query string) (string, error) {
+	// not implemented yet
+	return "", nil
+}
+
+func (c *ClickHouseConnector) insert(query string) error {
+	// not implemented yet
+	return nil
+}
+
+func (c *ClickHouseConnector) delete(query string) error {
+	// not implemented yet
+	return nil
+}
+
+func (c *ClickHouseConnector) queryCache(index, partitionKey, rangeKey string) (string, error) {
+	// not implemented yet
+	return "", nil
+}
+
+func (c *ClickHouseConnector) purgeCache(index, partitionKey, rangeKey string) error {
+	// not implemented yet
+	return nil
+}
+
+func (c *ClickHouseConnector) setCache(partitionKey, rangeKey, value string) error {
+	// not implemented yet
+	return nil
+}
