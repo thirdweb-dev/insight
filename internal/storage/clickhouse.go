@@ -13,11 +13,12 @@ import (
 )
 
 type ClickHouseConnector struct {
-	cache clickhouse.Conn
+	conn clickhouse.Conn
 }
 
 type ClickhouseConnectorConfig struct {
 	ExpiresAt time.Duration
+	Database string
 }
 
 func NewClickHouseConnector(cfg *ClickhouseConnectorConfig) (*ClickHouseConnector, error) {
@@ -27,7 +28,7 @@ func NewClickHouseConnector(cfg *ClickhouseConnectorConfig) (*ClickHouseConnecto
 		return nil, err
 	}
 	return &ClickHouseConnector{
-		cache:  conn,
+		conn:  conn,
 	}, nil
 }
 
@@ -37,7 +38,7 @@ func (c *ClickHouseConnector) Get(index, partitionKey, rangeKey string) (string,
 	// Does it make sense to check the expiration duration in the query?
 	query := "SELECT value FROM chainsaw.indexer_cache WHERE key = ?"
 	var value string
-    err := c.cache.QueryRow(context.Background(), query, key).Scan(&value)
+    err := c.conn.QueryRow(context.Background(), query, key).Scan(&value)
     if err != nil {
 		log.Error(err.Error())
 		return "", fmt.Errorf("record not found for key: %s", key)
@@ -48,7 +49,7 @@ func (c *ClickHouseConnector) Get(index, partitionKey, rangeKey string) (string,
 func (c *ClickHouseConnector) Set(partitionKey, rangeKey, value string) error {
 	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
 	query := "INSERT INTO chainsaw.indexer_cache (key, value, expires_at) VALUES (?, ?, ?)"
-	err := c.cache.Exec(
+	err := c.conn.Exec(
 		context.Background(),
 		query,
 		key, value, time.Now().Add(time.Hour),
@@ -62,7 +63,7 @@ func (c *ClickHouseConnector) Set(partitionKey, rangeKey, value string) error {
 func (c *ClickHouseConnector) Delete(index, partitionKey, rangeKey string) error {
 	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
 	query := fmt.Sprintf("DELETE FROM chainsaw.cache WHERE key = %s", key)
-	err := c.cache.Exec(context.Background(), query)
+	err := c.conn.Exec(context.Background(), query)
 	if err != nil {
 		return err
 	}
