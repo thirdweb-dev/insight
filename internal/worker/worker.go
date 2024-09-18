@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,63 +14,90 @@ import (
 )
 
 type Worker struct {
-	rpc         common.RPC
-	storage     storage.IStorage
-	blockNumber uint64
+	rpc     common.RPC
+	storage storage.IStorage
 }
 
-func NewWorker(rpc common.RPC, storage storage.IStorage, blockNumber uint64) *Worker {
+type BlockResult struct {
+	BlockNumber  uint64
+	Error        error
+	Block        common.Block
+	Transactions []common.Transaction
+	Logs         []common.Log
+	Traces       []common.Trace
+}
+
+func NewWorker(rpc common.RPC, storage storage.IStorage) *Worker {
 	return &Worker{
-		rpc:         rpc,
-		storage:     storage,
-		blockNumber: blockNumber,
+		rpc:     rpc,
+		storage: storage,
 	}
 }
 
-func (w *Worker) FetchData() error {
-	log.Printf("Fetching data for block %d (Chain ID: %v)", w.blockNumber, w.rpc.ChainID)
+func (w *Worker) Run(blockNumbers []uint64) []BlockResult {
+	var wg sync.WaitGroup
+	blockCount := len(blockNumbers)
+	resultsCh := make(chan BlockResult, blockCount)
+	for _, blockNumber := range blockNumbers {
+		wg.Add(1)
 
-	// Fetch block data
-	block, err := w.fetchBlock()
+		go func(bn uint64) {
+			defer wg.Done()
+			result := w.processBlock(bn)
+			resultsCh <- result
+		}(blockNumber)
+	}
+	go func() {
+		wg.Wait()
+		close(resultsCh)
+	}()
+	// TODO: Save data to staging tables and if fails, add error to each BlockResult
+
+	results := make([]BlockResult, blockCount)
+	for result := range resultsCh {
+		results = append(results, result)
+	}
+	return results
+}
+
+func (w *Worker) processBlock(blockNumber uint64) BlockResult {
+	log.Printf("Processing block %d", blockNumber)
+
+	block, err := w.fetchBlock(blockNumber)
 	if err != nil {
-		return fmt.Errorf("error fetching block %d: %v", w.blockNumber, err)
+		return BlockResult{BlockNumber: blockNumber, Error: fmt.Errorf("error fetching block %d: %v", blockNumber, err)}
 	}
 
-	// Fetch logs
-	logs, err := w.fetchLogs()
+	logs, err := w.fetchLogs(blockNumber)
 	if err != nil {
-		return fmt.Errorf("error fetching logs for block %d: %v", w.blockNumber, err)
+		return BlockResult{BlockNumber: blockNumber, Error: fmt.Errorf("error fetching logs for block %d: %v", blockNumber, err)}
 	}
 
-	// Fetch traces if supported
-	var traces interface{}
+	var traces []map[string]interface{}
 	if w.rpc.SupportsTraceBlock {
-		traces, err = w.fetchTraces()
+		traces, err = w.fetchTraces(blockNumber)
 		if err != nil {
-			log.Printf("Error fetching traces for block %d: %v", w.blockNumber, err)
+			return BlockResult{BlockNumber: blockNumber, Error: fmt.Errorf("error fetching traces for block %d: %v", blockNumber, err)}
 		}
 	}
 
-	// Process the fetched data
-	w.processData(block, logs, traces)
-
-	return nil
+	return SerializeBlockResult(w.rpc, block, logs, traces)
 }
 
-func (w *Worker) fetchBlock() (*types.Block, error) {
-	return w.rpc.EthClient.BlockByNumber(context.Background(), big.NewInt(int64(w.blockNumber)))
+func (w *Worker) fetchBlock(blockNumber uint64) (*types.Block, error) {
+	return w.rpc.EthClient.BlockByNumber(context.Background(), big.NewInt(int64(blockNumber)))
 }
 
-func (w *Worker) fetchLogs() ([]types.Log, error) {
+func (w *Worker) fetchLogs(blockNumber uint64) ([]types.Log, error) {
 	return w.rpc.EthClient.FilterLogs(context.Background(), ethereum.FilterQuery{
-		FromBlock: big.NewInt(int64(w.blockNumber)),
-		ToBlock:   big.NewInt(int64(w.blockNumber)),
+		FromBlock: big.NewInt(int64(blockNumber)),
+		ToBlock:   big.NewInt(int64(blockNumber)),
 	})
 }
 
-func (w *Worker) fetchTraces() (interface{}, error) {
-	var result interface{}
-	err := w.rpc.RPCClient.Call(&result, "trace_block", fmt.Sprintf("0x%x", w.blockNumber))
+func (w *Worker) fetchTraces(blockNumber uint64) ([]map[string]interface{}, error) {
+	var result []map[string]interface{}
+	err := w.rpc.RPCClient.Call(&result, "trace_block", fmt.Sprintf("0x%x", blockNumber))
 	return result, err
 }
 
@@ -94,32 +122,4 @@ func (w *Worker) queryRows() {
 		log.Printf("Error iterating rows: %v", err)
 	}
 	*/
-}
-
-func (w *Worker) processData(block *types.Block, logs []types.Log, traces interface{}) {
-	log.Printf("Processing data for block %d", w.blockNumber)
-	log.Printf("Block %d has %d transactions and %d logs", w.blockNumber, len(block.Transactions()), len(logs))
-
-	// TODO: Implement data processing logic
-	// This is where you would parse and store the block data, logs, and traces
-	// For now, we'll just log some basic information
-	// queryRows()
-
-	if traces != nil {
-		log.Printf("Traces fetched for block %d", w.blockNumber)
-	}
-
-	// Example: Process each transaction in the block
-	for _, tx := range block.Transactions() {
-		log.Printf("Transaction Hash: %s", tx.Hash().Hex())
-		// Process transaction data...
-	}
-
-	// Example: Process each log
-	for _, log := range logs {
-		fmt.Printf("Log Address: %s, Topics: %v", log.Address.Hex(), log.Topics)
-		// Process log data...
-	}
-
-	// TODO: Store processed data in a database or file
 }

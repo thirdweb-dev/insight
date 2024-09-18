@@ -3,7 +3,6 @@ package storage
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
@@ -34,13 +33,13 @@ type IOrchestratorStorage interface {
 }
 
 type IDBStorage interface {
-	InsertBlocks(blocks []types.Block) error
-	InsertTransactions(txs []types.Transaction) error
-	InsertEvents(events []types.Log) error
+	InsertBlocks(blocks []common.Block) error
+	InsertTransactions(txs []common.Transaction) error
+	InsertEvents(events []common.Log) error
 
-	GetBlocks(limit int) (events []*types.Block, err error)
-	GetTransactions(blockNumber uint64, limit int) (events []*types.Transaction, err error)
-	GetEvents(blockNumber uint64, limit int) (events []*types.Log, err error)
+	GetBlocks(limit int) (events []common.Block, err error)
+	GetTransactions(blockNumber uint64, limit int) (events []common.Transaction, err error)
+	GetEvents(blockNumber uint64, limit int) (events []common.Log, err error)
 	GetMaxBlockNumber() (maxBlockNumber uint64, err error)
 }
 
