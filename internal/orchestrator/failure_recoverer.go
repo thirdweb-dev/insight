@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
+	storage "github.com/thirdweb-dev/indexer/internal/storage/orchestrator"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
@@ -18,11 +19,11 @@ const DEFAULT_FAILURE_TRIGGER_INTERVAL = 1000
 type FailureRecoverer struct {
 	failuresPerPoll     int
 	triggerIntervalMs   int
-	orchestratorStorage OrchestratorStorage
+	orchestratorStorage storage.OrchestratorStorage
 	rpc                 common.RPC
 }
 
-func NewFailureRecoverer(rpc common.RPC, orchestratorStorage OrchestratorStorage) *FailureRecoverer {
+func NewFailureRecoverer(rpc common.RPC, orchestratorStorage storage.OrchestratorStorage) *FailureRecoverer {
 	failuresPerPoll, err := strconv.Atoi(os.Getenv("FAILURES_PER_POLL"))
 	if err != nil || failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
@@ -47,7 +48,7 @@ func (fr *FailureRecoverer) Start() {
 		for t := range ticker.C {
 			fmt.Println("Failure Recovery running at", t)
 
-			blockFailures, err := fr.orchestratorStorage.GetBlockFailures()
+			blockFailures, err := fr.orchestratorStorage.GetBlockFailures(fr.failuresPerPoll)
 			if err != nil {
 				log.Printf("Failed to get block failures: %s", err)
 				continue
@@ -58,14 +59,14 @@ func (fr *FailureRecoverer) Start() {
 			var wg sync.WaitGroup
 			for _, blockFailure := range blockFailures {
 				wg.Add(1)
-				go func(blockFailure BlockFailure) {
+				go func(blockFailure common.BlockFailure) {
 					defer wg.Done()
 					err := fr.triggerWorker(blockFailure.BlockNumber)
 					if err != nil {
 						log.Printf("Error retrying block %d: %v", blockFailure.BlockNumber, err)
-						fr.orchestratorStorage.SaveBlockFailure(blockFailure)
+						fr.orchestratorStorage.StoreBlockFailures([]common.BlockFailure{blockFailure})
 					} else {
-						err = fr.orchestratorStorage.DeleteBlockFailure(blockFailure.BlockNumber)
+						err = fr.orchestratorStorage.DeleteBlockFailures([]common.BlockFailure{blockFailure})
 						if err != nil {
 							log.Printf("Error deleting block failure for block %d: %v", blockFailure.BlockNumber, err)
 						}

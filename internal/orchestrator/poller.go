@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
+	storage "github.com/thirdweb-dev/indexer/internal/storage/orchestrator"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
@@ -20,11 +21,11 @@ type Poller struct {
 	rpc                 common.RPC
 	blocksPerPoll       int
 	triggerIntervalMs   int
-	orchestratorStorage OrchestratorStorage
+	orchestratorStorage storage.OrchestratorStorage
 	lastPolledBlock     uint64
 }
 
-func NewPoller(rpc common.RPC, orchestratorStorage OrchestratorStorage) *Poller {
+func NewPoller(rpc common.RPC, orchestratorStorage storage.OrchestratorStorage) *Poller {
 	blocksPerPoll, err := strconv.Atoi(os.Getenv("BLOCKS_PER_POLL"))
 	if err != nil || blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -72,7 +73,7 @@ func (p *Poller) Start() {
 			}
 			wg.Wait()
 
-			saveErr := p.orchestratorStorage.SetLastPolledBlock(endBlock)
+			saveErr := p.orchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
 			if saveErr != nil {
 				log.Printf("Error updating last polled block: %v", saveErr)
 			} else {
@@ -91,7 +92,7 @@ func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error)
 		return 0, 0, fmt.Errorf("failed to get latest block number: %v", err)
 	}
 
-	lastPolledBlock, err := p.orchestratorStorage.GetLastPolledBlock()
+	lastPolledBlock, err := p.orchestratorStorage.GetLatestPolledBlockNumber()
 	if err != nil {
 		log.Printf("No last polled block found, starting from genesis %s", err)
 		lastPolledBlock = 0
@@ -109,11 +110,14 @@ func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error)
 }
 
 func (p *Poller) markBlockAsErrored(blockNumber uint64, blockError error) {
-	err := p.orchestratorStorage.SaveBlockFailure(BlockFailure{
-		BlockNumber:   blockNumber,
-		FailureReason: blockError.Error(),
-		FailureTime:   time.Now(),
-		ChainId:       p.rpc.ChainID,
+	err := p.orchestratorStorage.StoreBlockFailures([]common.BlockFailure{
+		{
+			BlockNumber:   blockNumber,
+			FailureReason: blockError.Error(),
+			FailureTime:   time.Now(),
+			ChainId:       p.rpc.ChainID,
+			FailureCount:  1,
+		},
 	})
 	if err != nil {
 		log.Fatalf("Error setting block %d as errored: %v", blockNumber, err)
