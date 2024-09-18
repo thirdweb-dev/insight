@@ -34,13 +34,13 @@ func NewMemoryConnector(cfg *MemoryConnectorConfig) (*MemoryConnector, error) {
 	}, nil
 }
 
-func (m *MemoryConnector) Set(partitionKey, rangeKey, value string) error {
+func (m *MemoryConnector) setCache(partitionKey, rangeKey, value string) error {
 	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
 	m.cache.Add(key, value)
 	return nil
 }
 
-func (m *MemoryConnector) Get(index, partitionKey, rangeKey string) (string, error) {
+func (m *MemoryConnector) queryCache(index, partitionKey, rangeKey string) (string, error) {
 	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
 	value, ok := m.cache.Get(key)
 	if !ok {
@@ -49,7 +49,7 @@ func (m *MemoryConnector) Get(index, partitionKey, rangeKey string) (string, err
 	return value, nil
 }
 
-func (m *MemoryConnector) Delete(index, partitionKey, rangeKey string) error {
+func (m *MemoryConnector) purgeCache(index, partitionKey, rangeKey string) error {
 	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
 	m.cache.Remove(key)
 	return nil
