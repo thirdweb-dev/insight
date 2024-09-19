@@ -6,6 +6,18 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
+type QueryFilter struct {
+	BlockNumbers []uint64
+	Limit        uint16
+	Offset       uint64
+}
+
+type StorageConfig struct {
+	Main         ConnectorConfig
+	Staging      ConnectorConfig
+	Orchestrator ConnectorConfig
+}
+
 type ConnectorConfig struct {
 	Driver     string
 	Memory     *MemoryConnectorConfig
@@ -13,14 +25,9 @@ type ConnectorConfig struct {
 }
 
 type IStorage struct {
-	IStorageBase
 	OrchestratorStorage IOrchestratorStorage
-	DBStorage           IDBStorage
-}
-
-type IStorageBase interface {
-	connect() error
-	close() error
+	DBMainStorage       IDBStorage
+	DBStagingStorage    IDBStorage
 }
 
 type IOrchestratorStorage interface {
@@ -37,23 +44,54 @@ type IDBStorage interface {
 	InsertTransactions(txs []common.Transaction) error
 	InsertEvents(events []common.Log) error
 
-	GetBlocks(limit int) (events []common.Block, err error)
-	GetTransactions(blockNumber uint64, limit int) (events []common.Transaction, err error)
-	GetEvents(blockNumber uint64, limit int) (events []common.Log, err error)
+	GetBlocks(qf QueryFilter) (events []common.Block, err error)
+	GetTransactions(qf QueryFilter) (events []common.Transaction, err error)
+	GetEvents(qf QueryFilter) (events []common.Log, err error)
 	GetMaxBlockNumber() (maxBlockNumber uint64, err error)
 }
 
-func NewStorageConnector(
-	cfg *ConnectorConfig,
-) (IStorage, error) {
-	switch cfg.Driver {
-	case "memory":
-		connector, err := NewMemoryConnector(cfg.Memory)
-		return IStorage{OrchestratorStorage: connector, DBStorage: connector}, err
-	case "clickhouse":
-		connector, err := NewClickHouseConnector(cfg.Clickhouse)
-		return IStorage{DBStorage: connector, OrchestratorStorage: connector}, err
+func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
+	var storage IStorage
+	var err error
+
+	storage.OrchestratorStorage, err = newConnector[IOrchestratorStorage](cfg.Orchestrator)
+	if err != nil {
+		return IStorage{}, fmt.Errorf("failed to create orchestrator storage: %w", err)
 	}
 
-	return IStorage{}, fmt.Errorf("invalid connector driver: %s", cfg.Driver)
+	storage.DBMainStorage, err = newConnector[IDBStorage](cfg.Main)
+	if err != nil {
+		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
+	}
+
+	storage.DBStagingStorage, err = newConnector[IDBStorage](cfg.Staging)
+	if err != nil {
+		return IStorage{}, fmt.Errorf("failed to create staging storage: %w", err)
+	}
+
+	return storage, nil
+}
+
+func newConnector[T any](cfg ConnectorConfig) (T, error) {
+	var conn interface{}
+	var err error
+	switch cfg.Driver {
+	case "memory":
+		conn, err = NewMemoryConnector(cfg.Memory)
+	case "clickhouse":
+		conn, err = NewClickHouseConnector(cfg.Clickhouse)
+	default:
+		return *new(T), fmt.Errorf("invalid connector driver: %s", cfg.Driver)
+	}
+
+	if err != nil {
+		return *new(T), err
+	}
+
+	typedConn, ok := conn.(T)
+	if !ok {
+		return *new(T), fmt.Errorf("connector does not implement the required interface")
+	}
+
+	return typedConn, nil
 }

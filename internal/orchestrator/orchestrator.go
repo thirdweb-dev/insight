@@ -17,8 +17,25 @@ type Orchestrator struct {
 }
 
 func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
-	storage, err := storage.NewStorageConnector(&storage.ConnectorConfig{
-		Driver: "memory",
+	storage, err := storage.NewStorageConnector(&storage.StorageConfig{
+		Orchestrator: storage.ConnectorConfig{
+			Driver: "memory",
+			Memory: &storage.MemoryConnectorConfig{
+				Prefix: "orchestrator",
+			},
+		},
+		Main: storage.ConnectorConfig{
+			Driver: "memory",
+			Memory: &storage.MemoryConnectorConfig{
+				Prefix: "main",
+			},
+		},
+		Staging: storage.ConnectorConfig{
+			Driver: "memory",
+			Memory: &storage.MemoryConnectorConfig{
+				Prefix: "staging",
+			},
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -58,7 +75,7 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			commiter := NewCommiter()
+			commiter := NewCommiter(o.storage)
 			commiter.Start()
 		}()
 	}

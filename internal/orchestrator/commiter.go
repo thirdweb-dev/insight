@@ -2,9 +2,12 @@ package orchestrator
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 const DEFAULT_COMMITER_TRIGGER_INTERVAL = 250
@@ -13,9 +16,10 @@ const DEFAULT_BLOCKS_PER_COMMIT = 10
 type Commiter struct {
 	triggerIntervalMs int
 	blocksPerCommit   int
+	storage           storage.IStorage
 }
 
-func NewCommiter() *Commiter {
+func NewCommiter(storage storage.IStorage) *Commiter {
 	triggerInterval, err := strconv.Atoi(os.Getenv("COMMITER_TRIGGER_INTERVAL"))
 	if err != nil || triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITER_TRIGGER_INTERVAL
@@ -27,6 +31,7 @@ func NewCommiter() *Commiter {
 	return &Commiter{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
+		storage:           storage,
 	}
 }
 

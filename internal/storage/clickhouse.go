@@ -103,15 +103,15 @@ func (c *ClickHouseConnector) InsertEvents(events []common.Log) error {
 	return nil
 }
 
-func (c *ClickHouseConnector) GetBlocks(limit int) (events []common.Block, err error) {
+func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (events []common.Block, err error) {
 	return nil, nil
 }
 
-func (c *ClickHouseConnector) GetTransactions(blockNumber uint64, limit int) (events []common.Transaction, err error) {
+func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (events []common.Transaction, err error) {
 	return nil, nil
 }
 
-func (c *ClickHouseConnector) GetEvents(blockNumber uint64, limit int) (events []common.Log, err error) {
+func (c *ClickHouseConnector) GetEvents(qf QueryFilter) (events []common.Log, err error) {
 	return nil, nil
 }
 
