@@ -138,3 +138,15 @@ func (c *ClickHouseConnector) StoreLatestPolledBlockNumber(blockNumber uint64) e
 func (c *ClickHouseConnector) GetLatestPolledBlockNumber() (blockNumber uint64, err error) {
 	return 0, nil
 }
+
+func (c *ClickHouseConnector) DeleteBlocks(blocks []common.Block) error {
+	return nil
+}
+
+func (c *ClickHouseConnector) DeleteTransactions(txs []common.Transaction) error {
+	return nil
+}
+
+func (c *ClickHouseConnector) DeleteEvents(events []common.Log) error {
+	return nil
+}

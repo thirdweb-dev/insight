@@ -48,6 +48,10 @@ type IDBStorage interface {
 	GetTransactions(qf QueryFilter) (events []common.Transaction, err error)
 	GetEvents(qf QueryFilter) (events []common.Log, err error)
 	GetMaxBlockNumber() (maxBlockNumber uint64, err error)
+
+	DeleteBlocks(blocks []common.Block) error
+	DeleteTransactions(txs []common.Transaction) error
+	DeleteEvents(events []common.Log) error
 }
 
 func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
