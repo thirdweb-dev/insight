@@ -49,7 +49,7 @@ func NewStorageConnector(
 	switch cfg.Driver {
 	case "memory":
 		connector, err := NewMemoryConnector(cfg.Memory)
-		return IStorage{OrchestratorStorage: connector}, err
+		return IStorage{OrchestratorStorage: connector, DBStorage: connector}, err
 	case "clickhouse":
 		connector, err := NewClickHouseConnector(cfg.Clickhouse)
 		return IStorage{DBStorage: connector, OrchestratorStorage: connector}, err
