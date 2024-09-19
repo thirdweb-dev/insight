@@ -3,13 +3,13 @@ package worker
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
@@ -19,7 +19,7 @@ func SerializeBlockResult(rpc common.RPC, block *types.Block, logs []types.Log, 
 	for i, tx := range block.Transactions() {
 		serializedTx, err := serializeTransaction(rpc, tx, block, uint(i))
 		if err != nil {
-			log.Printf("Failed to serialize transaction %s: %v", tx.Hash().Hex(), err)
+			log.Error().Err(err).Msgf("Failed to serialize transaction %s", tx.Hash().Hex())
 			return BlockResult{Error: err}
 		}
 		serializedTxs = append(serializedTxs, *serializedTx)
@@ -67,7 +67,7 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 func serializeTransaction(rpc common.RPC, tx *types.Transaction, block *types.Block, index uint) (*common.Transaction, error) {
 	from, err := rpc.EthClient.TransactionSender(context.Background(), tx, block.Hash(), index)
 	if err != nil {
-		log.Printf("Failed to get sender for transaction %s: %v", tx.Hash().Hex(), err)
+		log.Error().Err(err).Msgf("Failed to get sender for transaction %s", tx.Hash().Hex())
 		return nil, err
 	}
 	return &common.Transaction{

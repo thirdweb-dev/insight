@@ -3,12 +3,12 @@ package worker
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
@@ -61,7 +61,7 @@ func (w *Worker) Run(blockNumbers []uint64) []BlockResult {
 }
 
 func (w *Worker) processBlock(blockNumber uint64) BlockResult {
-	log.Printf("Processing block %d", blockNumber)
+	log.Debug().Msgf("Processing block %d", blockNumber)
 
 	block, err := w.fetchBlock(blockNumber)
 	if err != nil {
@@ -105,7 +105,7 @@ func (w *Worker) queryRows() {
 	// TODO: Implement this
 	/*rows, err := w.storage.DBStorage.Query(context.Background(), "SELECT version()")
 	if err != nil {
-		log.Printf("Error querying ClickHouse: %v", err)
+		log.Error().Err(err).Msg("Error querying ClickHouse")
 	}
 	defer rows.Close()
 
@@ -113,13 +113,13 @@ func (w *Worker) queryRows() {
 		var version string
 		err = rows.Scan(&version)
 		if err != nil {
-			log.Printf("Error scanning version: %v", err)
+			log.Error().Err(err).Msg("Error scanning version")
 		}
-		log.Printf("ClickHouse version: %s", version)
+		log.Debug().Msgf("ClickHouse version: %s", version)
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Printf("Error iterating rows: %v", err)
+		log.Error().Err(err).Msg("Error iterating rows")
 	}
 	*/
 }

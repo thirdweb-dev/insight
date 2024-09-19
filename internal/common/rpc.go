@@ -3,13 +3,13 @@ package common
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/rs/zerolog/log"
 )
 
 type RPC struct {
@@ -57,21 +57,21 @@ func (rpc *RPC) checkSupportedMethods() error {
 	if err != nil {
 		return fmt.Errorf("eth_getBlockByNumber method not supported: %v", err)
 	}
-	fmt.Println("eth_getBlockByNumber method supported")
+	log.Debug().Msg("eth_getBlockByNumber method supported")
 
 	var getLogsResult interface{}
 	logsErr := rpc.RPCClient.Call(&getLogsResult, "eth_getLogs", map[string]string{"fromBlock": "0x0", "toBlock": "0x0"})
 	if logsErr != nil {
 		return fmt.Errorf("eth_getBlockByNumber method not supported: %v", logsErr)
 	}
-	fmt.Println("eth_getLogs method supported")
+	log.Debug().Msg("eth_getLogs method supported")
 
 	var traceBlockResult interface{}
 	if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
-		log.Printf("Optional method trace_block not supported: %v", traceBlockErr)
+		log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
 	}
 	rpc.SupportsTraceBlock = traceBlockResult != nil
-	fmt.Printf("trace_block method supported: %v\n", rpc.SupportsTraceBlock)
+	log.Debug().Msgf("trace_block method supported: %v", rpc.SupportsTraceBlock)
 	return nil
 }
 
