@@ -55,7 +55,12 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 		GasUsed:          big.NewInt(int64(block.GasUsed())),
 		TransactionCount: uint64(len(block.Transactions())),
 		BaseFeePerGas:    block.BaseFee(),
-		WithdrawalsRoot:  block.Header().WithdrawalsHash.Big().String(),
+		WithdrawalsRoot: func() string {
+			if block.Header().WithdrawalsHash == nil {
+				return ""
+			}
+			return block.Header().WithdrawalsHash.Big().String()
+		}(),
 	}
 }
 

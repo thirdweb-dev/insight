@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -22,6 +23,7 @@ type Poller struct {
 	triggerIntervalMs int
 	storage           storage.IStorage
 	lastPolledBlock   uint64
+	pollUntilBlock    uint64
 }
 
 type BlockNumberWithError struct {
@@ -38,11 +40,16 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 	if err != nil || triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
+	pollUntilBlock, err := strconv.ParseUint(os.Getenv("POLL_UNTIL_BLOCK"), 10, 64)
+	if err != nil {
+		pollUntilBlock = 0
+	}
 	return &Poller{
 		rpc:               rpc,
 		triggerIntervalMs: triggerInterval,
 		blocksPerPoll:     blocksPerPoll,
 		storage:           storage,
+		pollUntilBlock:    pollUntilBlock,
 	}
 }
 
@@ -70,6 +77,11 @@ func (p *Poller) Start() {
 			} else {
 				p.lastPolledBlock = endBlock
 			}
+
+			if p.pollUntilBlock != 0 && endBlock >= p.pollUntilBlock {
+				fmt.Println("Reached poll limit, exiting poller")
+				break
+			}
 		}
 	}()
 
@@ -86,14 +98,11 @@ func (p *Poller) getBlockRange() ([]uint64, uint64, error) {
 	lastPolledBlock, err := p.storage.OrchestratorStorage.GetLatestPolledBlockNumber()
 	if err != nil {
 		log.Printf("No last polled block found, starting from genesis %s", err)
-		lastPolledBlock = 0
+		lastPolledBlock = math.MaxUint64 // adding 1 will overflow to 0, so it starts from genesis
 	}
 
-	startBlock := lastPolledBlock
-	if startBlock != 0 {
-		startBlock = startBlock + 1 // do not skip genesis
-	}
-	endBlock := startBlock + uint64(p.blocksPerPoll)
+	startBlock := lastPolledBlock + 1
+	endBlock := startBlock + uint64(p.blocksPerPoll) - 1
 	if endBlock > latestBlock {
 		endBlock = latestBlock
 	}
