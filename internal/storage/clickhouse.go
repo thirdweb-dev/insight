@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
@@ -92,27 +91,27 @@ func connectDB() (clickhouse.Conn, error) {
 	return conn, nil
 }
 
-func (c *ClickHouseConnector) InsertBlocks(blocks []types.Block) error {
+func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 	return nil
 }
 
-func (c *ClickHouseConnector) InsertTransactions(txs []types.Transaction) error {
+func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error {
 	return nil
 }
 
-func (c *ClickHouseConnector) InsertEvents(events []types.Log) error {
+func (c *ClickHouseConnector) InsertEvents(events []common.Log) error {
 	return nil
 }
 
-func (c *ClickHouseConnector) GetBlocks(limit int) (events []*types.Block, err error) {
+func (c *ClickHouseConnector) GetBlocks(limit int) (events []common.Block, err error) {
 	return nil, nil
 }
 
-func (c *ClickHouseConnector) GetTransactions(blockNumber uint64, limit int) (events []*types.Transaction, err error) {
+func (c *ClickHouseConnector) GetTransactions(blockNumber uint64, limit int) (events []common.Transaction, err error) {
 	return nil, nil
 }
 
-func (c *ClickHouseConnector) GetEvents(blockNumber uint64, limit int) (events []*types.Log, err error) {
+func (c *ClickHouseConnector) GetEvents(blockNumber uint64, limit int) (events []common.Log, err error) {
 	return nil, nil
 }
 

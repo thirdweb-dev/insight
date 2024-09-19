@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -56,24 +55,14 @@ func (fr *FailureRecoverer) Start() {
 
 			log.Printf("Triggering workers for %d block failures", len(blockFailures))
 
-			var wg sync.WaitGroup
+			blocksToTrigger := make([]uint64, 0, len(blockFailures))
 			for _, blockFailure := range blockFailures {
-				wg.Add(1)
-				go func(blockFailure common.BlockFailure) {
-					defer wg.Done()
-					err := fr.triggerWorker(blockFailure.BlockNumber)
-					if err != nil {
-						log.Printf("Error retrying block %d: %v", blockFailure.BlockNumber, err)
-						fr.storage.OrchestratorStorage.StoreBlockFailures([]common.BlockFailure{blockFailure})
-					} else {
-						err = fr.storage.OrchestratorStorage.DeleteBlockFailures([]common.BlockFailure{blockFailure})
-						if err != nil {
-							log.Printf("Error deleting block failure for block %d: %v", blockFailure.BlockNumber, err)
-						}
-					}
-				}(blockFailure)
+				blocksToTrigger = append(blocksToTrigger, blockFailure.BlockNumber)
 			}
-			wg.Wait()
+
+			worker := worker.NewWorker(fr.rpc, fr.storage)
+			results := worker.Run(blocksToTrigger)
+			fr.handleBlockResults(blockFailures, results)
 		}
 	}()
 
@@ -81,7 +70,32 @@ func (fr *FailureRecoverer) Start() {
 	select {}
 }
 
-func (fr *FailureRecoverer) triggerWorker(blockNumber uint64) (err error) {
-	worker := worker.NewWorker(fr.rpc, fr.storage, blockNumber)
-	return worker.FetchData()
+func (fr *FailureRecoverer) handleBlockResults(blockFailures []common.BlockFailure, results []worker.BlockResult) {
+	err := fr.storage.OrchestratorStorage.DeleteBlockFailures(blockFailures)
+	if err != nil {
+		log.Printf("Error deleting block failures: %v", err)
+		return
+	}
+	blockFailureMap := make(map[uint64]common.BlockFailure)
+	for _, failure := range blockFailures {
+		blockFailureMap[failure.BlockNumber] = failure
+	}
+	var newBlockFailures []common.BlockFailure
+	for _, result := range results {
+		if result.Error != nil {
+			prevBlockFailure, ok := blockFailureMap[result.BlockNumber]
+			failureCount := 1
+			if ok {
+				failureCount = prevBlockFailure.FailureCount + 1
+			}
+			blockFailures = append(blockFailures, common.BlockFailure{
+				BlockNumber:   result.BlockNumber,
+				FailureReason: result.Error.Error(),
+				FailureTime:   time.Now(),
+				ChainId:       fr.rpc.ChainID,
+				FailureCount:  failureCount,
+			})
+		}
+	}
+	fr.storage.OrchestratorStorage.StoreBlockFailures(newBlockFailures)
 }

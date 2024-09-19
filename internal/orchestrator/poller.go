@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -23,6 +22,11 @@ type Poller struct {
 	triggerIntervalMs int
 	storage           storage.IStorage
 	lastPolledBlock   uint64
+}
+
+type BlockNumberWithError struct {
+	BlockNumber uint64
+	Error       error
 }
 
 func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
@@ -50,28 +54,15 @@ func (p *Poller) Start() {
 		for t := range ticker.C {
 			fmt.Println("Poller running at", t)
 
-			startBlock, endBlock, err := p.getBlockRange()
+			blockNumbers, endBlock, err := p.getBlockRange()
 			if err != nil {
 				log.Printf("Error getting block range: %v", err)
 				continue
 			}
 
-			var wg sync.WaitGroup
-			for blockNumber := startBlock; blockNumber <= endBlock; blockNumber++ {
-				log.Printf("Triggering worker for block %d", blockNumber)
-				wg.Add(1)
-				go func(bn uint64) {
-					defer wg.Done()
-					err := p.triggerWorker(bn)
-					if err != nil {
-						log.Printf("Error processing block %d: %v", blockNumber, err)
-						p.markBlockAsErrored(bn, err)
-					} else {
-						log.Printf("Successfully processed block %d", blockNumber)
-					}
-				}(blockNumber)
-			}
-			wg.Wait()
+			worker := worker.NewWorker(p.rpc, p.storage)
+			results := worker.Run(blockNumbers)
+			p.handleBlockFailures(results)
 
 			saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
 			if saveErr != nil {
@@ -86,10 +77,10 @@ func (p *Poller) Start() {
 	select {}
 }
 
-func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error) {
+func (p *Poller) getBlockRange() ([]uint64, uint64, error) {
 	latestBlock, err := p.rpc.EthClient.BlockNumber(context.Background())
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get latest block number: %v", err)
+		return nil, 0, fmt.Errorf("failed to get latest block number: %v", err)
 	}
 
 	lastPolledBlock, err := p.storage.OrchestratorStorage.GetLatestPolledBlockNumber()
@@ -98,34 +89,37 @@ func (p *Poller) getBlockRange() (startBlock uint64, endBlock uint64, err error)
 		lastPolledBlock = 0
 	}
 
-	startBlock = lastPolledBlock
+	startBlock := lastPolledBlock
 	if startBlock != 0 {
 		startBlock = startBlock + 1 // do not skip genesis
 	}
-	endBlock = startBlock + uint64(p.blocksPerPoll)
+	endBlock := startBlock + uint64(p.blocksPerPoll)
 	if endBlock > latestBlock {
 		endBlock = latestBlock
 	}
-	return startBlock, endBlock, nil
-}
-
-func (p *Poller) markBlockAsErrored(blockNumber uint64, blockError error) {
-	err := p.storage.OrchestratorStorage.StoreBlockFailures([]common.BlockFailure{
-		{
-			BlockNumber:   blockNumber,
-			FailureReason: blockError.Error(),
-			FailureTime:   time.Now(),
-			ChainId:       p.rpc.ChainID,
-			FailureCount:  1,
-		},
-	})
-	if err != nil {
-		log.Fatalf("Error setting block %d as errored: %v", blockNumber, err)
+	blockNumbers := make([]uint64, 0, endBlock-startBlock+1)
+	for blockNum := startBlock; blockNum <= endBlock; blockNum++ {
+		blockNumbers = append(blockNumbers, blockNum)
 	}
+	return blockNumbers, endBlock, nil
 }
 
-func (p *Poller) triggerWorker(blockNumber uint64) (err error) {
-	log.Printf("Processing block %d", blockNumber)
-	worker := worker.NewWorker(p.rpc, p.storage, blockNumber)
-	return worker.FetchData()
+func (p *Poller) handleBlockFailures(results []worker.BlockResult) {
+	var blockFailures []common.BlockFailure
+	for _, result := range results {
+		if result.Error != nil {
+			blockFailures = append(blockFailures, common.BlockFailure{
+				BlockNumber:   result.BlockNumber,
+				FailureReason: result.Error.Error(),
+				FailureTime:   time.Now(),
+				ChainId:       p.rpc.ChainID,
+				FailureCount:  1,
+			})
+		}
+	}
+	err := p.storage.OrchestratorStorage.StoreBlockFailures(blockFailures)
+	if err != nil {
+		// TODO: exiting if this fails, but should handle this better
+		log.Fatalf("Error saving block failures: %v", err)
+	}
 }
