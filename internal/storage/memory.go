@@ -13,6 +13,7 @@ import (
 
 type MemoryConnectorConfig struct {
 	MaxItems int
+	Prefix   string
 }
 
 type MemoryConnector struct {
@@ -101,13 +102,15 @@ func (m *MemoryConnector) InsertBlocks(blocks []common.Block) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetBlocks(limit int) ([]common.Block, error) {
+func (m *MemoryConnector) GetBlocks(qf QueryFilter) ([]common.Block, error) {
 	blocks := []common.Block{}
+	limit := getLimit(qf)
+	blockNumbersToCheck := getBlockNumbersToCheck(qf)
 	for _, key := range m.cache.Keys() {
-		if len(blocks) >= limit {
+		if len(blocks) >= int(limit) {
 			break
 		}
-		if strings.HasPrefix(key, "block:") {
+		if isKeyForBlock(key, "block:", blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				block := common.Block{}
@@ -133,13 +136,15 @@ func (m *MemoryConnector) InsertTransactions(txs []common.Transaction) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetTransactions(blockNumber uint64, limit int) ([]common.Transaction, error) {
+func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction, error) {
 	txs := []common.Transaction{}
+	limit := getLimit(qf)
+	blockNumbersToCheck := getBlockNumbersToCheck(qf)
 	for _, key := range m.cache.Keys() {
 		if len(txs) >= limit {
 			break
 		}
-		if strings.HasPrefix(key, fmt.Sprintf("transaction:%d", blockNumber)) {
+		if isKeyForBlock(key, "transaction:", blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				tx := common.Transaction{}
@@ -165,13 +170,15 @@ func (m *MemoryConnector) InsertEvents(events []common.Log) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetEvents(blockNumber uint64, limit int) ([]common.Log, error) {
+func (m *MemoryConnector) GetEvents(qf QueryFilter) ([]common.Log, error) {
 	events := []common.Log{}
+	limit := getLimit(qf)
+	blockNumbersToCheck := getBlockNumbersToCheck(qf)
 	for _, key := range m.cache.Keys() {
 		if len(events) >= limit {
 			break
 		}
-		if strings.HasPrefix(key, fmt.Sprintf("event:%d", blockNumber)) {
+		if isKeyForBlock(key, "event:", blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				event := common.Log{}
@@ -200,4 +207,35 @@ func (m *MemoryConnector) GetMaxBlockNumber() (uint64, error) {
 		}
 	}
 	return maxBlockNumber, nil
+}
+
+func isKeyForBlock(key string, prefix string, blocksFilter map[uint64]uint8) bool {
+	if !strings.HasPrefix(key, prefix) {
+		return false
+	}
+	blockNumber, err := strconv.ParseUint(strings.TrimPrefix(key, prefix), 10, 64)
+	if err != nil {
+		return false
+	}
+	if len(blocksFilter) == 0 {
+		return true
+	}
+	_, ok := blocksFilter[blockNumber]
+	return ok
+}
+
+func getLimit(qf QueryFilter) int {
+	limit := qf.Limit
+	if limit == 0 {
+		limit = math.MaxUint16
+	}
+	return int(limit)
+}
+
+func getBlockNumbersToCheck(qf QueryFilter) map[uint64]uint8 {
+	blockNumbersToCheck := make(map[uint64]uint8)
+	for _, num := range qf.BlockNumbers {
+		blockNumbersToCheck[num] = 1
+	}
+	return blockNumbersToCheck
 }
