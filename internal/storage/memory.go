@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -41,7 +42,7 @@ func NewMemoryConnector(cfg *MemoryConnectorConfig) (*MemoryConnector, error) {
 func (m *MemoryConnector) GetLatestPolledBlockNumber() (uint64, error) {
 	blockNumber, ok := m.cache.Get("latest_polled_block_number")
 	if !ok {
-		return 0, nil
+		return math.MaxUint64, nil // this will overflow to genesis
 	}
 	return strconv.ParseUint(blockNumber, 10, 64)
 }
