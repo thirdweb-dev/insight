@@ -3,12 +3,12 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
@@ -59,11 +59,11 @@ func (p *Poller) Start() {
 
 	go func() {
 		for t := range ticker.C {
-			fmt.Println("Poller running at", t)
+			log.Debug().Msgf("Poller running at %s", t)
 
 			blockNumbers, endBlock, err := p.getBlockRange()
 			if err != nil {
-				log.Printf("Error getting block range: %v", err)
+				log.Error().Err(err).Msg("Error getting block range")
 				continue
 			}
 
@@ -73,13 +73,13 @@ func (p *Poller) Start() {
 
 			saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
 			if saveErr != nil {
-				log.Printf("Error updating last polled block: %v", saveErr)
+				log.Error().Err(saveErr).Msg("Error updating last polled block")
 			} else {
 				p.lastPolledBlock = endBlock
 			}
 
 			if p.pollUntilBlock != 0 && endBlock >= p.pollUntilBlock {
-				fmt.Println("Reached poll limit, exiting poller")
+				log.Debug().Msg("Reached poll limit, exiting poller")
 				break
 			}
 		}
@@ -97,7 +97,7 @@ func (p *Poller) getBlockRange() ([]uint64, uint64, error) {
 
 	lastPolledBlock, err := p.storage.OrchestratorStorage.GetLatestPolledBlockNumber()
 	if err != nil {
-		log.Printf("No last polled block found, starting from genesis %s", err)
+		log.Warn().Err(err).Msg("No last polled block found, starting from genesis")
 		lastPolledBlock = math.MaxUint64 // adding 1 will overflow to 0, so it starts from genesis
 	}
 
@@ -129,6 +129,6 @@ func (p *Poller) handleBlockFailures(results []worker.BlockResult) {
 	err := p.storage.OrchestratorStorage.StoreBlockFailures(blockFailures)
 	if err != nil {
 		// TODO: exiting if this fails, but should handle this better
-		log.Fatalf("Error saving block failures: %v", err)
+		log.Error().Err(err).Msg("Error saving block failures")
 	}
 }

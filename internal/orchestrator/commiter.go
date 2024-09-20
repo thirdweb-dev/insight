@@ -2,13 +2,13 @@ package orchestrator
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
@@ -44,18 +44,18 @@ func (c *Commiter) Start() {
 
 	go func() {
 		for t := range ticker.C {
-			fmt.Println("Commiter running at", t)
+			log.Debug().Msgf("Commiter running at %s", t)
 			blocksToCommit, err := c.getSequentialBlocksToCommit()
 			if err != nil {
-				log.Printf("Error getting blocks to commit: %v", err)
+				log.Error().Err(err).Msg("Error getting blocks to commit")
 				continue
 			}
 			if len(blocksToCommit) == 0 {
-				log.Println("No blocks to commit")
+				log.Debug().Msg("No blocks to commit")
 				continue
 			}
 			if err := c.commit(blocksToCommit); err != nil {
-				log.Printf("Error committing blocks: %v", err)
+				log.Error().Err(err).Msg("Error committing blocks")
 			}
 		}
 	}()

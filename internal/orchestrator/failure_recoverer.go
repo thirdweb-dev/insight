@@ -1,12 +1,11 @@
 package orchestrator
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
@@ -45,15 +44,15 @@ func (fr *FailureRecoverer) Start() {
 
 	go func() {
 		for t := range ticker.C {
-			fmt.Println("Failure Recovery running at", t)
+			log.Debug().Msgf("Failure Recovery running at %s", t)
 
 			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(fr.failuresPerPoll)
 			if err != nil {
-				log.Printf("Failed to get block failures: %s", err)
+				log.Error().Err(err).Msg("Failed to get block failures")
 				continue
 			}
 
-			log.Printf("Triggering workers for %d block failures", len(blockFailures))
+			log.Debug().Msgf("Triggering workers for %d block failures", len(blockFailures))
 
 			blocksToTrigger := make([]uint64, 0, len(blockFailures))
 			for _, blockFailure := range blockFailures {
@@ -73,7 +72,7 @@ func (fr *FailureRecoverer) Start() {
 func (fr *FailureRecoverer) handleBlockResults(blockFailures []common.BlockFailure, results []worker.BlockResult) {
 	err := fr.storage.OrchestratorStorage.DeleteBlockFailures(blockFailures)
 	if err != nil {
-		log.Printf("Error deleting block failures: %v", err)
+		log.Error().Err(err).Msg("Error deleting block failures")
 		return
 	}
 	blockFailureMap := make(map[uint64]common.BlockFailure)
