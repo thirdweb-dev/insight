@@ -141,7 +141,7 @@ func (c *Commiter) getStagingDataForBlocks(blockNumbers []uint64) (logs []common
 
 	go func() {
 		defer wg.Done()
-		logs, logErr = c.storage.DBStagingStorage.GetEvents(storage.QueryFilter{BlockNumbers: blockNumbers})
+		logs, logErr = c.storage.DBStagingStorage.GetLogs(storage.QueryFilter{BlockNumbers: blockNumbers})
 	}()
 
 	go func() {
@@ -179,7 +179,7 @@ func (c *Commiter) saveDataToMainStorage(blocks []common.Block, logs []common.Lo
 
 	go func() {
 		defer commitWg.Done()
-		if err := c.storage.DBMainStorage.InsertEvents(logs); err != nil {
+		if err := c.storage.DBMainStorage.InsertLogs(logs); err != nil {
 			commitErrMutex.Lock()
 			commitErr = fmt.Errorf("error inserting logs: %v", err)
 			commitErrMutex.Unlock()
@@ -231,7 +231,7 @@ func (c *Commiter) deleteDataFromStagingStorage(blocks []common.Block, logs []co
 
 	go func() {
 		defer deleteWg.Done()
-		if err := c.storage.DBStagingStorage.DeleteEvents(logs); err != nil {
+		if err := c.storage.DBStagingStorage.DeleteLogs(logs); err != nil {
 			deleteErrMutex.Lock()
 			deleteErr = fmt.Errorf("error deleting logs from staging: %v", err)
 			deleteErrMutex.Unlock()

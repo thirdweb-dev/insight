@@ -155,12 +155,12 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction,
 }
 
 func (m *MemoryConnector) InsertLogs(logs []common.Log) error {
-	for _, event := range logs {
-		eventJson, err := json.Marshal(event)
+	for _, log := range logs {
+		logJson, err := json.Marshal(log)
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("event:%s-%d", event.TransactionHash, event.Index), string(eventJson))
+		m.cache.Add(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.Index), string(logJson))
 	}
 	return nil
 }
@@ -173,15 +173,15 @@ func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
 		if len(logs) >= limit {
 			break
 		}
-		if isKeyForBlock(key, "event:", blockNumbersToCheck) {
+		if isKeyForBlock(key, "log:", blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
-				event := common.Log{}
-				err := json.Unmarshal([]byte(value), &event)
+				log := common.Log{}
+				err := json.Unmarshal([]byte(value), &log)
 				if err != nil {
 					return nil, err
 				}
-				logs = append(logs, event)
+				logs = append(logs, log)
 			}
 		}
 	}
@@ -249,9 +249,9 @@ func (m *MemoryConnector) DeleteTransactions(txs []common.Transaction) error {
 	return nil
 }
 
-func (m *MemoryConnector) DeleteEvents(events []common.Log) error {
-	for _, event := range events {
-		m.cache.Remove(fmt.Sprintf("event:%s-%d", event.TransactionHash, event.Index))
+func (m *MemoryConnector) DeleteLogs(logs []common.Log) error {
+	for _, log := range logs {
+		m.cache.Remove(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.Index))
 	}
 	return nil
 }

@@ -163,18 +163,18 @@ func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
 	if err != nil {
 		return err
 	}
-	for _, event := range logs {
+	for _, log := range logs {
 		err := batch.Append(
-			event.ChainId,
-			event.BlockNumber,
-			event.BlockHash,
-			event.BlockTimestamp,
-			event.TransactionHash,
-			event.TransactionIndex,
-			event.Index,
-			event.Address,
-			event.Data,
-			event.Topics,
+			log.ChainId,
+			log.BlockNumber,
+			log.BlockHash,
+			log.BlockTimestamp,
+			log.TransactionHash,
+			log.TransactionIndex,
+			log.Index,
+			log.Address,
+			log.Data,
+			log.Topics,
 		)
 		if err != nil {
 			return err
@@ -282,14 +282,14 @@ func (c *ClickHouseConnector) DeleteTransactions(txs []common.Transaction) error
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) DeleteEvents(events []common.Log) error {
+func (c *ClickHouseConnector) DeleteLogs(logs []common.Log) error {
 	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".logs")
 	if err != nil {
 		return err
 	}
 
-	for _, event := range events {
-		err := batch.Append(event.TransactionHash, event.Index)
+	for _, log := range logs {
+		err := batch.Append(log.BlockNumber, log.TransactionHash, log.Index)
 		if err != nil {
 			return err
 		}
@@ -343,24 +343,24 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 	defer rows.Close()
 	
 	for rows.Next() {
-		var event common.Log
+		var log common.Log
 		err := rows.Scan(
-			&event.ChainId,
-			&event.BlockNumber,
-			&event.BlockHash,
-			&event.BlockTimestamp,
-			&event.TransactionHash,
-			&event.TransactionIndex,
-			&event.Index,
-			&event.Address,
-			&event.Data,
-			&event.Topics,
+			&log.ChainId,
+			&log.BlockNumber,
+			&log.BlockHash,
+			&log.BlockTimestamp,
+			&log.TransactionHash,
+			&log.TransactionIndex,
+			&log.Index,
+			&log.Address,
+			&log.Data,
+			&log.Topics,
 		)
 		if err != nil {
 			log.Error(err.Error())
 			return nil, err
 		}
-		logs = append(logs, event)
+		logs = append(logs, log)
 	}
 	return logs, nil
 }
