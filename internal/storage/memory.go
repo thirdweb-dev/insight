@@ -154,8 +154,8 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction,
 	return txs, nil
 }
 
-func (m *MemoryConnector) InsertLogs(events []common.Log) error {
-	for _, event := range events {
+func (m *MemoryConnector) InsertLogs(logs []common.Log) error {
+	for _, event := range logs {
 		eventJson, err := json.Marshal(event)
 		if err != nil {
 			return err
@@ -165,12 +165,12 @@ func (m *MemoryConnector) InsertLogs(events []common.Log) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetEvents(qf QueryFilter) ([]common.Log, error) {
-	events := []common.Log{}
+func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
+	logs := []common.Log{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
 	for _, key := range m.cache.Keys() {
-		if len(events) >= limit {
+		if len(logs) >= limit {
 			break
 		}
 		if isKeyForBlock(key, "event:", blockNumbersToCheck) {
@@ -181,11 +181,11 @@ func (m *MemoryConnector) GetEvents(qf QueryFilter) ([]common.Log, error) {
 				if err != nil {
 					return nil, err
 				}
-				events = append(events, event)
+				logs = append(logs, event)
 			}
 		}
 	}
-	return events, nil
+	return logs, nil
 }
 
 func (m *MemoryConnector) GetMaxBlockNumber() (uint64, error) {
