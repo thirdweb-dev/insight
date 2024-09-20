@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/ethereum/go-ethereum/log"
+	zLog "github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
@@ -44,7 +44,7 @@ func (c *ClickHouseConnector) Get(index, partitionKey, rangeKey string) (string,
 	var value string
 	err := c.conn.QueryRow(context.Background(), query, key).Scan(&value)
 	if err != nil {
-		log.Error(err.Error())
+		zLog.Error().Err(err).Msgf("record not found for key: %s", key)
 		return "", fmt.Errorf("record not found for key: %s", key)
 	}
 	return value, nil
@@ -96,7 +96,7 @@ func connectDB() (clickhouse.Conn, error) {
 }
 
 func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO " + c.cfg.Database + ".blocks")
+	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO "+c.cfg.Database+".blocks")
 	if err != nil {
 		return err
 	}
@@ -128,10 +128,10 @@ func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 }
 
 func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO " + c.cfg.Database + ".transactions")
+	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO "+c.cfg.Database+".transactions")
 	if err != nil {
 		return err
-		}
+	}
 	for _, tx := range txs {
 		err := batch.Append(
 			tx.ChainId,
@@ -159,7 +159,7 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 }
 
 func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO " + c.cfg.Database + ".logs")
+	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO "+c.cfg.Database+".logs")
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
 }
 
 func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO " + c.cfg.Database + ".block_failures")
+	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO "+c.cfg.Database+".block_failures")
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 			&block.WithdrawalsRoot,
 		)
 		if err != nil {
-			log.Error(err.Error())
+			zLog.Error().Err(err).Msg("Error scanning block")
 			return nil, err
 		}
 		blocks = append(blocks, block)
@@ -253,7 +253,7 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 }
 
 func (c *ClickHouseConnector) DeleteBlocks(blocks []common.Block) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".blocks")
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM "+c.cfg.Database+".blocks")
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func (c *ClickHouseConnector) DeleteBlocks(blocks []common.Block) error {
 }
 
 func (c *ClickHouseConnector) DeleteTransactions(txs []common.Transaction) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".transactions")
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM "+c.cfg.Database+".transactions")
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (c *ClickHouseConnector) DeleteTransactions(txs []common.Transaction) error
 }
 
 func (c *ClickHouseConnector) DeleteLogs(logs []common.Log) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".logs")
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM "+c.cfg.Database+".logs")
 	if err != nil {
 		return err
 	}
@@ -326,7 +326,7 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Tran
 			&tx.Type,
 		)
 		if err != nil {
-			log.Error(err.Error())
+			zLog.Error().Err(err).Msg("Error scanning transaction")
 			return nil, err
 		}
 		txs = append(txs, tx)
@@ -341,7 +341,7 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	for rows.Next() {
 		var log common.Log
 		err := rows.Scan(
@@ -357,7 +357,7 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 			&log.Topics,
 		)
 		if err != nil {
-			log.Error(err.Error())
+			zLog.Error().Err(err).Msg("Error scanning log")
 			return nil, err
 		}
 		logs = append(logs, log)
@@ -393,7 +393,7 @@ func (c *ClickHouseConnector) GetBlockFailures(limit int) ([]common.BlockFailure
 			&failure.FailureCount,
 		)
 		if err != nil {
-			log.Error(err.Error())
+			zLog.Error().Err(err).Msg("Error scanning block failure")
 			return nil, err
 		}
 		failures = append(failures, failure)
@@ -411,7 +411,7 @@ func (c *ClickHouseConnector) GetLatestPolledBlockNumber() (blockNumber uint64, 
 }
 
 func (c *ClickHouseConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".block_failures")
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM "+c.cfg.Database+".block_failures")
 	if err != nil {
 		return err
 	}
