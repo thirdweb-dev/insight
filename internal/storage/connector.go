@@ -51,7 +51,7 @@ type IDBStorage interface {
 
 	DeleteBlocks(blocks []common.Block) error
 	DeleteTransactions(txs []common.Transaction) error
-	DeleteEvents(events []common.Log) error
+	DeleteLogs(logs []common.Log) error
 }
 
 func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
