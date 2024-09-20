@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math/big"
 	"os"
 	"strconv"
 	"time"
@@ -204,7 +205,7 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) StoreLatestPolledBlockNumber(blockNumber uint64) error {
+func (c *ClickHouseConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int) error {
 	query := "INSERT INTO " + c.cfg.Database + ".latest_polled_block_number (block_number) VALUES (?) ON DUPLICATE KEY UPDATE block_number = VALUES(block_number)"
 	err := c.conn.Exec(context.Background(), query, blockNumber)
 	if err != nil {
@@ -365,11 +366,11 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 	return logs, nil
 }
 
-func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber uint64, err error) {
+func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err error) {
 	query := fmt.Sprintf("SELECT max(block_number) FROM %s.blocks", c.cfg.Database)
 	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	return maxBlockNumber, nil
 }
@@ -401,11 +402,11 @@ func (c *ClickHouseConnector) GetBlockFailures(limit int) ([]common.BlockFailure
 	return failures, nil
 }
 
-func (c *ClickHouseConnector) GetLatestPolledBlockNumber() (blockNumber uint64, err error) {
+func (c *ClickHouseConnector) GetLatestPolledBlockNumber() (blockNumber *big.Int, err error) {
 	query := fmt.Sprintf("SELECT block_number FROM %s.latest_polled_block_number ORDER BY inserted_at DESC LIMIT 1", c.cfg.Database)
 	err = c.conn.QueryRow(context.Background(), query).Scan(&blockNumber)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	return blockNumber, nil
 }
@@ -432,10 +433,10 @@ func getLimitClause(limit int) string {
 	return fmt.Sprintf(" LIMIT %d", limit)
 }
 
-func getBlockNumbersStringArray(blockNumbers []uint64) string {
+func getBlockNumbersStringArray(blockNumbers []*big.Int) string {
 	blockNumbersString := ""
 	for _, blockNumber := range blockNumbers {
-		blockNumbersString += fmt.Sprintf("%d,", blockNumber)
+		blockNumbersString += fmt.Sprintf("%s,", blockNumber.String())
 	}
 	return blockNumbersString
 }

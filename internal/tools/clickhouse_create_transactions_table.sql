@@ -3,7 +3,7 @@ CREATE TABLE base.transactions (
     `hash` FixedString(66),
     `nonce` UInt64,
     `block_hash` FixedString(66),
-    `block_number` UInt64,
+    `block_number` UInt256,
     `block_timestamp` DateTime CODEC(Delta(4), ZSTD(1)),
     `transaction_index` UInt64,
     `from_address` FixedString(42),

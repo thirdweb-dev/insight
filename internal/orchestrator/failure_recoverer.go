@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"math/big"
 	"os"
 	"strconv"
 	"time"
@@ -42,23 +43,21 @@ func (fr *FailureRecoverer) Start() {
 	interval := time.Duration(fr.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
+	log.Debug().Msgf("Failure Recovery running")
 	go func() {
-		for t := range ticker.C {
-			log.Debug().Msgf("Failure Recovery running at %s", t)
-
+		for range ticker.C {
 			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(fr.failuresPerPoll)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get block failures")
 				continue
 			}
 
-			log.Debug().Msgf("Triggering workers for %d block failures", len(blockFailures))
-
-			blocksToTrigger := make([]uint64, 0, len(blockFailures))
+			blocksToTrigger := make([]*big.Int, 0, len(blockFailures))
 			for _, blockFailure := range blockFailures {
 				blocksToTrigger = append(blocksToTrigger, blockFailure.BlockNumber)
 			}
 
+			log.Debug().Msgf("Triggering Failure Recoverer for trigger: %v", blocksToTrigger)
 			worker := worker.NewWorker(fr.rpc, fr.storage)
 			results := worker.Run(blocksToTrigger)
 			fr.handleBlockResults(blockFailures, results)
@@ -75,7 +74,7 @@ func (fr *FailureRecoverer) handleBlockResults(blockFailures []common.BlockFailu
 		log.Error().Err(err).Msg("Error deleting block failures")
 		return
 	}
-	blockFailureMap := make(map[uint64]common.BlockFailure)
+	blockFailureMap := make(map[*big.Int]common.BlockFailure)
 	for _, failure := range blockFailures {
 		blockFailureMap[failure.BlockNumber] = failure
 	}
@@ -87,7 +86,7 @@ func (fr *FailureRecoverer) handleBlockResults(blockFailures []common.BlockFailu
 			if ok {
 				failureCount = prevBlockFailure.FailureCount + 1
 			}
-			blockFailures = append(blockFailures, common.BlockFailure{
+			newBlockFailures = append(newBlockFailures, common.BlockFailure{
 				BlockNumber:   result.BlockNumber,
 				FailureReason: result.Error.Error(),
 				FailureTime:   time.Now(),

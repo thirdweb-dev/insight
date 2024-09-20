@@ -10,7 +10,7 @@ type Transaction struct {
 	Hash                 string
 	Nonce                uint64
 	BlockHash            string
-	BlockNumber          uint64
+	BlockNumber          *big.Int
 	BlockTimestamp       time.Time
 	TransactionIndex     uint64
 	FromAddress          string

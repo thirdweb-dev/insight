@@ -26,7 +26,7 @@ func SerializeBlockResult(rpc common.RPC, block *types.Block, logs []types.Log, 
 	}
 	serializedLogs := serializeLogs(rpc, logs, block)
 	var serializedTraces []common.Trace
-	if traces != nil && len(traces) > 0 {
+	if len(traces) > 0 {
 		serializedTraces = serializeTraces(rpc, traces, block)
 	}
 	return BlockResult{
@@ -40,7 +40,7 @@ func SerializeBlockResult(rpc common.RPC, block *types.Block, logs []types.Log, 
 func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 	return common.Block{
 		ChainId:          rpc.ChainID,
-		Number:           block.NumberU64(),
+		Number:           block.Number(),
 		Hash:             block.Hash().Hex(),
 		ParentHash:       block.ParentHash().Hex(),
 		Timestamp:        time.Unix(int64(block.Time()), 0),
@@ -58,8 +58,18 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 		GasLimit:         big.NewInt(int64(block.GasLimit())),
 		GasUsed:          big.NewInt(int64(block.GasUsed())),
 		TransactionCount: uint64(len(block.Transactions())),
-		BaseFeePerGas:    block.BaseFee().Uint64(),
-		WithdrawalsRoot:  block.Header().WithdrawalsHash.Hex(),
+		BaseFeePerGas: func() uint64 {
+			if block.BaseFee() != nil {
+				return block.BaseFee().Uint64()
+			}
+			return 0
+		}(),
+		WithdrawalsRoot: func() string {
+			if block.Header().WithdrawalsHash != nil {
+				return block.Header().WithdrawalsHash.Hex()
+			}
+			return ""
+		}(),
 	}
 }
 
@@ -74,7 +84,7 @@ func serializeTransaction(rpc common.RPC, tx *types.Transaction, block *types.Bl
 		Hash:                 tx.Hash().Hex(),
 		Nonce:                tx.Nonce(),
 		BlockHash:            block.Hash().Hex(),
-		BlockNumber:          block.NumberU64(),
+		BlockNumber:          block.Number(),
 		BlockTimestamp:       time.Unix(int64(block.Time()), 0),
 		TransactionIndex:     uint64(index),
 		FromAddress:          from.Hex(),
@@ -99,7 +109,7 @@ func serializeLogs(rpc common.RPC, logs []types.Log, block *types.Block) []commo
 		}
 		serializedLogs = append(serializedLogs, common.Log{
 			ChainId:          rpc.ChainID,
-			BlockNumber:      log.BlockNumber,
+			BlockNumber:      block.Number(),
 			BlockHash:        log.BlockHash.Hex(),
 			BlockTimestamp:   blockTimestamp,
 			TransactionHash:  log.TxHash.Hex(),
@@ -121,7 +131,7 @@ func serializeTraces(rpc common.RPC, traces []map[string]interface{}, block *typ
 		serializedTraces = append(serializedTraces, common.Trace{
 			ID:               uuid.New().String(),
 			ChainID:          rpc.ChainID,
-			BlockNumber:      block.NumberU64(),
+			BlockNumber:      block.Number(),
 			BlockHash:        block.Hash().Hex(),
 			BlockTimestamp:   time.Unix(int64(block.Time()), 0),
 			TransactionHash:  trace["transactionHash"].(string),

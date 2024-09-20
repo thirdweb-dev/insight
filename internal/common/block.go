@@ -7,7 +7,7 @@ import (
 
 type Block struct {
 	ChainId          *big.Int
-	Number           uint64
+	Number           *big.Int
 	Hash             string
 	ParentHash       string
 	Timestamp        time.Time

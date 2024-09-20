@@ -1,6 +1,6 @@
 CREATE TABLE base.logs (
     `chain_id` UInt256,
-    `block_number` UInt64,
+    `block_number` UInt256,
     `block_hash` FixedString(66),
     `block_timestamp` DateTime CODEC(Delta(4), ZSTD(1)),
     `transaction_hash` FixedString(66),

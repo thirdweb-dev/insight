@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"strconv"
+	"math/big"
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -35,16 +35,21 @@ func NewMemoryConnector(cfg *MemoryConnectorConfig) (*MemoryConnector, error) {
 	}, nil
 }
 
-func (m *MemoryConnector) GetLatestPolledBlockNumber() (uint64, error) {
+func (m *MemoryConnector) GetLatestPolledBlockNumber() (*big.Int, error) {
 	blockNumber, ok := m.cache.Get("latest_polled_block_number")
 	if !ok {
-		return math.MaxUint64, nil // this will overflow to genesis
+		return nil, nil
 	}
-	return strconv.ParseUint(blockNumber, 10, 64)
+	bn := new(big.Int)
+	_, success := bn.SetString(blockNumber, 10)
+	if !success {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumber)
+	}
+	return bn, nil
 }
 
-func (m *MemoryConnector) StoreLatestPolledBlockNumber(blockNumber uint64) error {
-	m.cache.Add("latest_polled_block_number", strconv.FormatUint(blockNumber, 10))
+func (m *MemoryConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int) error {
+	m.cache.Add("latest_polled_block_number", blockNumber.String())
 	return nil
 }
 
@@ -188,15 +193,16 @@ func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
 	return logs, nil
 }
 
-func (m *MemoryConnector) GetMaxBlockNumber() (uint64, error) {
-	maxBlockNumber := uint64(0)
+func (m *MemoryConnector) GetMaxBlockNumber() (*big.Int, error) {
+	maxBlockNumber := new(big.Int)
 	for _, key := range m.cache.Keys() {
 		if strings.HasPrefix(key, "block:") {
-			blockNumber, err := strconv.ParseUint(strings.Split(key, ":")[1], 10, 64)
-			if err != nil {
-				return 0, err
+			blockNumberStr := strings.Split(key, ":")[1]
+			blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
 			}
-			if blockNumber > maxBlockNumber {
+			if blockNumber.Cmp(maxBlockNumber) > 0 {
 				maxBlockNumber = blockNumber
 			}
 		}
@@ -204,18 +210,19 @@ func (m *MemoryConnector) GetMaxBlockNumber() (uint64, error) {
 	return maxBlockNumber, nil
 }
 
-func isKeyForBlock(key string, prefix string, blocksFilter map[uint64]uint8) bool {
+func isKeyForBlock(key string, prefix string, blocksFilter map[*big.Int]uint8) bool {
 	if !strings.HasPrefix(key, prefix) {
 		return false
 	}
-	blockNumber, err := strconv.ParseUint(strings.TrimPrefix(key, prefix), 10, 64)
-	if err != nil {
+	blockNumberStr := strings.TrimPrefix(key, prefix)
+	blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
+	if !ok {
 		return false
 	}
 	if len(blocksFilter) == 0 {
 		return true
 	}
-	_, ok := blocksFilter[blockNumber]
+	_, ok = blocksFilter[blockNumber]
 	return ok
 }
 
@@ -227,8 +234,8 @@ func getLimit(qf QueryFilter) int {
 	return int(limit)
 }
 
-func getBlockNumbersToCheck(qf QueryFilter) map[uint64]uint8 {
-	blockNumbersToCheck := make(map[uint64]uint8)
+func getBlockNumbersToCheck(qf QueryFilter) map[*big.Int]uint8 {
+	blockNumbersToCheck := make(map[*big.Int]uint8)
 	for _, num := range qf.BlockNumbers {
 		blockNumbersToCheck[num] = 1
 	}

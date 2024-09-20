@@ -8,7 +8,7 @@ import (
 )
 
 type BlockFailure struct {
-	BlockNumber   uint64
+	BlockNumber   *big.Int
 	ChainId       *big.Int
 	FailureTime   time.Time
 	FailureReason string
@@ -22,8 +22,9 @@ func BlockFailureToString(blockFailure BlockFailure) (string, error) {
 		BlockNumber string `json:"block_number"`
 		ChainId     string `json:"chain_id"`
 	}{
-		Alias:   (*Alias)(&blockFailure),
-		ChainId: blockFailure.ChainId.String(),
+		Alias:       (*Alias)(&blockFailure),
+		ChainId:     blockFailure.ChainId.String(),
+		BlockNumber: blockFailure.BlockNumber.String(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal block failure: %v", err)
@@ -36,7 +37,8 @@ func StringToBlockFailure(blockFailureJson string) (BlockFailure, error) {
 	type Alias BlockFailure
 	aux := &struct {
 		*Alias
-		ChainId string `json:"chain_id"`
+		ChainId     string `json:"chain_id"`
+		BlockNumber string `json:"block_number"`
 	}{
 		Alias: (*Alias)(&result),
 	}
@@ -51,5 +53,9 @@ func StringToBlockFailure(blockFailureJson string) (BlockFailure, error) {
 		return result, fmt.Errorf("failed to parse chain id: %s", aux.ChainId)
 	}
 	result.ChainId = chainId
+	result.BlockNumber, ok = new(big.Int).SetString(aux.BlockNumber, 10)
+	if !ok {
+		return result, fmt.Errorf("failed to parse block number: %s", aux.BlockNumber)
+	}
 	return result, nil
 }
