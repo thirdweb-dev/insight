@@ -126,6 +126,9 @@ func serializeLogs(rpc common.RPC, logs []types.Log, block *types.Block) []commo
 func serializeTraces(rpc common.RPC, traces []map[string]interface{}, block *types.Block) []common.Trace {
 	serializedTraces := make([]common.Trace, 0, len(traces))
 	for _, trace := range traces {
+		if trace == nil {
+			continue
+		}
 		action := trace["action"].(map[string]interface{})
 		result := trace["result"].(map[string]interface{})
 		serializedTraces = append(serializedTraces, common.Trace{

@@ -74,7 +74,7 @@ func (p *Poller) Start() {
 
 			worker := worker.NewWorker(p.rpc, p.storage)
 			results := worker.Run(blockNumbers)
-			p.handleBlockFailures(results)
+			p.handleBlockResults(results)
 
 			if endBlock != nil {
 				saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
@@ -124,6 +124,42 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 	}
 
 	return blockNumbers, nil
+}
+
+func (p *Poller) handleBlockResults(results []worker.BlockResult) {
+	var blocks []common.Block
+	var logs []common.Log
+	var transactions []common.Transaction
+	var failedResults []worker.BlockResult
+
+	for _, result := range results {
+		if result.Error != nil {
+			failedResults = append(failedResults, result)
+			continue
+		}
+		blocks = append(blocks, result.Block)
+		logs = append(logs, result.Logs...)
+		transactions = append(transactions, result.Transactions...)
+	}
+
+	if err := p.storage.DBStagingStorage.InsertBlocks(blocks); err != nil {
+		log.Error().Err(err).Msg("Error inserting blocks")
+		failedResults = append(failedResults, results...)
+	}
+
+	if err := p.storage.DBStagingStorage.InsertLogs(logs); err != nil {
+		log.Error().Err(err).Msg("Error inserting logs")
+		failedResults = append(failedResults, results...)
+	}
+
+	if err := p.storage.DBStagingStorage.InsertTransactions(transactions); err != nil {
+		log.Error().Err(err).Msg("Error inserting transactions")
+		failedResults = append(failedResults, results...)
+	}
+
+	if len(failedResults) > 0 {
+		p.handleBlockFailures(failedResults)
+	}
 }
 
 func (p *Poller) handleBlockFailures(results []worker.BlockResult) {
