@@ -42,11 +42,11 @@ type IOrchestratorStorage interface {
 type IDBStorage interface {
 	InsertBlocks(blocks []common.Block) error
 	InsertTransactions(txs []common.Transaction) error
-	InsertLogs(events []common.Log) error
+	InsertLogs(logs []common.Log) error
 
-	GetBlocks(qf QueryFilter) (events []common.Block, err error)
-	GetTransactions(qf QueryFilter) (events []common.Transaction, err error)
-	GetEvents(qf QueryFilter) (events []common.Log, err error)
+	GetBlocks(qf QueryFilter) (logs []common.Block, err error)
+	GetTransactions(qf QueryFilter) (logs []common.Transaction, err error)
+	GetLogs(qf QueryFilter) (logs []common.Log, err error)
 	GetMaxBlockNumber() (maxBlockNumber uint64, err error)
 
 	DeleteBlocks(blocks []common.Block) error
