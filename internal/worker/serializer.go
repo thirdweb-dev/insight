@@ -51,7 +51,7 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 		StateRoot:        block.Header().Root.Hex(),
 		TransactionsRoot: block.Header().TxHash.Hex(),
 		ReceiptsRoot:     block.ReceiptHash().Hex(),
-		LogsBloom:        block.Bloom().Big().String(),
+		LogsBloom:        block.Bloom().Big().Text(16),
 		Size:             uint64(block.Size()),
 		ExtraData:        string(block.Extra()),
 		Difficulty:       block.Difficulty(),
@@ -59,12 +59,7 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 		GasUsed:          big.NewInt(int64(block.GasUsed())),
 		TransactionCount: uint64(len(block.Transactions())),
 		BaseFeePerGas:    block.BaseFee().Uint64(),
-		WithdrawalsRoot: func() string {
-			if block.Header().WithdrawalsHash == nil {
-				return ""
-			}
-			return block.Header().WithdrawalsHash.Big().String()
-		}(),
+		WithdrawalsRoot:  block.Header().WithdrawalsHash.Hex(),
 	}
 }
 
