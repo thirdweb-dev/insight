@@ -253,16 +253,50 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 }
 
 func (c *ClickHouseConnector) DeleteBlocks(blocks []common.Block) error {
-	return nil
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".blocks")
+	if err != nil {
+		return err
+	}
+
+	for _, block := range blocks {
+		err := batch.Append(block.Number)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Send()
 }
 
 func (c *ClickHouseConnector) DeleteTransactions(txs []common.Transaction) error {
-	return nil
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".transactions")
+	if err != nil {
+		return err
+	}
+
+	for _, tx := range txs {
+		err := batch.Append(tx.Hash)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Send()
 }
 
 func (c *ClickHouseConnector) DeleteEvents(events []common.Log) error {
-	return nil
+	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM " + c.cfg.Database + ".logs")
+	if err != nil {
+		return err
+	}
+
+	for _, event := range events {
+		err := batch.Append(event.TransactionHash, event.Index)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Send()
 }
+
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Transaction, err error) {
 	query := fmt.Sprintf("SELECT * FROM %s.transactions WHERE block_number IN (%s)%s", c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 	rows, err := c.conn.Query(context.Background(), query)
