@@ -13,7 +13,6 @@ import (
 
 type MemoryConnectorConfig struct {
 	MaxItems int
-	Prefix   string
 }
 
 type MemoryConnector struct {
@@ -21,10 +20,6 @@ type MemoryConnector struct {
 }
 
 func NewMemoryConnector(cfg *MemoryConnectorConfig) (*MemoryConnector, error) {
-	if cfg != nil && cfg.MaxItems <= 0 {
-		return nil, fmt.Errorf("maxItems must be greater than 0")
-	}
-
 	maxItems := 1000
 	if cfg != nil && cfg.MaxItems > 0 {
 		maxItems = cfg.MaxItems
@@ -238,4 +233,25 @@ func getBlockNumbersToCheck(qf QueryFilter) map[uint64]uint8 {
 		blockNumbersToCheck[num] = 1
 	}
 	return blockNumbersToCheck
+}
+
+func (m *MemoryConnector) DeleteBlocks(blocks []common.Block) error {
+	for _, block := range blocks {
+		m.cache.Remove(fmt.Sprintf("block:%d", block.Number))
+	}
+	return nil
+}
+
+func (m *MemoryConnector) DeleteTransactions(txs []common.Transaction) error {
+	for _, tx := range txs {
+		m.cache.Remove(fmt.Sprintf("transaction:%s", tx.Hash))
+	}
+	return nil
+}
+
+func (m *MemoryConnector) DeleteEvents(events []common.Log) error {
+	for _, event := range events {
+		m.cache.Remove(fmt.Sprintf("event:%s-%d", event.TransactionHash, event.Index))
+	}
+	return nil
 }

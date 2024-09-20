@@ -18,24 +18,9 @@ type Orchestrator struct {
 
 func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
 	storage, err := storage.NewStorageConnector(&storage.StorageConfig{
-		Orchestrator: storage.ConnectorConfig{
-			Driver: "memory",
-			Memory: &storage.MemoryConnectorConfig{
-				Prefix: "orchestrator",
-			},
-		},
-		Main: storage.ConnectorConfig{
-			Driver: "memory",
-			Memory: &storage.MemoryConnectorConfig{
-				Prefix: "main",
-			},
-		},
-		Staging: storage.ConnectorConfig{
-			Driver: "memory",
-			Memory: &storage.MemoryConnectorConfig{
-				Prefix: "staging",
-			},
-		},
+		Orchestrator: storage.ConnectorConfig{Driver: "memory"},
+		Main:         storage.ConnectorConfig{Driver: "memory"},
+		Staging:      storage.ConnectorConfig{Driver: "memory"},
 	})
 	if err != nil {
 		return nil, err
