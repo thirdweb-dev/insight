@@ -12,14 +12,14 @@ type Transaction struct {
 	BlockHash            string
 	BlockNumber          uint64
 	BlockTimestamp       time.Time
-	Index                uint64
-	From                 string
-	To                   string
+	TransactionIndex     uint64
+	FromAddress          string
+	ToAddress            string
 	Value                *big.Int
 	Gas                  *big.Int
 	GasPrice             *big.Int
 	Input                string
 	MaxFeePerGas         *big.Int
 	MaxPriorityFeePerGas *big.Int
-	Type                 uint64
+	TransactionType      int64
 }

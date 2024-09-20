@@ -160,7 +160,7 @@ func (m *MemoryConnector) InsertLogs(logs []common.Log) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.Index), string(logJson))
+		m.cache.Add(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.LogIndex), string(logJson))
 	}
 	return nil
 }
@@ -251,7 +251,7 @@ func (m *MemoryConnector) DeleteTransactions(txs []common.Transaction) error {
 
 func (m *MemoryConnector) DeleteLogs(logs []common.Log) error {
 	for _, log := range logs {
-		m.cache.Remove(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.Index))
+		m.cache.Remove(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.LogIndex))
 	}
 	return nil
 }
