@@ -1,18 +1,15 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/env"
 	customLogger "github.com/thirdweb-dev/indexer/internal/log"
 	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal().Err(err).Msg("error loading .env file")
-	}
+	env.Load()
 	customLogger.InitLogger()
 
 	log.Info().Msg("Starting indexer")
