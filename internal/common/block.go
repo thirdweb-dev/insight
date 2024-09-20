@@ -13,14 +13,18 @@ type Block struct {
 	Timestamp        time.Time
 	Nonce            string
 	Sha3Uncles       string
-	LogsBloom        string
+	MixHash          string
+	Miner            string
+	StateRoot        string
+	TransactionsRoot string
 	ReceiptsRoot     string
-	Difficulty       *big.Int
-	Size             float64
+	LogsBloom        string
+	Size             uint64
 	ExtraData        string
+	Difficulty       *big.Int
+	TransactionCount uint64
 	GasLimit         *big.Int
 	GasUsed          *big.Int
-	TransactionCount uint64
-	BaseFeePerGas    *big.Int
 	WithdrawalsRoot  string
+	BaseFeePerGas    uint64
 }

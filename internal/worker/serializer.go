@@ -46,21 +46,20 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 		Timestamp:        time.Unix(int64(block.Time()), 0),
 		Nonce:            hexutil.EncodeUint64(block.Nonce()),
 		Sha3Uncles:       block.UncleHash().Hex(),
-		LogsBloom:        block.Bloom().Big().String(),
+		MixHash:          block.Header().MixDigest.Hex(),
+		Miner:            block.Header().Coinbase.Hex(),
+		StateRoot:        block.Header().Root.Hex(),
+		TransactionsRoot: block.Header().TxHash.Hex(),
 		ReceiptsRoot:     block.ReceiptHash().Hex(),
-		Difficulty:       block.Difficulty(),
-		Size:             float64(block.Size()),
+		LogsBloom:        block.Bloom().Big().Text(16),
+		Size:             uint64(block.Size()),
 		ExtraData:        string(block.Extra()),
+		Difficulty:       block.Difficulty(),
 		GasLimit:         big.NewInt(int64(block.GasLimit())),
 		GasUsed:          big.NewInt(int64(block.GasUsed())),
 		TransactionCount: uint64(len(block.Transactions())),
-		BaseFeePerGas:    block.BaseFee(),
-		WithdrawalsRoot: func() string {
-			if block.Header().WithdrawalsHash == nil {
-				return ""
-			}
-			return block.Header().WithdrawalsHash.Big().String()
-		}(),
+		BaseFeePerGas:    block.BaseFee().Uint64(),
+		WithdrawalsRoot:  block.Header().WithdrawalsHash.Hex(),
 	}
 }
 
@@ -77,16 +76,16 @@ func serializeTransaction(rpc common.RPC, tx *types.Transaction, block *types.Bl
 		BlockHash:            block.Hash().Hex(),
 		BlockNumber:          block.NumberU64(),
 		BlockTimestamp:       time.Unix(int64(block.Time()), 0),
-		Index:                uint64(index),
-		From:                 from.Hex(),
-		To:                   tx.To().Hex(),
+		TransactionIndex:     uint64(index),
+		FromAddress:          from.Hex(),
+		ToAddress:            tx.To().Hex(),
 		Value:                tx.Value(),
 		Gas:                  new(big.Int).SetUint64(tx.Gas()),
 		GasPrice:             tx.GasPrice(),
 		Input:                hexutil.Encode(tx.Data()),
 		MaxFeePerGas:         tx.GasFeeCap(),
 		MaxPriorityFeePerGas: tx.GasTipCap(),
-		Type:                 uint64(tx.Type()),
+		TransactionType:      int64(tx.Type()),
 	}, nil
 }
 
@@ -105,7 +104,7 @@ func serializeLogs(rpc common.RPC, logs []types.Log, block *types.Block) []commo
 			BlockTimestamp:   blockTimestamp,
 			TransactionHash:  log.TxHash.Hex(),
 			TransactionIndex: uint64(log.TxIndex),
-			Index:            uint64(log.Index),
+			LogIndex:         uint64(log.Index),
 			Address:          log.Address.Hex(),
 			Data:             hexutil.Encode(log.Data),
 			Topics:           topics,

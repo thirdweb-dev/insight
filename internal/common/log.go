@@ -12,7 +12,7 @@ type Log struct {
 	BlockTimestamp   time.Time
 	TransactionHash  string
 	TransactionIndex uint64
-	Index            uint64
+	LogIndex         uint64
 	Address          string
 	Data             string
 	Topics           []string

@@ -140,16 +140,16 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 			tx.BlockHash,
 			tx.BlockNumber,
 			tx.BlockTimestamp,
-			tx.Index,
-			tx.From,
-			tx.To,
+			tx.TransactionIndex,
+			tx.FromAddress,
+			tx.ToAddress,
 			tx.Value,
 			tx.Gas,
 			tx.GasPrice,
 			tx.Input,
 			tx.MaxFeePerGas,
 			tx.MaxPriorityFeePerGas,
-			tx.Type,
+			tx.TransactionType,
 		)
 		if err != nil {
 			return err
@@ -171,7 +171,7 @@ func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
 			log.BlockTimestamp,
 			log.TransactionHash,
 			log.TransactionIndex,
-			log.Index,
+			log.LogIndex,
 			log.Address,
 			log.Data,
 			log.Topics,
@@ -289,7 +289,7 @@ func (c *ClickHouseConnector) DeleteLogs(logs []common.Log) error {
 	}
 
 	for _, log := range logs {
-		err := batch.Append(log.BlockNumber, log.TransactionHash, log.Index)
+		err := batch.Append(log.BlockNumber, log.TransactionHash, log.LogIndex)
 		if err != nil {
 			return err
 		}
@@ -314,16 +314,16 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Tran
 			&tx.BlockHash,
 			&tx.BlockNumber,
 			&tx.BlockTimestamp,
-			&tx.Index,
-			&tx.From,
-			&tx.To,
+			&tx.TransactionIndex,
+			&tx.FromAddress,
+			&tx.ToAddress,
 			&tx.Value,
 			&tx.Gas,
 			&tx.GasPrice,
 			&tx.Input,
 			&tx.MaxFeePerGas,
 			&tx.MaxPriorityFeePerGas,
-			&tx.Type,
+			&tx.TransactionType,
 		)
 		if err != nil {
 			zLog.Error().Err(err).Msg("Error scanning transaction")
@@ -351,7 +351,7 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 			&log.BlockTimestamp,
 			&log.TransactionHash,
 			&log.TransactionIndex,
-			&log.Index,
+			&log.LogIndex,
 			&log.Address,
 			&log.Data,
 			&log.Topics,
