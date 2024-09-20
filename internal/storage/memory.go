@@ -154,7 +154,7 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction,
 	return txs, nil
 }
 
-func (m *MemoryConnector) InsertEvents(events []common.Log) error {
+func (m *MemoryConnector) InsertLogs(events []common.Log) error {
 	for _, event := range events {
 		eventJson, err := json.Marshal(event)
 		if err != nil {
