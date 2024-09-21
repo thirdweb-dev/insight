@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -44,7 +45,7 @@ func serializeBlock(rpc common.RPC, block *types.Block) common.Block {
 		Hash:             block.Hash().Hex(),
 		ParentHash:       block.ParentHash().Hex(),
 		Timestamp:        time.Unix(int64(block.Time()), 0),
-		Nonce:            hexutil.EncodeUint64(block.Nonce()),
+		Nonce:            fmt.Sprintf("0x%016x", block.Nonce()),
 		Sha3Uncles:       block.UncleHash().Hex(),
 		MixHash:          block.Header().MixDigest.Hex(),
 		Miner:            block.Header().Coinbase.Hex(),
@@ -80,15 +81,20 @@ func serializeTransaction(rpc common.RPC, tx *types.Transaction, block *types.Bl
 		return nil, err
 	}
 	return &common.Transaction{
-		ChainId:              rpc.ChainID,
-		Hash:                 tx.Hash().Hex(),
-		Nonce:                tx.Nonce(),
-		BlockHash:            block.Hash().Hex(),
-		BlockNumber:          block.Number(),
-		BlockTimestamp:       time.Unix(int64(block.Time()), 0),
-		TransactionIndex:     uint64(index),
-		FromAddress:          from.Hex(),
-		ToAddress:            tx.To().Hex(),
+		ChainId:          rpc.ChainID,
+		Hash:             tx.Hash().Hex(),
+		Nonce:            tx.Nonce(),
+		BlockHash:        block.Hash().Hex(),
+		BlockNumber:      block.Number(),
+		BlockTimestamp:   time.Unix(int64(block.Time()), 0),
+		TransactionIndex: uint64(index),
+		FromAddress:      from.Hex(),
+		ToAddress: func() string {
+			if tx.To() != nil {
+				return tx.To().Hex()
+			}
+			return ""
+		}(),
 		Value:                tx.Value(),
 		Gas:                  new(big.Int).SetUint64(tx.Gas()),
 		GasPrice:             tx.GasPrice(),
@@ -130,41 +136,70 @@ func serializeTraces(rpc common.RPC, traces []map[string]interface{}, block *typ
 			continue
 		}
 		action := trace["action"].(map[string]interface{})
-		result := trace["result"].(map[string]interface{})
+		result := make(map[string]interface{})
+		if resultVal, ok := trace["result"]; ok {
+			if resultMap, ok := resultVal.(map[string]interface{}); ok {
+				result = resultMap
+			}
+		}
 		serializedTraces = append(serializedTraces, common.Trace{
-			ID:               uuid.New().String(),
-			ChainID:          rpc.ChainID,
-			BlockNumber:      block.Number(),
-			BlockHash:        block.Hash().Hex(),
-			BlockTimestamp:   time.Unix(int64(block.Time()), 0),
-			TransactionHash:  trace["transactionHash"].(string),
-			TransactionIndex: trace["transactionPosition"].(uint64),
-			CallType:         action["callType"].(string),
-			Error:            trace["error"].(string), // TODO: how to get this?
-			FromAddress:      action["from"].(string),
-			ToAddress:        action["to"].(string),
-			Gas:              serializeHexToBigInt(action["gas"].(string)),
-			GasUsed:          serializeHexToBigInt(result["gasUsed"].(string)),
-			Input:            action["input"].(string),
-			Output:           result["output"].(string),
-			Subtraces:        trace["subtraces"].(uint64),
-			TraceAddress:     serializeTraceAddress(trace["traceAddress"].([]uint64)),
-			TraceType:        trace["type"].(string),
-			Value:            serializeHexToBigInt(trace["value"].(string)),
+			ID:              uuid.New().String(),
+			ChainID:         rpc.ChainID,
+			BlockNumber:     block.Number(),
+			BlockHash:       block.Hash().Hex(),
+			BlockTimestamp:  time.Unix(int64(block.Time()), 0),
+			TransactionHash: getStringValueIfExists(trace, "transactionHash"),
+			TransactionIndex: func() uint64 {
+				if v, ok := trace["transactionPosition"]; ok && v != nil {
+					if f, ok := v.(float64); ok {
+						return uint64(f)
+					}
+				}
+				return 0
+			}(),
+			CallType:     getStringValueIfExists(action, "callType"),
+			Error:        getStringValueIfExists(trace, "error"),
+			FromAddress:  getStringValueIfExists(action, "from"),
+			ToAddress:    getStringValueIfExists(action, "to"),
+			Gas:          serializeHexToBigInt(action["gas"]),
+			GasUsed:      serializeHexToBigInt(result["gasUsed"]),
+			Input:        getStringValueIfExists(action, "input"),
+			Output:       getStringValueIfExists(result, "output"),
+			Subtraces:    uint64(trace["subtraces"].(float64)),
+			TraceAddress: serializeTraceAddress(trace["traceAddress"]),
+			TraceType:    trace["type"].(string),
+			Value:        serializeHexToBigInt(trace["value"]),
 		})
 	}
 	return serializedTraces
 }
 
-func serializeHexToBigInt(hex string) *big.Int {
-	v, _ := new(big.Int).SetString(hex[2:], 16)
+func serializeHexToBigInt(hex interface{}) *big.Int {
+	if hex == nil {
+		return new(big.Int)
+	}
+	hexString, ok := hex.(string)
+	if !ok {
+		return new(big.Int)
+	}
+	v, _ := new(big.Int).SetString(hexString[2:], 16)
 	return v
 }
 
-func serializeTraceAddress(traceAddress []uint64) string {
-	traceAddressString := ""
-	for _, value := range traceAddress {
-		traceAddressString += fmt.Sprintf("%d-", value)
+func serializeTraceAddress(traceAddress interface{}) string {
+	if traceAddressSlice, ok := traceAddress.([]interface{}); ok {
+		var strAddresses []string
+		for _, addr := range traceAddressSlice {
+			strAddresses = append(strAddresses, fmt.Sprintf("%d", uint64(addr.(float64))))
+		}
+		return strings.Join(strAddresses, "-")
 	}
-	return traceAddressString
+	return ""
+}
+
+func getStringValueIfExists(trace map[string]interface{}, key string) string {
+	if value, ok := trace[key]; ok {
+		return value.(string)
+	}
+	return ""
 }

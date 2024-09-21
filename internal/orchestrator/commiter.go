@@ -21,6 +21,7 @@ type Commiter struct {
 	triggerIntervalMs int
 	blocksPerCommit   int
 	storage           storage.IStorage
+	pollFromBlock     *big.Int
 }
 
 func NewCommiter(storage storage.IStorage) *Commiter {
@@ -32,10 +33,16 @@ func NewCommiter(storage storage.IStorage) *Commiter {
 	if err != nil || blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
+	pollFromBlock, err := strconv.ParseUint(os.Getenv("POLL_FROM_BLOCK"), 10, 64)
+	if err != nil {
+		pollFromBlock = 0
+	}
+
 	return &Commiter{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
+		pollFromBlock:     big.NewInt(int64(pollFromBlock)),
 	}
 }
 
@@ -70,11 +77,14 @@ func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	startBlock := new(big.Int).Set(maxBlockNumber)
-	if maxBlockNumber.Cmp(big.NewInt(0)) != 0 {
-		startBlock.Add(startBlock, big.NewInt(1))
+
+	if maxBlockNumber.Cmp(big.NewInt(0)) == 0 {
+		maxBlockNumber = new(big.Int).Sub(c.pollFromBlock, big.NewInt(1))
 	}
+
+	startBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
 	endBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+
 	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
 	blockNumbers := make([]*big.Int, blockCount)
 	for i := int64(0); i < blockCount; i++ {
@@ -133,6 +143,7 @@ func (c *Commiter) commit(blocks []common.Block) error {
 		return fmt.Errorf("error fetching staging data: %v", err)
 	}
 
+	// TODO if next parts fail, we'll have to do a rollback
 	if err := c.saveDataToMainStorage(blocks, logs, transactions); err != nil {
 		return fmt.Errorf("error saving data to main storage: %v", err)
 	}
