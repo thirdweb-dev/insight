@@ -305,72 +305,6 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 	return blocks, nil
 }
 
-func (c *ClickHouseConnector) DeleteBlocks(blocks []common.Block) error {
-	query := fmt.Sprintf(`
-        INSERT INTO %s.blocks (
-            chain_id, number, hash, is_deleted
-        ) VALUES (?, ?, ?, ?)
-    `, c.cfg.Database)
-
-	batch, err := c.conn.PrepareBatch(context.Background(), query)
-	if err != nil {
-		return err
-	}
-
-	for _, block := range blocks {
-		err := batch.Append(
-			block.ChainId,
-			block.Number,
-			block.Hash,
-			1,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return batch.Send()
-}
-
-func (c *ClickHouseConnector) DeleteTransactions(txs []common.Transaction) error {
-	query := fmt.Sprintf(`
-        INSERT INTO %s.transactions (
-            chain_id, block_number, is_deleted
-        ) VALUES (?, ?, ?)
-    `, c.cfg.Database)
-	batch, err := c.conn.PrepareBatch(context.Background(), query)
-	if err != nil {
-		return err
-	}
-
-	for _, tx := range txs {
-		err := batch.Append(tx.ChainId, tx.BlockNumber, 1)
-		if err != nil {
-			return err
-		}
-	}
-	return batch.Send()
-}
-
-func (c *ClickHouseConnector) DeleteLogs(logs []common.Log) error {
-	query := fmt.Sprintf(`
-        INSERT INTO %s.logs (
-            chain_id, block_number, transaction_hash, log_index, is_deleted
-        ) VALUES (?, ?, ?, ?, ?)
-    `, c.cfg.Database)
-	batch, err := c.conn.PrepareBatch(context.Background(), query)
-	if err != nil {
-		return err
-	}
-
-	for _, log := range logs {
-		err := batch.Append(log.ChainId, log.BlockNumber, log.TransactionHash, log.LogIndex, 1)
-		if err != nil {
-			return err
-		}
-	}
-	return batch.Send()
-}
-
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Transaction, err error) {
 	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, input, max_fee_per_gas, max_priority_fee_per_gas, transaction_type"
 	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
@@ -606,4 +540,83 @@ func (c *ClickHouseConnector) DeleteBlockData(data []common.BlockData) error {
 		}
 	}
 	return batch.Send()
+}
+
+func (c *ClickHouseConnector) InsertTraces(traces []common.Trace) error {
+	query := `INSERT INTO ` + c.cfg.Database + `.traces (id, chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, call_type, error, from_address, to_address, gas, gas_used, input, output, subtraces, trace_address, trace_type, value)`
+	batch, err := c.conn.PrepareBatch(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	for _, trace := range traces {
+		err = batch.Append(
+			trace.ID,
+			trace.ChainID,
+			trace.BlockNumber,
+			trace.BlockHash,
+			uint64(trace.BlockTimestamp.Unix()),
+			trace.TransactionHash,
+			trace.TransactionIndex,
+			trace.CallType,
+			trace.Error,
+			trace.FromAddress,
+			trace.ToAddress,
+			trace.Gas,
+			trace.GasUsed,
+			trace.Input,
+			trace.Output,
+			trace.Subtraces,
+			trace.TraceAddress,
+			trace.TraceType,
+			trace.Value,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Send()
+}
+
+func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, err error) {
+	query := fmt.Sprintf("SELECT * FROM %s.traces FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
+		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
+
+	rows, err := c.conn.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var trace common.Trace
+		var timestamp uint64
+		err := rows.Scan(
+			&trace.ID,
+			&trace.ChainID,
+			&trace.BlockNumber,
+			&trace.BlockHash,
+			&timestamp,
+			&trace.TransactionHash,
+			&trace.TransactionIndex,
+			&trace.CallType,
+			&trace.Error,
+			&trace.FromAddress,
+			&trace.ToAddress,
+			&trace.Gas,
+			&trace.GasUsed,
+			&trace.Input,
+			&trace.Output,
+			&trace.Subtraces,
+			&trace.TraceAddress,
+			&trace.TraceType,
+			&trace.Value,
+		)
+		if err != nil {
+			zLog.Error().Err(err).Msg("Error scanning transaction")
+			return nil, err
+		}
+		trace.BlockTimestamp = time.Unix(int64(timestamp), 0)
+		traces = append(traces, trace)
+	}
+	return traces, nil
 }

@@ -20,11 +20,6 @@ CREATE TABLE base.logs (
     INDEX topic1_idx topic_1 TYPE bloom_filter GRANULARITY 1,
     INDEX topic2_idx topic_2 TYPE bloom_filter GRANULARITY 1,
     INDEX topic3_idx topic_3 TYPE bloom_filter GRANULARITY 1,
-) ENGINE = SharedReplacingMergeTree(
-    '/clickhouse/tables/{uuid}/{shard}',
-    '{replica}',
-    insert_timestamp,
-    is_deleted
-)
-ORDER BY (block_number, transaction_hash, log_index) SETTINGS index_granularity = 8192
+) ENGINE = SharedReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (block_number, transaction_hash, log_index)
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

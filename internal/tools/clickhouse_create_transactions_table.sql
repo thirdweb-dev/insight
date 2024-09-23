@@ -19,11 +19,5 @@ CREATE TABLE base.transactions (
     `insert_timestamp` DateTime DEFAULT now(),
     INDEX block_timestamp_idx block_timestamp TYPE minmax GRANULARITY 1,
     INDEX transaction_hash_idx hash TYPE bloom_filter GRANULARITY 1,
-) ENGINE = SharedReplacingMergeTree(
-    '/clickhouse/tables/{uuid}/{shard}',
-    '{replica}',
-    insert_timestamp,
-    is_deleted
-)
-ORDER BY (chain_id, block_number) SETTINGS index_granularity = 8192
-SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (chain_id, block_number, hash) SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
