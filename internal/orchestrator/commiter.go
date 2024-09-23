@@ -53,16 +53,16 @@ func (c *Commiter) Start() {
 	log.Debug().Msgf("Commiter running at")
 	go func() {
 		for range ticker.C {
-			blocksToCommit, err := c.getSequentialBlocksToCommit()
+			blockDataToCommit, err := c.getSequentialBlockDataToCommit()
 			if err != nil {
-				log.Error().Err(err).Msg("Error getting blocks to commit")
+				log.Error().Err(err).Msg("Error getting block data to commit")
 				continue
 			}
-			if len(blocksToCommit) == 0 {
-				log.Debug().Msg("No blocks to commit")
+			if len(blockDataToCommit) == 0 {
+				log.Debug().Msg("No block data to commit")
 				continue
 			}
-			if err := c.commit(blocksToCommit); err != nil {
+			if err := c.commit(blockDataToCommit); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
 		}
@@ -73,7 +73,7 @@ func (c *Commiter) Start() {
 }
 
 func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
-	maxBlockNumber, err := c.storage.DBMainStorage.GetMaxBlockNumber()
+	maxBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber()
 	if err != nil {
 		return nil, err
 	}
@@ -94,105 +94,79 @@ func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
 	return blockNumbers, nil
 }
 
-func (c *Commiter) getSequentialBlocksToCommit() ([]common.Block, error) {
+func (c *Commiter) getSequentialBlockDataToCommit() ([]common.BlockData, error) {
 	blocksToCommit, err := c.getBlockNumbersToCommit()
 	if err != nil {
 		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
 	}
-	blocks, err := c.storage.DBStagingStorage.GetBlocks(storage.QueryFilter{BlockNumbers: blocksToCommit})
+	blocksData, err := c.storage.StagingStorage.GetBlockData(storage.QueryFilter{BlockNumbers: blocksToCommit})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
 	}
-	if len(blocks) == 0 {
+	if len(blocksData) == 0 {
 		return nil, nil
 	}
 
 	// Sort blocks by block number
-	sort.Slice(blocks, func(i, j int) bool {
-		return blocks[i].Number.Cmp(blocks[j].Number) < 0
+	sort.Slice(blocksData, func(i, j int) bool {
+		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
 	})
 
-	var sequentialBlocks []common.Block
-	if len(blocks) == 0 {
-		return sequentialBlocks, nil
-	}
-	sequentialBlocks = append(sequentialBlocks, blocks[0])
-	expectedBlockNumber := new(big.Int).Add(blocks[0].Number, big.NewInt(1))
+	var sequentialBlockData []common.BlockData
+	sequentialBlockData = append(sequentialBlockData, blocksData[0])
+	expectedBlockNumber := new(big.Int).Add(blocksData[0].Block.Number, big.NewInt(1))
 
-	for i := 1; i < len(blocks); i++ {
-		if blocks[i].Number.Cmp(expectedBlockNumber) != 0 {
+	for i := 1; i < len(blocksData); i++ {
+		if blocksData[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
 			// Gap detected, stop here
 			break
 		}
-		sequentialBlocks = append(sequentialBlocks, blocks[i])
+		sequentialBlockData = append(sequentialBlockData, blocksData[i])
 		expectedBlockNumber.Add(expectedBlockNumber, big.NewInt(1))
 	}
 
-	return sequentialBlocks, nil
+	return sequentialBlockData, nil
 }
 
-func (c *Commiter) commit(blocks []common.Block) error {
-	blockNumbers := make([]*big.Int, len(blocks))
-	for i, block := range blocks {
-		blockNumbers[i] = block.Number
+func (c *Commiter) commit(blockData []common.BlockData) error {
+	blockNumbers := make([]*big.Int, len(blockData))
+	for i, block := range blockData {
+		blockNumbers[i] = block.Block.Number
 	}
 	log.Debug().Msgf("Committing blocks: %v", blockNumbers)
 
-	logs, transactions, err := c.getStagingDataForBlocks(blockNumbers)
-	if err != nil {
-		return fmt.Errorf("error fetching staging data: %v", err)
-	}
-
-	// TODO if next parts fail, we'll have to do a rollback
-	if err := c.saveDataToMainStorage(blocks, logs, transactions); err != nil {
+	// TODO if next parts (saving or deleting) fail, we'll have to do a rollback
+	if err := c.saveDataToMainStorage(blockData); err != nil {
 		return fmt.Errorf("error saving data to main storage: %v", err)
 	}
 
-	if err := c.deleteDataFromStagingStorage(blocks, logs, transactions); err != nil {
+	if err := c.storage.StagingStorage.DeleteBlockData(blockData); err != nil {
 		return fmt.Errorf("error deleting data from staging storage: %v", err)
 	}
 
 	return nil
 }
 
-func (c *Commiter) getStagingDataForBlocks(blockNumbers []*big.Int) (logs []common.Log, transactions []common.Transaction, err error) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	var logErr, txErr error
-
-	go func() {
-		defer wg.Done()
-		logs, logErr = c.storage.DBStagingStorage.GetLogs(storage.QueryFilter{BlockNumbers: blockNumbers})
-	}()
-
-	go func() {
-		defer wg.Done()
-		transactions, txErr = c.storage.DBStagingStorage.GetTransactions(storage.QueryFilter{BlockNumbers: blockNumbers})
-	}()
-
-	wg.Wait()
-
-	if logErr != nil {
-		return nil, nil, fmt.Errorf("error fetching logs: %v", logErr)
-	}
-	if txErr != nil {
-		return nil, nil, fmt.Errorf("error fetching transactions: %v", txErr)
-	}
-
-	return logs, transactions, nil
-}
-
-func (c *Commiter) saveDataToMainStorage(blocks []common.Block, logs []common.Log, transactions []common.Transaction) error {
+func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
 	var commitWg sync.WaitGroup
 	commitWg.Add(3)
 
 	var commitErr error
 	var commitErrMutex sync.Mutex
 
+	blocks := make([]common.Block, 0, len(blockData))
+	logs := make([]common.Log, 0)
+	transactions := make([]common.Transaction, 0)
+
+	for _, block := range blockData {
+		blocks = append(blocks, block.Block)
+		logs = append(logs, block.Logs...)
+		transactions = append(transactions, block.Transactions...)
+	}
+
 	go func() {
 		defer commitWg.Done()
-		if err := c.storage.DBMainStorage.InsertBlocks(blocks); err != nil {
+		if err := c.storage.MainStorage.InsertBlocks(blocks); err != nil {
 			commitErrMutex.Lock()
 			commitErr = fmt.Errorf("error inserting blocks: %v", err)
 			commitErrMutex.Unlock()
@@ -201,7 +175,7 @@ func (c *Commiter) saveDataToMainStorage(blocks []common.Block, logs []common.Lo
 
 	go func() {
 		defer commitWg.Done()
-		if err := c.storage.DBMainStorage.InsertLogs(logs); err != nil {
+		if err := c.storage.MainStorage.InsertLogs(logs); err != nil {
 			commitErrMutex.Lock()
 			commitErr = fmt.Errorf("error inserting logs: %v", err)
 			commitErrMutex.Unlock()
@@ -210,7 +184,7 @@ func (c *Commiter) saveDataToMainStorage(blocks []common.Block, logs []common.Lo
 
 	go func() {
 		defer commitWg.Done()
-		if err := c.storage.DBMainStorage.InsertTransactions(transactions); err != nil {
+		if err := c.storage.MainStorage.InsertTransactions(transactions); err != nil {
 			commitErrMutex.Lock()
 			commitErr = fmt.Errorf("error inserting transactions: %v", err)
 			commitErrMutex.Unlock()
@@ -223,47 +197,5 @@ func (c *Commiter) saveDataToMainStorage(blocks []common.Block, logs []common.Lo
 		return commitErr
 	}
 
-	return nil
-}
-
-func (c *Commiter) deleteDataFromStagingStorage(blocks []common.Block, logs []common.Log, transactions []common.Transaction) error {
-	var deleteWg sync.WaitGroup
-	deleteWg.Add(3)
-
-	var deleteErr error
-	var deleteErrMutex sync.Mutex
-
-	go func() {
-		defer deleteWg.Done()
-		if err := c.storage.DBStagingStorage.DeleteBlocks(blocks); err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting blocks from staging: %v", err)
-			deleteErrMutex.Unlock()
-		}
-	}()
-
-	go func() {
-		defer deleteWg.Done()
-		if err := c.storage.DBStagingStorage.DeleteTransactions(transactions); err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting transactions from staging: %v", err)
-			deleteErrMutex.Unlock()
-		}
-	}()
-
-	go func() {
-		defer deleteWg.Done()
-		if err := c.storage.DBStagingStorage.DeleteLogs(logs); err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting logs from staging: %v", err)
-			deleteErrMutex.Unlock()
-		}
-	}()
-
-	deleteWg.Wait()
-
-	if deleteErr != nil {
-		return deleteErr
-	}
 	return nil
 }

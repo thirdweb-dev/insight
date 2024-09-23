@@ -133,34 +133,35 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 }
 
 func (p *Poller) handleBlockResults(results []worker.BlockResult) {
-	var blocks []common.Block
-	var logs []common.Log
-	var transactions []common.Transaction
+	var successfulResults []worker.BlockResult
 	var failedResults []worker.BlockResult
 
 	for _, result := range results {
 		if result.Error != nil {
 			failedResults = append(failedResults, result)
-			continue
+		} else {
+			successfulResults = append(successfulResults, result)
 		}
-		blocks = append(blocks, result.Block)
-		logs = append(logs, result.Logs...)
-		transactions = append(transactions, result.Transactions...)
 	}
 
-	if err := p.storage.DBStagingStorage.InsertBlocks(blocks); err != nil {
-		log.Error().Err(err).Msg("Error inserting blocks")
-		failedResults = append(failedResults, results...)
+	blockData := make([]common.BlockData, 0, len(successfulResults))
+	for _, result := range successfulResults {
+		blockData = append(blockData, common.BlockData{
+			Block:        result.Block,
+			Logs:         result.Logs,
+			Transactions: result.Transactions,
+			Traces:       result.Traces,
+		})
 	}
-
-	if err := p.storage.DBStagingStorage.InsertLogs(logs); err != nil {
-		log.Error().Err(err).Msg("Error inserting logs")
-		failedResults = append(failedResults, results...)
-	}
-
-	if err := p.storage.DBStagingStorage.InsertTransactions(transactions); err != nil {
-		log.Error().Err(err).Msg("Error inserting transactions")
-		failedResults = append(failedResults, results...)
+	if err := p.storage.StagingStorage.InsertBlockData(blockData); err != nil {
+		e := fmt.Errorf("error inserting block data: %v", err)
+		log.Error().Err(e)
+		for _, result := range successfulResults {
+			failedResults = append(failedResults, worker.BlockResult{
+				BlockNumber: result.BlockNumber,
+				Error:       e,
+			})
+		}
 	}
 
 	if len(failedResults) > 0 {

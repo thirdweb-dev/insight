@@ -27,8 +27,8 @@ type ConnectorConfig struct {
 
 type IStorage struct {
 	OrchestratorStorage IOrchestratorStorage
-	DBMainStorage       IDBStorage
-	DBStagingStorage    IDBStorage
+	MainStorage         IMainStorage
+	StagingStorage      IStagingStorage
 }
 
 type IOrchestratorStorage interface {
@@ -40,7 +40,13 @@ type IOrchestratorStorage interface {
 	DeleteBlockFailures(failures []common.BlockFailure) error
 }
 
-type IDBStorage interface {
+type IStagingStorage interface {
+	InsertBlockData(data []common.BlockData) error
+	GetBlockData(qf QueryFilter) (data []common.BlockData, err error)
+	DeleteBlockData(data []common.BlockData) error
+}
+
+type IMainStorage interface {
 	InsertBlocks(blocks []common.Block) error
 	InsertTransactions(txs []common.Transaction) error
 	InsertLogs(logs []common.Log) error
@@ -49,10 +55,6 @@ type IDBStorage interface {
 	GetTransactions(qf QueryFilter) (logs []common.Transaction, err error)
 	GetLogs(qf QueryFilter) (logs []common.Log, err error)
 	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
-
-	DeleteBlocks(blocks []common.Block) error
-	DeleteTransactions(txs []common.Transaction) error
-	DeleteLogs(logs []common.Log) error
 }
 
 func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
@@ -64,12 +66,12 @@ func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
 		return IStorage{}, fmt.Errorf("failed to create orchestrator storage: %w", err)
 	}
 
-	storage.DBMainStorage, err = newConnector[IDBStorage](cfg.Main)
+	storage.MainStorage, err = newConnector[IMainStorage](cfg.Main)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
 	}
 
-	storage.DBStagingStorage, err = newConnector[IDBStorage](cfg.Staging)
+	storage.StagingStorage, err = newConnector[IStagingStorage](cfg.Staging)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create staging storage: %w", err)
 	}

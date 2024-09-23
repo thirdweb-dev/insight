@@ -28,3 +28,10 @@ type Block struct {
 	WithdrawalsRoot  string
 	BaseFeePerGas    uint64
 }
+
+type BlockData struct {
+	Block        Block
+	Transactions []Transaction
+	Logs         []Log
+	Traces       []Trace
+}
