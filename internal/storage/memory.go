@@ -265,3 +265,15 @@ func (m *MemoryConnector) DeleteLogs(logs []common.Log) error {
 	}
 	return nil
 }
+
+func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
+	return nil
+}
+
+func (m *MemoryConnector) GetBlockData(blockNumbers []*big.Int) (data []common.BlockData, err error) {
+	return nil, nil
+}
+
+func (m *MemoryConnector) DeleteBlockData(blockNumbers []*big.Int) error {
+	return nil
+}

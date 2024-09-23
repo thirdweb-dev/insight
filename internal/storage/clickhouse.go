@@ -529,3 +529,15 @@ func getBlockNumbersStringArray(blockNumbers []*big.Int) string {
 	}
 	return blockNumbersString
 }
+
+func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
+	return nil
+}
+
+func (c *ClickHouseConnector) GetBlockData(blockNumbers []*big.Int) (data []common.BlockData, err error) {
+	return nil, nil
+}
+
+func (c *ClickHouseConnector) DeleteBlockData(blockNumbers []*big.Int) error {
+	return nil
+}
