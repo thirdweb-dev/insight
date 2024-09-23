@@ -50,10 +50,12 @@ type IMainStorage interface {
 	InsertBlocks(blocks []common.Block) error
 	InsertTransactions(txs []common.Transaction) error
 	InsertLogs(logs []common.Log) error
+	InsertTraces(traces []common.Trace) error
 
 	GetBlocks(qf QueryFilter) (logs []common.Block, err error)
 	GetTransactions(qf QueryFilter) (logs []common.Transaction, err error)
 	GetLogs(qf QueryFilter) (logs []common.Log, err error)
+	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
 	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
 }
 

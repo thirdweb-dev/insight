@@ -247,27 +247,6 @@ func getBlockNumbersToCheck(qf QueryFilter) map[string]uint8 {
 	return blockNumbersToCheck
 }
 
-func (m *MemoryConnector) DeleteBlocks(blocks []common.Block) error {
-	for _, block := range blocks {
-		m.cache.Remove(fmt.Sprintf("block:%s", block.Number.String()))
-	}
-	return nil
-}
-
-func (m *MemoryConnector) DeleteTransactions(txs []common.Transaction) error {
-	for _, tx := range txs {
-		m.cache.Remove(fmt.Sprintf("transaction:%s", tx.Hash))
-	}
-	return nil
-}
-
-func (m *MemoryConnector) DeleteLogs(logs []common.Log) error {
-	for _, log := range logs {
-		m.cache.Remove(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.LogIndex))
-	}
-	return nil
-}
-
 func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
 	for _, blockData := range data {
 		dataJson, err := json.Marshal(blockData)
@@ -309,4 +288,38 @@ func (m *MemoryConnector) DeleteBlockData(data []common.BlockData) error {
 		m.cache.Remove(key)
 	}
 	return nil
+}
+
+func (m *MemoryConnector) InsertTraces(traces []common.Trace) error {
+	for _, trace := range traces {
+		traceJson, err := json.Marshal(trace)
+		if err != nil {
+			return err
+		}
+		m.cache.Add(fmt.Sprintf("trace:%s:%s", trace.BlockNumber.String(), trace.ID), string(traceJson))
+	}
+	return nil
+}
+
+func (m *MemoryConnector) GetTraces(qf QueryFilter) ([]common.Trace, error) {
+	traces := []common.Trace{}
+	limit := getLimit(qf)
+	blockNumbersToCheck := getBlockNumbersToCheck(qf)
+	for _, key := range m.cache.Keys() {
+		if len(traces) >= limit {
+			break
+		}
+		if isKeyForBlock(key, "trace:", blockNumbersToCheck) {
+			value, ok := m.cache.Get(key)
+			if ok {
+				trace := common.Trace{}
+				err := json.Unmarshal([]byte(value), &trace)
+				if err != nil {
+					return nil, err
+				}
+				traces = append(traces, trace)
+			}
+		}
+	}
+	return traces, nil
 }

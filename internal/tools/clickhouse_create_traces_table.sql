@@ -23,11 +23,5 @@ CREATE TABLE base.traces (
     INDEX hash_idx transaction_hash TYPE bloom_filter GRANULARITY 1,
     INDEX to_address_idx to_address TYPE bloom_filter GRANULARITY 1,
     INDEX from_address_idx from_address TYPE bloom_filter GRANULARITY 1,
-) ENGINE = SharedReplacingMergeTree(
-    '/clickhouse/tables/{uuid}/{shard}',
-    '{replica}',
-    insert_timestamp,
-    is_deleted
-)
-ORDER BY (block_number) SETTINGS index_granularity = 8192
-SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (block_number, id) SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

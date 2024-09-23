@@ -50,7 +50,7 @@ func (c *Commiter) Start() {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	log.Debug().Msgf("Commiter running at")
+	log.Debug().Msgf("Commiter running")
 	go func() {
 		for range ticker.C {
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit()
@@ -149,7 +149,7 @@ func (c *Commiter) commit(blockData []common.BlockData) error {
 
 func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
 	var commitWg sync.WaitGroup
-	commitWg.Add(3)
+	commitWg.Add(4)
 
 	var commitErr error
 	var commitErrMutex sync.Mutex
@@ -157,11 +157,13 @@ func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
 	blocks := make([]common.Block, 0, len(blockData))
 	logs := make([]common.Log, 0)
 	transactions := make([]common.Transaction, 0)
+	traces := make([]common.Trace, 0)
 
 	for _, block := range blockData {
 		blocks = append(blocks, block.Block)
 		logs = append(logs, block.Logs...)
 		transactions = append(transactions, block.Transactions...)
+		traces = append(traces, block.Traces...)
 	}
 
 	go func() {
@@ -187,6 +189,15 @@ func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
 		if err := c.storage.MainStorage.InsertTransactions(transactions); err != nil {
 			commitErrMutex.Lock()
 			commitErr = fmt.Errorf("error inserting transactions: %v", err)
+			commitErrMutex.Unlock()
+		}
+	}()
+
+	go func() {
+		defer commitWg.Done()
+		if err := c.storage.MainStorage.InsertTraces(traces); err != nil {
+			commitErrMutex.Lock()
+			commitErr = fmt.Errorf("error inserting traces: %v", err)
 			commitErrMutex.Unlock()
 		}
 	}()

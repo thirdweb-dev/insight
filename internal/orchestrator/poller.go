@@ -64,9 +64,9 @@ func (p *Poller) Start() {
 	ticker := time.NewTicker(interval)
 
 	go func() {
-		for t := range ticker.C {
-			log.Debug().Msgf("Poller running at %s", t)
+		log.Debug().Msgf("Poller running")
 
+		for range ticker.C {
 			blockNumbers, err := p.getBlockRange()
 			var endBlock *big.Int
 			if len(blockNumbers) > 0 {
