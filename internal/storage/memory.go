@@ -55,11 +55,11 @@ func (m *MemoryConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int) err
 
 func (m *MemoryConnector) StoreBlockFailures(failures []common.BlockFailure) error {
 	for _, failure := range failures {
-		failureJson, err := common.BlockFailureToString(failure)
+		failureJson, err := json.Marshal(failure)
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("block_failure:%d", failure.BlockNumber), failureJson)
+		m.cache.Add(fmt.Sprintf("block_failure:%s", failure.BlockNumber.String()), string(failureJson))
 	}
 	return nil
 }
@@ -73,7 +73,8 @@ func (m *MemoryConnector) GetBlockFailures(limit int) ([]common.BlockFailure, er
 		if strings.HasPrefix(key, "block_failure:") {
 			value, ok := m.cache.Get(key)
 			if ok {
-				blockFailure, err := common.StringToBlockFailure(value)
+				blockFailure := common.BlockFailure{}
+				err := json.Unmarshal([]byte(value), &blockFailure)
 				if err != nil {
 					return nil, err
 				}
@@ -86,7 +87,8 @@ func (m *MemoryConnector) GetBlockFailures(limit int) ([]common.BlockFailure, er
 
 func (m *MemoryConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
 	for _, failure := range failures {
-		m.cache.Remove(fmt.Sprintf("block_failure:%d", failure.BlockNumber))
+		key := fmt.Sprintf("block_failure:%s", failure.BlockNumber.String())
+		m.cache.Remove(key)
 	}
 	return nil
 }
@@ -97,7 +99,7 @@ func (m *MemoryConnector) InsertBlocks(blocks []common.Block) error {
 		if err != nil {
 			return err
 		}
-		key := fmt.Sprintf("block:%d", block.Number)
+		key := fmt.Sprintf("block:%s", block.Number.String())
 		m.cache.Add(key, string(blockJson))
 	}
 	return nil
@@ -133,7 +135,7 @@ func (m *MemoryConnector) InsertTransactions(txs []common.Transaction) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("transaction:%s", tx.Hash), string(txJson))
+		m.cache.Add(fmt.Sprintf("transaction:%s:%s", tx.BlockNumber.String(), tx.Hash), string(txJson))
 	}
 	return nil
 }
@@ -167,7 +169,7 @@ func (m *MemoryConnector) InsertLogs(logs []common.Log) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("log:%s-%d", log.TransactionHash, log.LogIndex), string(logJson))
+		m.cache.Add(fmt.Sprintf("log:%s:%s-%d", log.BlockNumber.String(), log.TransactionHash, log.LogIndex), string(logJson))
 	}
 	return nil
 }
@@ -247,7 +249,7 @@ func getBlockNumbersToCheck(qf QueryFilter) map[string]uint8 {
 
 func (m *MemoryConnector) DeleteBlocks(blocks []common.Block) error {
 	for _, block := range blocks {
-		m.cache.Remove(fmt.Sprintf("block:%d", block.Number))
+		m.cache.Remove(fmt.Sprintf("block:%s", block.Number.String()))
 	}
 	return nil
 }
@@ -267,13 +269,44 @@ func (m *MemoryConnector) DeleteLogs(logs []common.Log) error {
 }
 
 func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
+	for _, blockData := range data {
+		dataJson, err := json.Marshal(blockData)
+		if err != nil {
+			return err
+		}
+		m.cache.Add(fmt.Sprintf("blockData:%s", blockData.Block.Number.String()), string(dataJson))
+	}
 	return nil
 }
 
-func (m *MemoryConnector) GetBlockData(blockNumbers []*big.Int) (data []common.BlockData, err error) {
-	return nil, nil
+func (m *MemoryConnector) GetBlockData(qf QueryFilter) ([]common.BlockData, error) {
+	blockData := []common.BlockData{}
+	limit := getLimit(qf)
+	blockNumbersToCheck := getBlockNumbersToCheck(qf)
+
+	for _, key := range m.cache.Keys() {
+		if len(blockData) >= int(limit) {
+			break
+		}
+		if isKeyForBlock(key, "blockData:", blockNumbersToCheck) {
+			value, ok := m.cache.Get(key)
+			if ok {
+				bd := common.BlockData{}
+				err := json.Unmarshal([]byte(value), &bd)
+				if err != nil {
+					return nil, err
+				}
+				blockData = append(blockData, bd)
+			}
+		}
+	}
+	return blockData, nil
 }
 
-func (m *MemoryConnector) DeleteBlockData(blockNumbers []*big.Int) error {
+func (m *MemoryConnector) DeleteBlockData(data []common.BlockData) error {
+	for _, blockData := range data {
+		key := fmt.Sprintf("blockData:%s", blockData.Block.Number.String())
+		m.cache.Remove(key)
+	}
 	return nil
 }

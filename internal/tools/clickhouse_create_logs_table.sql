@@ -27,3 +27,4 @@ CREATE TABLE base.logs (
     is_deleted
 )
 ORDER BY (block_number, transaction_hash, log_index) SETTINGS index_granularity = 8192
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

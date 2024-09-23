@@ -26,3 +26,4 @@ CREATE TABLE base.blocks (
     INDEX idx_number number TYPE minmax GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, hash) PRIMARY KEY (chain_id, hash)
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
