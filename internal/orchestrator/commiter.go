@@ -70,11 +70,16 @@ func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	startBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
+	startBlock := new(big.Int).Set(maxBlockNumber)
+	if maxBlockNumber.Cmp(big.NewInt(0)) != 0 {
+		startBlock.Add(startBlock, big.NewInt(1))
+	}
 	endBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
-	var blockNumbers []*big.Int
-	for i := startBlock; i.Cmp(endBlock) <= 0; i.Add(i, big.NewInt(1)) {
-		blockNumbers = append(blockNumbers, i)
+	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
+	blockNumbers := make([]*big.Int, blockCount)
+	for i := int64(0); i < blockCount; i++ {
+		blockNumber := new(big.Int).Add(startBlock, big.NewInt(i))
+		blockNumbers[i] = blockNumber
 	}
 	return blockNumbers, nil
 }
@@ -98,14 +103,18 @@ func (c *Commiter) getSequentialBlocksToCommit() ([]common.Block, error) {
 	})
 
 	var sequentialBlocks []common.Block
-	expectedBlockNumber := blocks[0].Number
+	if len(blocks) == 0 {
+		return sequentialBlocks, nil
+	}
+	sequentialBlocks = append(sequentialBlocks, blocks[0])
+	expectedBlockNumber := new(big.Int).Add(blocks[0].Number, big.NewInt(1))
 
-	for _, block := range blocks {
-		if block.Number != expectedBlockNumber {
+	for i := 1; i < len(blocks); i++ {
+		if blocks[i].Number.Cmp(expectedBlockNumber) != 0 {
 			// Gap detected, stop here
 			break
 		}
-		sequentialBlocks = append(sequentialBlocks, block)
+		sequentialBlocks = append(sequentialBlocks, blocks[i])
 		expectedBlockNumber.Add(expectedBlockNumber, big.NewInt(1))
 	}
 
@@ -117,6 +126,7 @@ func (c *Commiter) commit(blocks []common.Block) error {
 	for i, block := range blocks {
 		blockNumbers[i] = block.Number
 	}
+	log.Debug().Msgf("Committing blocks: %v", blockNumbers)
 
 	logs, transactions, err := c.getStagingDataForBlocks(blockNumbers)
 	if err != nil {

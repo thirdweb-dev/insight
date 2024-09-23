@@ -51,12 +51,12 @@ func (w *Worker) Run(blockNumbers []*big.Int) []BlockResult {
 		wg.Wait()
 		close(resultsCh)
 	}()
-	// TODO: Save data to staging tables and if fails, add error to each BlockResult
 
-	results := make([]BlockResult, blockCount)
+	results := make([]BlockResult, 0, blockCount)
 	for result := range resultsCh {
 		results = append(results, result)
 	}
+
 	return results
 }
 

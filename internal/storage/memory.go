@@ -97,7 +97,8 @@ func (m *MemoryConnector) InsertBlocks(blocks []common.Block) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("block:%d", block.Number), string(blockJson))
+		key := fmt.Sprintf("block:%d", block.Number)
+		m.cache.Add(key, string(blockJson))
 	}
 	return nil
 }
@@ -106,6 +107,7 @@ func (m *MemoryConnector) GetBlocks(qf QueryFilter) ([]common.Block, error) {
 	blocks := []common.Block{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
+
 	for _, key := range m.cache.Keys() {
 		if len(blocks) >= int(limit) {
 			break
@@ -210,19 +212,19 @@ func (m *MemoryConnector) GetMaxBlockNumber() (*big.Int, error) {
 	return maxBlockNumber, nil
 }
 
-func isKeyForBlock(key string, prefix string, blocksFilter map[*big.Int]uint8) bool {
+func isKeyForBlock(key string, prefix string, blocksFilter map[string]uint8) bool {
 	if !strings.HasPrefix(key, prefix) {
 		return false
 	}
-	blockNumberStr := strings.TrimPrefix(key, prefix)
-	blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
-	if !ok {
+	parts := strings.Split(key, ":")
+	if len(parts) < 2 {
 		return false
 	}
+	blockNumber := parts[1]
 	if len(blocksFilter) == 0 {
 		return true
 	}
-	_, ok = blocksFilter[blockNumber]
+	_, ok := blocksFilter[blockNumber]
 	return ok
 }
 
@@ -234,10 +236,11 @@ func getLimit(qf QueryFilter) int {
 	return int(limit)
 }
 
-func getBlockNumbersToCheck(qf QueryFilter) map[*big.Int]uint8 {
-	blockNumbersToCheck := make(map[*big.Int]uint8)
+func getBlockNumbersToCheck(qf QueryFilter) map[string]uint8 {
+	blockNumbersToCheck := make(map[string]uint8, len(qf.BlockNumbers))
 	for _, num := range qf.BlockNumbers {
-		blockNumbersToCheck[num] = 1
+		key := fmt.Sprintf("%d", num)
+		blockNumbersToCheck[key] = 1
 	}
 	return blockNumbersToCheck
 }
