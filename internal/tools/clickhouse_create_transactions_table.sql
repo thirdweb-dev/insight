@@ -26,3 +26,4 @@ CREATE TABLE base.transactions (
     is_deleted
 )
 ORDER BY (chain_id, block_number) SETTINGS index_granularity = 8192
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -263,7 +264,7 @@ func (c *ClickHouseConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int)
 
 func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, err error) {
 	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
-	query := fmt.Sprintf("SELECT %s FROM %s.blocks WHERE number IN (%s) AND is_deleted = 0%s",
+	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE number IN (%s) AND is_deleted = 0%s",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 
 	rows, err := c.conn.Query(context.Background(), query)
@@ -372,7 +373,7 @@ func (c *ClickHouseConnector) DeleteLogs(logs []common.Log) error {
 
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Transaction, err error) {
 	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, input, max_fee_per_gas, max_priority_fee_per_gas, transaction_type"
-	query := fmt.Sprintf("SELECT %s FROM %s.transactions WHERE block_number IN (%s) AND is_deleted = 0%s",
+	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
@@ -413,7 +414,7 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Tran
 
 func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err error) {
 	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
-	query := fmt.Sprintf("SELECT %s FROM %s.logs WHERE block_number IN (%s) AND is_deleted = 0%s",
+	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
@@ -531,13 +532,78 @@ func getBlockNumbersStringArray(blockNumbers []*big.Int) string {
 }
 
 func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
-	return nil
+	query := `INSERT INTO ` + c.cfg.Database + `.block_data (chain_id, block_number, data)`
+	batch, err := c.conn.PrepareBatch(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	for _, blockData := range data {
+		blockDataJSON, err := json.Marshal(blockData)
+		if err != nil {
+			return err
+		}
+		err = batch.Append(
+			blockData.Block.ChainId,
+			blockData.Block.Number,
+			blockDataJSON,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Send()
 }
 
-func (c *ClickHouseConnector) GetBlockData(blockNumbers []*big.Int) (data []common.BlockData, err error) {
-	return nil, nil
+func (c *ClickHouseConnector) GetBlockData(qf QueryFilter) (blockDataList []common.BlockData, err error) {
+	query := fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
+		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
+
+	rows, err := c.conn.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var blockDataJson string
+		err := rows.Scan(
+			&blockDataJson,
+		)
+		if err != nil {
+			zLog.Error().Err(err).Msg("Error scanning block data")
+			return nil, err
+		}
+		blockData := common.BlockData{}
+		err = json.Unmarshal([]byte(blockDataJson), &blockData)
+		if err != nil {
+			return nil, err
+		}
+		blockDataList = append(blockDataList, blockData)
+	}
+	return blockDataList, nil
 }
 
-func (c *ClickHouseConnector) DeleteBlockData(blockNumbers []*big.Int) error {
-	return nil
+func (c *ClickHouseConnector) DeleteBlockData(data []common.BlockData) error {
+	query := fmt.Sprintf(`
+        INSERT INTO %s.block_data (
+            chain_id, block_number, is_deleted
+        ) VALUES (?, ?, ?)
+    `, c.cfg.Database)
+
+	batch, err := c.conn.PrepareBatch(context.Background(), query)
+	if err != nil {
+		return err
+	}
+
+	for _, blockData := range data {
+		err := batch.Append(
+			blockData.Block.ChainId,
+			blockData.Block.Number,
+			1,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Send()
 }
