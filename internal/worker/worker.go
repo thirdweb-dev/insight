@@ -19,7 +19,7 @@ type Worker struct {
 }
 
 type BlockResult struct {
-	BlockNumber  uint64
+	BlockNumber  *big.Int
 	Error        error
 	Block        common.Block
 	Transactions []common.Transaction
@@ -34,14 +34,14 @@ func NewWorker(rpc common.RPC, storage storage.IStorage) *Worker {
 	}
 }
 
-func (w *Worker) Run(blockNumbers []uint64) []BlockResult {
+func (w *Worker) Run(blockNumbers []*big.Int) []BlockResult {
 	var wg sync.WaitGroup
 	blockCount := len(blockNumbers)
 	resultsCh := make(chan BlockResult, blockCount)
 	for _, blockNumber := range blockNumbers {
 		wg.Add(1)
 
-		go func(bn uint64) {
+		go func(bn *big.Int) {
 			defer wg.Done()
 			result := w.processBlock(bn)
 			resultsCh <- result
@@ -60,9 +60,8 @@ func (w *Worker) Run(blockNumbers []uint64) []BlockResult {
 	return results
 }
 
-func (w *Worker) processBlock(blockNumber uint64) BlockResult {
+func (w *Worker) processBlock(blockNumber *big.Int) BlockResult {
 	log.Debug().Msgf("Processing block %d", blockNumber)
-
 	block, err := w.fetchBlock(blockNumber)
 	if err != nil {
 		return BlockResult{BlockNumber: blockNumber, Error: fmt.Errorf("error fetching block %d: %v", blockNumber, err)}
@@ -84,18 +83,18 @@ func (w *Worker) processBlock(blockNumber uint64) BlockResult {
 	return SerializeBlockResult(w.rpc, block, logs, traces)
 }
 
-func (w *Worker) fetchBlock(blockNumber uint64) (*types.Block, error) {
-	return w.rpc.EthClient.BlockByNumber(context.Background(), big.NewInt(int64(blockNumber)))
+func (w *Worker) fetchBlock(blockNumber *big.Int) (*types.Block, error) {
+	return w.rpc.EthClient.BlockByNumber(context.Background(), blockNumber)
 }
 
-func (w *Worker) fetchLogs(blockNumber uint64) ([]types.Log, error) {
+func (w *Worker) fetchLogs(blockNumber *big.Int) ([]types.Log, error) {
 	return w.rpc.EthClient.FilterLogs(context.Background(), ethereum.FilterQuery{
-		FromBlock: big.NewInt(int64(blockNumber)),
-		ToBlock:   big.NewInt(int64(blockNumber)),
+		FromBlock: blockNumber,
+		ToBlock:   blockNumber,
 	})
 }
 
-func (w *Worker) fetchTraces(blockNumber uint64) ([]map[string]interface{}, error) {
+func (w *Worker) fetchTraces(blockNumber *big.Int) ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
 	err := w.rpc.RPCClient.Call(&result, "trace_block", fmt.Sprintf("0x%x", blockNumber))
 	return result, err

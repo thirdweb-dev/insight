@@ -1,6 +1,6 @@
 CREATE TABLE base.blocks (
     `chain_id` UInt256,
-    `number` UInt64,
+    `number` UInt256,
     `timestamp` UInt64 CODEC(Delta, ZSTD),
     `hash` FixedString(66),
     `parent_hash` FixedString(66),

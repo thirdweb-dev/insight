@@ -8,7 +8,7 @@ import (
 type Trace struct {
 	ID               string
 	ChainID          *big.Int
-	BlockNumber      uint64
+	BlockNumber      *big.Int
 	BlockHash        string
 	BlockTimestamp   time.Time
 	TransactionHash  string

@@ -2,12 +2,13 @@ package storage
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
 type QueryFilter struct {
-	BlockNumbers []uint64
+	BlockNumbers []*big.Int
 	Limit        uint16
 	Offset       uint64
 }
@@ -31,8 +32,8 @@ type IStorage struct {
 }
 
 type IOrchestratorStorage interface {
-	GetLatestPolledBlockNumber() (blockNumber uint64, err error)
-	StoreLatestPolledBlockNumber(blockNumber uint64) error
+	GetLatestPolledBlockNumber() (blockNumber *big.Int, err error)
+	StoreLatestPolledBlockNumber(blockNumber *big.Int) error
 
 	GetBlockFailures(limit int) ([]common.BlockFailure, error)
 	StoreBlockFailures(failures []common.BlockFailure) error
@@ -47,7 +48,7 @@ type IDBStorage interface {
 	GetBlocks(qf QueryFilter) (logs []common.Block, err error)
 	GetTransactions(qf QueryFilter) (logs []common.Transaction, err error)
 	GetLogs(qf QueryFilter) (logs []common.Log, err error)
-	GetMaxBlockNumber() (maxBlockNumber uint64, err error)
+	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
 
 	DeleteBlocks(blocks []common.Block) error
 	DeleteTransactions(txs []common.Transaction) error

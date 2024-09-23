@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"sort"
 	"strconv"
@@ -42,9 +43,9 @@ func (c *Commiter) Start() {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
+	log.Debug().Msgf("Commiter running at")
 	go func() {
-		for t := range ticker.C {
-			log.Debug().Msgf("Commiter running at %s", t)
+		for range ticker.C {
 			blocksToCommit, err := c.getSequentialBlocksToCommit()
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting blocks to commit")
@@ -64,15 +65,15 @@ func (c *Commiter) Start() {
 	select {}
 }
 
-func (c *Commiter) getBlockNumbersToCommit() ([]uint64, error) {
+func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
 	maxBlockNumber, err := c.storage.DBMainStorage.GetMaxBlockNumber()
 	if err != nil {
 		return nil, err
 	}
-	startBlock := maxBlockNumber + 1
-	endBlock := maxBlockNumber + uint64(c.blocksPerCommit)
-	var blockNumbers []uint64
-	for i := startBlock; i <= endBlock; i++ {
+	startBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
+	endBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+	var blockNumbers []*big.Int
+	for i := startBlock; i.Cmp(endBlock) <= 0; i.Add(i, big.NewInt(1)) {
 		blockNumbers = append(blockNumbers, i)
 	}
 	return blockNumbers, nil
@@ -93,7 +94,7 @@ func (c *Commiter) getSequentialBlocksToCommit() ([]common.Block, error) {
 
 	// Sort blocks by block number
 	sort.Slice(blocks, func(i, j int) bool {
-		return blocks[i].Number < blocks[j].Number
+		return blocks[i].Number.Cmp(blocks[j].Number) < 0
 	})
 
 	var sequentialBlocks []common.Block
@@ -105,14 +106,14 @@ func (c *Commiter) getSequentialBlocksToCommit() ([]common.Block, error) {
 			break
 		}
 		sequentialBlocks = append(sequentialBlocks, block)
-		expectedBlockNumber++
+		expectedBlockNumber.Add(expectedBlockNumber, big.NewInt(1))
 	}
 
 	return sequentialBlocks, nil
 }
 
 func (c *Commiter) commit(blocks []common.Block) error {
-	blockNumbers := make([]uint64, len(blocks))
+	blockNumbers := make([]*big.Int, len(blocks))
 	for i, block := range blocks {
 		blockNumbers[i] = block.Number
 	}
@@ -133,7 +134,7 @@ func (c *Commiter) commit(blocks []common.Block) error {
 	return nil
 }
 
-func (c *Commiter) getStagingDataForBlocks(blockNumbers []uint64) (logs []common.Log, transactions []common.Transaction, err error) {
+func (c *Commiter) getStagingDataForBlocks(blockNumbers []*big.Int) (logs []common.Log, transactions []common.Transaction, err error) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 

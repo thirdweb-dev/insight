@@ -67,9 +67,9 @@ func (rpc *RPC) checkSupportedMethods() error {
 	log.Debug().Msg("eth_getLogs method supported")
 
 	var traceBlockResult interface{}
-	if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
+	/* if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
 		log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
-	}
+	} */
 	rpc.SupportsTraceBlock = traceBlockResult != nil
 	log.Debug().Msgf("trace_block method supported: %v", rpc.SupportsTraceBlock)
 	return nil
