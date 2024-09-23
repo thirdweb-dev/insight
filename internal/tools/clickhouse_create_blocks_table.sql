@@ -6,7 +6,7 @@ CREATE TABLE base.blocks (
     `parent_hash` FixedString(66),
     `sha3_uncles` FixedString(66),
     `nonce` FixedString(18),
-    `mixHash` FixedString(66),
+    `mix_hash` FixedString(66),
     `miner` FixedString(42),
     `state_root` FixedString(66),
     `transactions_root` FixedString(66),

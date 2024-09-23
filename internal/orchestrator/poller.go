@@ -24,6 +24,7 @@ type Poller struct {
 	storage           storage.IStorage
 	lastPolledBlock   *big.Int
 	pollUntilBlock    *big.Int
+	pollFromBlock     *big.Int
 }
 
 type BlockNumberWithError struct {
@@ -44,12 +45,17 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 	if err != nil {
 		pollUntilBlock = 0
 	}
+	pollFromBlock, err := strconv.ParseUint(os.Getenv("POLL_FROM_BLOCK"), 10, 64)
+	if err != nil {
+		pollFromBlock = 0
+	}
 	return &Poller{
 		rpc:               rpc,
 		triggerIntervalMs: int64(triggerInterval),
 		blocksPerPoll:     int64(blocksPerPoll),
 		storage:           storage,
 		pollUntilBlock:    big.NewInt(int64(pollUntilBlock)),
+		pollFromBlock:     big.NewInt(int64(pollFromBlock)),
 	}
 }
 
@@ -105,8 +111,8 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 
 	lastPolledBlock, err := p.storage.OrchestratorStorage.GetLatestPolledBlockNumber()
 	if err != nil || lastPolledBlock == nil {
-		log.Warn().Err(err).Msg("No last polled block found, starting from genesis")
-		lastPolledBlock = big.NewInt(-1)
+		log.Warn().Err(err).Msgf("No last polled block found, starting from %s", p.pollFromBlock.String())
+		lastPolledBlock = new(big.Int).Sub(p.pollFromBlock, big.NewInt(1))
 	}
 	log.Debug().Msgf("Last polled block: %s", lastPolledBlock.String())
 
