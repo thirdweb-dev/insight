@@ -25,3 +25,6 @@ go.work.sum
 .env
 
 .vscode
+
+configs/secrets*
+!configs/secrets.example.yml

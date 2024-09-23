@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
@@ -11,18 +12,6 @@ type QueryFilter struct {
 	BlockNumbers []*big.Int
 	Limit        uint16
 	Offset       uint64
-}
-
-type StorageConfig struct {
-	Main         ConnectorConfig
-	Staging      ConnectorConfig
-	Orchestrator ConnectorConfig
-}
-
-type ConnectorConfig struct {
-	Driver     string
-	Memory     *MemoryConnectorConfig
-	Clickhouse *ClickhouseConnectorConfig
 }
 
 type IStorage struct {
@@ -59,21 +48,21 @@ type IMainStorage interface {
 	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
 }
 
-func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
+func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 	var storage IStorage
 	var err error
 
-	storage.OrchestratorStorage, err = newConnector[IOrchestratorStorage](cfg.Orchestrator)
+	storage.OrchestratorStorage, err = newConnector[IOrchestratorStorage](&cfg.Orchestrator)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create orchestrator storage: %w", err)
 	}
 
-	storage.MainStorage, err = newConnector[IMainStorage](cfg.Main)
+	storage.MainStorage, err = newConnector[IMainStorage](&cfg.Main)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
 	}
 
-	storage.StagingStorage, err = newConnector[IStagingStorage](cfg.Staging)
+	storage.StagingStorage, err = newConnector[IStagingStorage](&cfg.Staging)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create staging storage: %w", err)
 	}
@@ -81,16 +70,15 @@ func NewStorageConnector(cfg *StorageConfig) (IStorage, error) {
 	return storage, nil
 }
 
-func newConnector[T any](cfg ConnectorConfig) (T, error) {
+func newConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var conn interface{}
 	var err error
-	switch cfg.Driver {
-	case "memory":
-		conn, err = NewMemoryConnector(cfg.Memory)
-	case "clickhouse":
+	if cfg.Clickhouse != nil {
 		conn, err = NewClickHouseConnector(cfg.Clickhouse)
-	default:
-		return *new(T), fmt.Errorf("invalid connector driver: %s", cfg.Driver)
+	} else if cfg.Memory != nil {
+		conn, err = NewMemoryConnector(cfg.Memory)
+	} else {
+		return *new(T), fmt.Errorf("no storage driver configured")
 	}
 
 	if err != nil {
