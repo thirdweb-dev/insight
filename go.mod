@@ -5,10 +5,10 @@ go 1.22.0
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.28.3
 	github.com/ethereum/go-ethereum v1.14.8
-	github.com/go-chi/chi v1.5.4
+	github.com/go-chi/chi v1.5.5
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/schema v1.2.0
+	github.com/gorilla/schema v1.4.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.33.0

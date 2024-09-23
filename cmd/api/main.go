@@ -5,11 +5,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
+	"github.com/thirdweb-dev/indexer/internal/env"
 	"github.com/thirdweb-dev/indexer/internal/handlers"
 	customLogger "github.com/thirdweb-dev/indexer/internal/log"
 )
 
 func main() {
+	env.Load()
 	customLogger.InitLogger()
 
 	var r *chi.Mux = chi.NewRouter()

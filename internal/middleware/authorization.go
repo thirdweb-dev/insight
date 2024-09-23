@@ -15,7 +15,7 @@ func Authorization(next http.Handler) http.Handler {
 		username, password, ok := r.BasicAuth()
 		if !ok || !validateCredentials(username, password) {
 			log.Error(ErrUnauthorized.Error())
-			api.RequestErrorHandler(w, ErrUnauthorized)
+			api.UnauthorizedErrorHandler(w, ErrUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)
