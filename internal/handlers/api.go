@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"net/http"
+
 	chimiddle "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/thirdweb-dev/indexer/internal/middleware"
@@ -8,11 +10,25 @@ import (
 
 func Handler(r *chi.Mux) {
 	r.Use(chimiddle.StripSlashes)
+	r.Use(middleware.Authorization)
+	r.Route("/", func(router chi.Router) {
+		// might consolidate all variants to one handler function
+		// Wild card queries
+		router.Get("/{chainId}/transactions", GetTransactions)
+		router.Get("/{chainId}/events", GetLogs)
 
-	r.Route("/api", func(router chi.Router) {
-		router.Use(middleware.Authorization)
-		router.Route("/v1", func(r chi.Router) {
-			r.Get("/blocks", GetBlocks)
-		})
+		// contract scoped queries
+		router.Get("/{chainId}/transactions/{contractAddress}", GetTransactionsWithContract)
+		router.Get("/{chainId}/events/{contractAddress}", GetEventsWithContract)
+
+		// signature scoped queries
+		router.Get("/{chainId}/transactions/{contractAddress}/{functionSig}", GetTransactionsWithContractAndSignature)
+		router.Get("/{chainId}/events/{contractAddress}/{functionSig}", GetEventsWithContractAndSignature)
+	})
+
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		// TODO: implement a simple query before going live
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
 	})
 }
