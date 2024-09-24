@@ -9,9 +9,16 @@ import (
 )
 
 type QueryFilter struct {
-	BlockNumbers []*big.Int
-	Limit        uint16
-	Offset       uint64
+	BlockNumbers    []*big.Int
+	FilterParams    map[string]string
+	GroupBy         string
+	SortBy          string
+	SortOrder       string
+	Page            int
+	Limit           int
+	Aggregates      []string
+	ContractAddress string
+	FunctionSig     string
 }
 
 type IStorage struct {
@@ -52,17 +59,17 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 	var storage IStorage
 	var err error
 
-	storage.OrchestratorStorage, err = newConnector[IOrchestratorStorage](&cfg.Orchestrator)
+	storage.OrchestratorStorage, err = NewConnector[IOrchestratorStorage](&cfg.Orchestrator)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create orchestrator storage: %w", err)
 	}
 
-	storage.MainStorage, err = newConnector[IMainStorage](&cfg.Main)
+	storage.MainStorage, err = NewConnector[IMainStorage](&cfg.Main)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
 	}
 
-	storage.StagingStorage, err = newConnector[IStagingStorage](&cfg.Staging)
+	storage.StagingStorage, err = NewConnector[IStagingStorage](&cfg.Staging)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create staging storage: %w", err)
 	}
@@ -70,7 +77,7 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 	return storage, nil
 }
 
-func newConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
+func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var conn interface{}
 	var err error
 	if cfg.Clickhouse != nil {

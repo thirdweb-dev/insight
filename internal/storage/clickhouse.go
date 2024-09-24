@@ -121,7 +121,7 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 			tx.FromAddress,
 			tx.ToAddress,
 			tx.Value,
-			tx.Gas.Uint64(),
+			tx.Gas,
 			tx.GasPrice,
 			tx.Data,
 			tx.MaxFeePerGas,
@@ -269,8 +269,8 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Transaction, err error) {
 	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, data, max_fee_per_gas, max_priority_fee_per_gas, transaction_type, r, s, v, access_list"
-	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
-		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
+	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE is_deleted = 0%s",
+		columns, c.cfg.Database, getLimitClause(int(qf.Limit)))
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
 		return nil, err
@@ -314,8 +314,9 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Tran
 
 func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err error) {
 	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
-	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
-		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
+	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE is_deleted = 0%s",
+		columns, c.cfg.Database, getLimitClause(int(qf.Limit)))
+	// TODO: add aggregations, filters and grouping
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
 		return nil, err
