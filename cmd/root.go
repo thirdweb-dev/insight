@@ -3,7 +3,6 @@ package cmd
 import (
 	"os"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	configs "github.com/thirdweb-dev/indexer/configs"
@@ -19,7 +18,10 @@ var (
 		Short: "TBD",
 		Long:  "TBD",
 		Run: func(cmd *cobra.Command, args []string) {
-			log.Info().Msg("TODO: Starting indexer & api both")
+			go func() {
+				RunOrchestrator(cmd, args)
+			}()
+			RunApi(cmd, args)
 		},
 	}
 )
