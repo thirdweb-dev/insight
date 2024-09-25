@@ -67,12 +67,6 @@ func (p *Poller) Start() {
 				log.Error().Err(err).Msg("Error getting block range")
 				continue
 			}
-			log.Debug().Msgf("Polling blocks %s to %s", blockNumbers[0], endBlock)
-
-			worker := worker.NewWorker(p.rpc, p.storage)
-			results := worker.Run(blockNumbers)
-			p.handleBlockResults(results)
-
 			if endBlock != nil {
 				saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
 				if saveErr != nil {
@@ -81,6 +75,11 @@ func (p *Poller) Start() {
 					p.lastPolledBlock = endBlock
 				}
 			}
+			log.Debug().Msgf("Polling blocks %s to %s", blockNumbers[0], endBlock)
+
+			worker := worker.NewWorker(p.rpc)
+			results := worker.Run(blockNumbers)
+			p.handleWorkerResults(results)
 
 			if p.pollUntilBlock != nil && endBlock.Cmp(p.pollUntilBlock) >= 0 {
 				log.Debug().Msg("Reached poll limit, exiting poller")
@@ -123,9 +122,9 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 	return blockNumbers, nil
 }
 
-func (p *Poller) handleBlockResults(results []worker.BlockResult) {
-	var successfulResults []worker.BlockResult
-	var failedResults []worker.BlockResult
+func (p *Poller) handleWorkerResults(results []worker.WorkerResult) {
+	var successfulResults []worker.WorkerResult
+	var failedResults []worker.WorkerResult
 
 	for _, result := range results {
 		if result.Error != nil {
@@ -148,7 +147,7 @@ func (p *Poller) handleBlockResults(results []worker.BlockResult) {
 		e := fmt.Errorf("error inserting block data: %v", err)
 		log.Error().Err(e)
 		for _, result := range successfulResults {
-			failedResults = append(failedResults, worker.BlockResult{
+			failedResults = append(failedResults, worker.WorkerResult{
 				BlockNumber: result.BlockNumber,
 				Error:       e,
 			})
@@ -160,7 +159,7 @@ func (p *Poller) handleBlockResults(results []worker.BlockResult) {
 	}
 }
 
-func (p *Poller) handleBlockFailures(results []worker.BlockResult) {
+func (p *Poller) handleBlockFailures(results []worker.WorkerResult) {
 	var blockFailures []common.BlockFailure
 	for _, result := range results {
 		if result.Error != nil {

@@ -18,8 +18,12 @@ type Transaction struct {
 	Value                *big.Int
 	Gas                  *big.Int
 	GasPrice             *big.Int
-	Input                string
+	Data                 string
 	MaxFeePerGas         *big.Int
 	MaxPriorityFeePerGas *big.Int
-	TransactionType      int64
+	TransactionType      uint8
+	R                    *big.Int
+	S                    *big.Int
+	V                    *big.Int
+	AccessListJson       string
 }

@@ -6,13 +6,15 @@ import (
 )
 
 type Trace struct {
-	ID               string
 	ChainID          *big.Int
 	BlockNumber      *big.Int
 	BlockHash        string
 	BlockTimestamp   time.Time
 	TransactionHash  string
 	TransactionIndex uint64
+	Subtraces        int64
+	TraceAddress     []uint64
+	TraceType        string
 	CallType         string
 	Error            string
 	FromAddress      string
@@ -21,8 +23,8 @@ type Trace struct {
 	GasUsed          *big.Int
 	Input            string
 	Output           string
-	Subtraces        uint64
-	TraceAddress     string
-	TraceType        string
 	Value            *big.Int
+	Author           string
+	RewardType       string
+	RefundAddress    string
 }

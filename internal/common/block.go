@@ -22,6 +22,7 @@ type Block struct {
 	Size             uint64
 	ExtraData        string
 	Difficulty       *big.Int
+	TotalDifficulty  *big.Int
 	TransactionCount uint64
 	GasLimit         *big.Int
 	GasUsed          *big.Int

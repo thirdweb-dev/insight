@@ -128,7 +128,7 @@ func (c *Commiter) commit(blockData []common.BlockData) error {
 	for i, block := range blockData {
 		blockNumbers[i] = block.Block.Number
 	}
-	log.Debug().Msgf("Committing blocks: %v", blockNumbers)
+	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
 
 	// TODO if next parts (saving or deleting) fail, we'll have to do a rollback
 	if err := c.saveDataToMainStorage(blockData); err != nil {
