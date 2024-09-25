@@ -8,18 +8,17 @@ CREATE TABLE base.logs (
     `log_index` UInt64,
     `address` FixedString(42),
     `data` String,
-    `topic_0` Nullable(String),
+    `topic_0` String,
     `topic_1` Nullable(String),
     `topic_2` Nullable(String),
     `topic_3` Nullable(String),
     `insert_timestamp` DateTime DEFAULT now(),
     `is_deleted` UInt8 DEFAULT 0,
-    INDEX transaction_hash_idx transaction_hash TYPE bloom_filter GRANULARITY 1,
-    INDEX address_idx address TYPE bloom_filter GRANULARITY 1,
-    INDEX topic0_idx topic_0 TYPE bloom_filter GRANULARITY 1,
-    INDEX topic1_idx topic_1 TYPE bloom_filter GRANULARITY 1,
-    INDEX topic2_idx topic_2 TYPE bloom_filter GRANULARITY 1,
-    INDEX topic3_idx topic_3 TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
+    INDEX idx_block_number block_number TYPE minmax GRANULARITY 1,
+    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_address address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_topic0 topic_0 TYPE bloom_filter GRANULARITY 1,
 ) ENGINE = SharedReplacingMergeTree(insert_timestamp, is_deleted)
-ORDER BY (block_number, transaction_hash, log_index)
+ORDER BY (chain_id, transaction_hash, log_index, block_hash)
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

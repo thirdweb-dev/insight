@@ -64,11 +64,13 @@ type MemoryConfig struct {
 
 type RPCBatchSizeConfig struct {
 	BlocksPerRequest int `mapstructure:"blocksPerRequest"`
+	BatchDelay       int `mapstructure:"batchDelay"`
 }
 
 type RPCTracesConfig struct {
 	Enabled          bool `mapstructure:"enabled"`
 	BlocksPerRequest int  `mapstructure:"blocksPerRequest"`
+	BatchDelay       int  `mapstructure:"batchDelay"`
 }
 
 type RPCConfig struct {

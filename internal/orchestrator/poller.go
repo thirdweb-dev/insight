@@ -128,6 +128,7 @@ func (p *Poller) handleWorkerResults(results []worker.WorkerResult) {
 
 	for _, result := range results {
 		if result.Error != nil {
+			log.Warn().Err(result.Error).Msgf("Error fetching block data for block %s", result.BlockNumber.String())
 			failedResults = append(failedResults, result)
 		} else {
 			successfulResults = append(successfulResults, result)

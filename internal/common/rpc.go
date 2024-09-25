@@ -38,7 +38,7 @@ func InitializeRPC() (*RPC, error) {
 	if rpcUrl == "" {
 		return nil, fmt.Errorf("RPC_URL environment variable is not set")
 	}
-	log.Debug().Msgf("Initializing RPC with URL: %s", rpcUrl)
+	log.Debug().Msg("Initializing RPC")
 	rpcClient, dialErr := rpc.Dial(rpcUrl)
 	if dialErr != nil {
 		return nil, dialErr

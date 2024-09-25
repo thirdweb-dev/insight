@@ -31,44 +31,6 @@ func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector,
 	}, nil
 }
 
-func (c *ClickHouseConnector) Get(index, partitionKey, rangeKey string) (string, error) {
-	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
-	// Does it make sense to check the expiration duration in the query?
-	query := "SELECT value FROM chainsaw.indexer_cache WHERE key = ?"
-	query += getLimitClause(1)
-	var value string
-	err := c.conn.QueryRow(context.Background(), query, key).Scan(&value)
-	if err != nil {
-		zLog.Error().Err(err).Msgf("record not found for key: %s", key)
-		return "", fmt.Errorf("record not found for key: %s", key)
-	}
-	return value, nil
-}
-
-func (c *ClickHouseConnector) Set(partitionKey, rangeKey, value string) error {
-	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
-	query := "INSERT INTO chainsaw.indexer_cache (key, value, expires_at) VALUES (?, ?, ?)"
-	err := c.conn.Exec(
-		context.Background(),
-		query,
-		key, value, time.Now().Add(time.Hour),
-	)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *ClickHouseConnector) Delete(index, partitionKey, rangeKey string) error {
-	key := fmt.Sprintf("%s:%s", partitionKey, rangeKey)
-	query := fmt.Sprintf("DELETE FROM chainsaw.cache WHERE key = %s", key)
-	err := c.conn.Exec(context.Background(), query)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	port := cfg.Port
 	if port == 0 {
@@ -95,7 +57,7 @@ func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 		INSERT INTO ` + c.cfg.Database + `.blocks (
 			chain_id, number, timestamp, hash, parent_hash, sha3_uncles, nonce,
 			mix_hash, miner, state_root, transactions_root, receipts_root,
-			size, logs_bloom, extra_data, difficulty, transaction_count, gas_limit,
+			size, logs_bloom, extra_data, difficulty, total_difficulty, transaction_count, gas_limit,
 			gas_used, withdrawals_root, base_fee_per_gas
 		)
 	`
@@ -121,6 +83,7 @@ func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 			block.LogsBloom,
 			block.ExtraData,
 			block.Difficulty,
+			block.TotalDifficulty,
 			block.TransactionCount,
 			block.GasLimit,
 			block.GasUsed,
@@ -138,7 +101,8 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.transactions (
 			chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index,
-			from_address, to_address, value, gas, gas_price, input, max_fee_per_gas, max_priority_fee_per_gas, transaction_type
+			from_address, to_address, value, gas, gas_price, data, max_fee_per_gas, max_priority_fee_per_gas,
+			transaction_type, r, s, v, access_list
 		)
 	`
 	batch, err := c.conn.PrepareBatch(context.Background(), query)
@@ -157,12 +121,16 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 			tx.FromAddress,
 			tx.ToAddress,
 			tx.Value,
-			tx.Gas,
+			tx.Gas.Uint64(),
 			tx.GasPrice,
-			tx.Input,
+			tx.Data,
 			tx.MaxFeePerGas,
 			tx.MaxPriorityFeePerGas,
 			tx.TransactionType,
+			tx.R,
+			tx.S,
+			tx.V,
+			tx.AccessListJson,
 		)
 		if err != nil {
 			return err
@@ -256,7 +224,7 @@ func (c *ClickHouseConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int)
 }
 
 func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, err error) {
-	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
+	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, total_difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
 	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE number IN (%s) AND is_deleted = 0%s",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 
@@ -280,6 +248,7 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 			&block.LogsBloom,
 			&block.ReceiptsRoot,
 			&block.Difficulty,
+			&block.TotalDifficulty,
 			&block.Size,
 			&block.ExtraData,
 			&block.GasLimit,
@@ -299,7 +268,7 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 }
 
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Transaction, err error) {
-	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, input, max_fee_per_gas, max_priority_fee_per_gas, transaction_type"
+	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, data, max_fee_per_gas, max_priority_fee_per_gas, transaction_type, r, s, v, access_list"
 	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 	rows, err := c.conn.Query(context.Background(), query)
@@ -324,10 +293,14 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Tran
 			&tx.Value,
 			&tx.Gas,
 			&tx.GasPrice,
-			&tx.Input,
+			&tx.Data,
 			&tx.MaxFeePerGas,
 			&tx.MaxPriorityFeePerGas,
 			&tx.TransactionType,
+			&tx.R,
+			&tx.S,
+			&tx.V,
+			&tx.AccessListJson,
 		)
 		if err != nil {
 			zLog.Error().Err(err).Msg("Error scanning transaction")
@@ -384,7 +357,7 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT max(number) FROM %s.blocks WHERE is_deleted = 0", c.cfg.Database)
+	query := fmt.Sprintf("SELECT max(number) FROM %s.blocks FINAL WHERE is_deleted = 0", c.cfg.Database)
 	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
 	if err != nil {
 		return nil, err
@@ -420,7 +393,7 @@ func (c *ClickHouseConnector) GetBlockFailures(limit int) ([]common.BlockFailure
 }
 
 func (c *ClickHouseConnector) GetLatestPolledBlockNumber() (blockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT block_number FROM %s.latest_polled_block_number ORDER BY inserted_at DESC LIMIT 1", c.cfg.Database)
+	query := fmt.Sprintf("SELECT block_number FROM %s.latest_polled_block_number FINAL ORDER BY inserted_at DESC LIMIT 1", c.cfg.Database)
 	err = c.conn.QueryRow(context.Background(), query).Scan(&blockNumber)
 	if err != nil {
 		return nil, err
@@ -536,32 +509,40 @@ func (c *ClickHouseConnector) DeleteBlockData(data []common.BlockData) error {
 }
 
 func (c *ClickHouseConnector) InsertTraces(traces []common.Trace) error {
-	query := `INSERT INTO ` + c.cfg.Database + `.traces (id, chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, call_type, error, from_address, to_address, gas, gas_used, input, output, subtraces, trace_address, trace_type, value)`
+	query := `
+		INSERT INTO ` + c.cfg.Database + `.traces (
+			chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index,
+			subtraces, trace_address, type, call_type, error, from_address, to_address,
+			gas, gas_used, input, output, value, author, reward_type, refund_address
+		)
+	`
 	batch, err := c.conn.PrepareBatch(context.Background(), query)
 	if err != nil {
 		return err
 	}
 	for _, trace := range traces {
 		err = batch.Append(
-			trace.ID,
 			trace.ChainID,
 			trace.BlockNumber,
 			trace.BlockHash,
 			uint64(trace.BlockTimestamp.Unix()),
 			trace.TransactionHash,
 			trace.TransactionIndex,
+			trace.Subtraces,
+			trace.TraceAddress,
+			trace.TraceType,
 			trace.CallType,
 			trace.Error,
 			trace.FromAddress,
 			trace.ToAddress,
-			trace.Gas,
-			trace.GasUsed,
+			trace.Gas.Uint64(),
+			trace.GasUsed.Uint64(),
 			trace.Input,
 			trace.Output,
-			trace.Subtraces,
-			trace.TraceAddress,
-			trace.TraceType,
 			trace.Value,
+			trace.Author,
+			trace.RewardType,
+			trace.RefundAddress,
 		)
 		if err != nil {
 			return err
@@ -571,8 +552,9 @@ func (c *ClickHouseConnector) InsertTraces(traces []common.Trace) error {
 }
 
 func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, err error) {
-	query := fmt.Sprintf("SELECT * FROM %s.traces FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
-		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
+	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, subtraces, trace_address, type, call_type, error, from_address, to_address, gas, gas_used, input, output, value, author, reward_type, refund_address"
+	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE block_number IN (%s) AND is_deleted = 0%s",
+		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers), getLimitClause(int(qf.Limit)))
 
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
@@ -584,13 +566,15 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 		var trace common.Trace
 		var timestamp uint64
 		err := rows.Scan(
-			&trace.ID,
 			&trace.ChainID,
 			&trace.BlockNumber,
 			&trace.BlockHash,
 			&timestamp,
 			&trace.TransactionHash,
 			&trace.TransactionIndex,
+			&trace.Subtraces,
+			&trace.TraceAddress,
+			&trace.TraceType,
 			&trace.CallType,
 			&trace.Error,
 			&trace.FromAddress,
@@ -599,10 +583,10 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 			&trace.GasUsed,
 			&trace.Input,
 			&trace.Output,
-			&trace.Subtraces,
-			&trace.TraceAddress,
-			&trace.TraceType,
 			&trace.Value,
+			&trace.Author,
+			&trace.RewardType,
+			&trace.RefundAddress,
 		)
 		if err != nil {
 			zLog.Error().Err(err).Msg("Error scanning transaction")

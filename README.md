@@ -18,7 +18,8 @@ You can also configure the application using environment variables. You can conf
 For example to configure the `rpc.url` configuration to `https://my-rpc.com`, you can set the `RPC_URL` environment variable to `https://my-rpc.com`.  
 
 ### Configuration using configuration files
-The default configuration file is `configs/config.yml`. You can use the `--config` flag to specify a different configuration file.  
+The default configuration should live in `configs/config.yml`. Copy `configs/config.example.yml` to get started.  
+Or you can use the `--config` flag to specify a different configuration file.  
 If you want to add secrets to the configuration file, you can copy `configs/secrets.example.yml` to `configs/secrets.yml` and add the secrets. They won't be commited to the repository or the built image.
 
 ### Supported configurations:
@@ -45,6 +46,17 @@ rpc:
     blocksPerRequest: 1000
 ```
 
+#### RPC Blocks Batch Delay
+Milliseconds to wait between batches of blocks when fetching from the RPC. Default is 0.
+
+env: `RPC_BLOCKS_BATCHDELAY`
+yaml:
+```yaml
+rpc:
+  blocks:
+    batchDelay: 100
+```
+
 #### RPC Logs Blocks Per Request
 How many blocks at a time to query logs for from the RPC. Default is 100.
 Has no effect if it's larger than RPC blocks per request.
@@ -55,6 +67,17 @@ yaml:
 rpc:
   logs:
     blocksPerRequest: 100
+```
+
+#### RPC Logs Batch Delay
+Milliseconds to wait between batches of logs when fetching from the RPC. Default is 0.
+
+env: `RPC_LOGS_BATCHDELAY`
+yaml:
+```yaml
+rpc:
+  logs:
+    batchDelay: 100
 ```
 
 #### RPC Traces Enabled
@@ -78,6 +101,17 @@ yaml:
 rpc:
   traces:
     blocksPerRequest: 100
+```
+
+#### RPC Traces Batch Delay
+Milliseconds to wait between batches of traces when fetching from the RPC. Default is 0.
+
+env: `RPC_TRACES_BATCHDELAY`
+yaml:
+```yaml
+rpc:
+  traces:
+    batchDelay: 100
 ```
 
 #### Log Level
