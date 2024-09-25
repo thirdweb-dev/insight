@@ -50,16 +50,19 @@ func (fr *FailureRecoverer) Start() {
 				log.Error().Err(err).Msg("Failed to get block failures")
 				continue
 			}
+			if len(blockFailures) == 0 {
+				continue
+			}
 
 			blocksToTrigger := make([]*big.Int, 0, len(blockFailures))
 			for _, blockFailure := range blockFailures {
 				blocksToTrigger = append(blocksToTrigger, blockFailure.BlockNumber)
 			}
 
-			log.Debug().Msgf("Triggering Failure Recoverer for trigger: %v", blocksToTrigger)
-			worker := worker.NewWorker(fr.rpc, fr.storage)
+			log.Debug().Msgf("Triggering Failure Recoverer for blocks: %v", blocksToTrigger)
+			worker := worker.NewWorker(fr.rpc)
 			results := worker.Run(blocksToTrigger)
-			fr.handleBlockResults(blockFailures, results)
+			fr.handleWorkerResults(blockFailures, results)
 		}
 	}()
 
@@ -67,7 +70,7 @@ func (fr *FailureRecoverer) Start() {
 	select {}
 }
 
-func (fr *FailureRecoverer) handleBlockResults(blockFailures []common.BlockFailure, results []worker.BlockResult) {
+func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFailure, results []worker.WorkerResult) {
 	err := fr.storage.OrchestratorStorage.DeleteBlockFailures(blockFailures)
 	if err != nil {
 		log.Error().Err(err).Msg("Error deleting block failures")
