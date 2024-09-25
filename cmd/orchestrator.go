@@ -13,18 +13,22 @@ var (
 		Short: "TBD",
 		Long:  "TBD",
 		Run: func(cmd *cobra.Command, args []string) {
-			log.Info().Msg("Starting indexer")
-			rpc, err := common.InitializeRPC()
-			if err != nil {
-				log.Fatal().Err(err).Msg("Failed to initialize RPC")
-			}
-
-			orchestrator, err := orchestrator.NewOrchestrator(*rpc)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Failed to create orchestrator")
-			}
-
-			orchestrator.Start()
+			RunOrchestrator(cmd, args)
 		},
 	}
 )
+
+func RunOrchestrator(cmd *cobra.Command, args []string) {
+	log.Info().Msg("Starting indexer")
+	rpc, err := common.InitializeRPC()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize RPC")
+	}
+
+	orchestrator, err := orchestrator.NewOrchestrator(*rpc)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create orchestrator")
+	}
+
+	orchestrator.Start()
+}
