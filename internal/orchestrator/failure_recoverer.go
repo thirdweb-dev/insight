@@ -2,11 +2,10 @@ package orchestrator
 
 import (
 	"math/big"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
@@ -23,12 +22,12 @@ type FailureRecoverer struct {
 }
 
 func NewFailureRecoverer(rpc common.RPC, storage storage.IStorage) *FailureRecoverer {
-	failuresPerPoll, err := strconv.Atoi(os.Getenv("FAILURES_PER_POLL"))
-	if err != nil || failuresPerPoll == 0 {
+	failuresPerPoll := config.Cfg.FailureRecoverer.BatchSize
+	if failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
 	}
-	triggerInterval, err := strconv.Atoi(os.Getenv("FAILURE_TRIGGER_INTERVAL"))
-	if err != nil || triggerInterval == 0 {
+	triggerInterval := config.Cfg.FailureRecoverer.Interval
+	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_FAILURE_TRIGGER_INTERVAL
 	}
 	return &FailureRecoverer{

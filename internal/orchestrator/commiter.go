@@ -3,13 +3,12 @@ package orchestrator
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
@@ -25,24 +24,20 @@ type Commiter struct {
 }
 
 func NewCommiter(storage storage.IStorage) *Commiter {
-	triggerInterval, err := strconv.Atoi(os.Getenv("COMMITER_TRIGGER_INTERVAL"))
-	if err != nil || triggerInterval == 0 {
+	triggerInterval := config.Cfg.Committer.Interval
+	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITER_TRIGGER_INTERVAL
 	}
-	blocksPerCommit, err := strconv.Atoi(os.Getenv("BLOCKS_PER_COMMIT"))
-	if err != nil || blocksPerCommit == 0 {
+	blocksPerCommit := config.Cfg.Committer.BatchSize
+	if blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
-	}
-	pollFromBlock, err := strconv.ParseUint(os.Getenv("POLL_FROM_BLOCK"), 10, 64)
-	if err != nil {
-		pollFromBlock = 0
 	}
 
 	return &Commiter{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
-		pollFromBlock:     big.NewInt(int64(pollFromBlock)),
+		pollFromBlock:     big.NewInt(int64(config.Cfg.Poller.FromBlock)),
 	}
 }
 

@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 )
 
 type RPC struct {
@@ -22,11 +22,12 @@ type RPC struct {
 }
 
 func InitializeRPC() (*RPC, error) {
-	rpcURL := os.Getenv("RPC_URL")
-	if rpcURL == "" {
+	rpcUrl := config.Cfg.RPC.URL
+	if rpcUrl == "" {
 		return nil, fmt.Errorf("RPC_URL environment variable is not set")
 	}
-	rpcClient, dialErr := rpc.Dial(rpcURL)
+	log.Debug().Msgf("Initializing RPC with URL: %s", rpcUrl)
+	rpcClient, dialErr := rpc.Dial(rpcUrl)
 	if dialErr != nil {
 		return nil, dialErr
 	}
@@ -36,8 +37,8 @@ func InitializeRPC() (*RPC, error) {
 	rpc := &RPC{
 		RPCClient:   rpcClient,
 		EthClient:   ethClient,
-		URL:         rpcURL,
-		IsWebsocket: strings.HasPrefix(rpcURL, "ws://") || strings.HasPrefix(rpcURL, "wss://"),
+		URL:         rpcUrl,
+		IsWebsocket: strings.HasPrefix(rpcUrl, "ws://") || strings.HasPrefix(rpcUrl, "wss://"),
 	}
 	checkErr := rpc.checkSupportedMethods()
 	if checkErr != nil {

@@ -6,28 +6,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	zLog "github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
 type ClickHouseConnector struct {
 	conn clickhouse.Conn
-	cfg  *ClickhouseConnectorConfig
+	cfg  *config.ClickhouseConfig
 }
 
-type ClickhouseConnectorConfig struct {
-	ExpiresAt time.Duration
-	Database  string
-	Table     string
-}
-
-func NewClickHouseConnector(cfg *ClickhouseConnectorConfig) (*ClickHouseConnector, error) {
-	conn, err := connectDB()
+func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector, error) {
+	conn, err := connectDB(cfg)
 	// Question: Should we add the table setup here?
 	if err != nil {
 		return nil, err
@@ -76,19 +69,19 @@ func (c *ClickHouseConnector) Delete(index, partitionKey, rangeKey string) error
 	return nil
 }
 
-func connectDB() (clickhouse.Conn, error) {
-	port, err := strconv.Atoi(os.Getenv("CLICKHOUSE_PORT"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid CLICKHOUSE_PORT: %w", err)
+func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
+	port := cfg.Port
+	if port == 0 {
+		return nil, fmt.Errorf("invalid CLICKHOUSE_PORT: %d", port)
 	}
 
 	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr:     []string{fmt.Sprintf("%s:%d", os.Getenv("CLICKHOUSE_HOST"), port)},
+		Addr:     []string{fmt.Sprintf("%s:%d", cfg.Host, port)},
 		Protocol: clickhouse.Native,
 		TLS:      &tls.Config{}, // enable secure TLS
 		Auth: clickhouse.Auth{
-			Username: os.Getenv("CLICKHOUSE_USERNAME"),
-			Password: os.Getenv("CLICKHOUSE_PASSWORD"),
+			Username: cfg.Username,
+			Password: cfg.Password,
 		},
 	})
 	if err != nil {

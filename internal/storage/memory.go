@@ -8,20 +8,17 @@ import (
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
-
-type MemoryConnectorConfig struct {
-	MaxItems int
-}
 
 type MemoryConnector struct {
 	cache *lru.Cache[string, string]
 }
 
-func NewMemoryConnector(cfg *MemoryConnectorConfig) (*MemoryConnector, error) {
+func NewMemoryConnector(cfg *config.MemoryConfig) (*MemoryConnector, error) {
 	maxItems := 1000
-	if cfg != nil && cfg.MaxItems > 0 {
+	if cfg.MaxItems > 0 {
 		maxItems = cfg.MaxItems
 	}
 

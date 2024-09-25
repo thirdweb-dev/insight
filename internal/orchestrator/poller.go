@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
@@ -33,29 +32,21 @@ type BlockNumberWithError struct {
 }
 
 func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
-	blocksPerPoll, err := strconv.Atoi(os.Getenv("BLOCKS_PER_POLL"))
-	if err != nil || blocksPerPoll == 0 {
+	blocksPerPoll := config.Cfg.Poller.BatchSize
+	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
 	}
-	triggerInterval, err := strconv.Atoi(os.Getenv("TRIGGER_INTERVAL"))
-	if err != nil || triggerInterval == 0 {
+	triggerInterval := config.Cfg.Poller.Interval
+	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
-	}
-	pollUntilBlock, err := strconv.ParseUint(os.Getenv("POLL_UNTIL_BLOCK"), 10, 64)
-	if err != nil {
-		pollUntilBlock = 0
-	}
-	pollFromBlock, err := strconv.ParseUint(os.Getenv("POLL_FROM_BLOCK"), 10, 64)
-	if err != nil {
-		pollFromBlock = 0
 	}
 	return &Poller{
 		rpc:               rpc,
 		triggerIntervalMs: int64(triggerInterval),
 		blocksPerPoll:     int64(blocksPerPoll),
 		storage:           storage,
-		pollUntilBlock:    big.NewInt(int64(pollUntilBlock)),
-		pollFromBlock:     big.NewInt(int64(pollFromBlock)),
+		pollUntilBlock:    big.NewInt(int64(config.Cfg.Poller.UntilBlock)),
+		pollFromBlock:     big.NewInt(int64(config.Cfg.Poller.FromBlock)),
 	}
 }
 

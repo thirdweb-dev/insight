@@ -1,9 +1,9 @@
 package orchestrator
 
 import (
-	"os"
 	"sync"
 
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
@@ -17,17 +17,7 @@ type Orchestrator struct {
 }
 
 func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
-	storage, err := storage.NewStorageConnector(&storage.StorageConfig{
-		Orchestrator: storage.ConnectorConfig{Driver: "memory"},
-		Main: storage.ConnectorConfig{Driver: "clickhouse", Clickhouse: &storage.ClickhouseConnectorConfig{
-			Database: "base",
-			Table:    "base",
-		}},
-		Staging: storage.ConnectorConfig{Driver: "clickhouse", Clickhouse: &storage.ClickhouseConnectorConfig{
-			Database: "staging",
-			Table:    "staging",
-		}},
-	})
+	storage, err := storage.NewStorageConnector(&config.Cfg.Storage)
 	if err != nil {
 		return nil, err
 	}
@@ -35,9 +25,9 @@ func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
 	return &Orchestrator{
 		rpc:                     rpc,
 		storage:                 storage,
-		pollerEnabled:           os.Getenv("DISABLE_POLLER") != "true",
-		failureRecovererEnabled: os.Getenv("DISABLE_FAILURE_RECOVERY") != "true",
-		committerEnabled:        os.Getenv("DISABLE_COMMITTER") != "true",
+		pollerEnabled:           config.Cfg.Poller.Enabled,
+		failureRecovererEnabled: config.Cfg.FailureRecoverer.Enabled,
+		committerEnabled:        config.Cfg.Committer.Enabled,
 	}, nil
 }
 

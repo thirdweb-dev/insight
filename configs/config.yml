@@ -1,0 +1,33 @@
+log:
+  level: debug
+  pretty: true
+
+poller:
+  enabled: true
+  interval: 3000
+  batchSize: 3
+  fromBlock: 20000000
+  untilBlock: 20000010
+
+commiter:
+  enabled: true
+  interval: 10000
+  batchSize: 100
+
+failureRecoverer:
+  enabled: true
+  interval: 3000
+  batchSize: 100
+
+storage:
+  main:
+    clickhouse:
+      port: 9440
+      database: "base"
+  staging:
+    clickhouse:
+      port: 9440
+      database: "staging"
+  orchestrator:
+    memory:
+      maxItems: 10000
