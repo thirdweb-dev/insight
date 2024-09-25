@@ -4,10 +4,12 @@ import (
 	"context"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
@@ -72,6 +74,9 @@ func (w *Worker) Run(blockNumbers []*big.Int) []WorkerResult {
 		go func(chunk []*big.Int) {
 			defer wg.Done()
 			resultsCh <- w.processBatch(chunk)
+			if config.Cfg.RPC.Blocks.BatchDelay > 0 {
+				time.Sleep(time.Duration(config.Cfg.RPC.Blocks.BatchDelay) * time.Millisecond)
+			}
 		}(chunk)
 	}
 	go func() {
@@ -119,7 +124,7 @@ func (w *Worker) processBatch(blockNumbers []*big.Int) []WorkerResult {
 
 	go func() {
 		defer wg.Done()
-		logs = fetchInBatches[RawLogs](w.rpc, blockNumbers, w.rpc.BlocksPerRequest.Logs, "eth_getLogs", func(blockNum *big.Int) []interface{} {
+		logs = fetchInBatches[RawLogs](w.rpc, blockNumbers, w.rpc.BlocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", func(blockNum *big.Int) []interface{} {
 			return []interface{}{map[string]string{"fromBlock": hexutil.EncodeBig(blockNum), "toBlock": hexutil.EncodeBig(blockNum)}}
 		})
 	}()
@@ -128,7 +133,7 @@ func (w *Worker) processBatch(blockNumbers []*big.Int) []WorkerResult {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			traces = fetchInBatches[RawTraces](w.rpc, blockNumbers, w.rpc.BlocksPerRequest.Traces, "trace_block", func(blockNum *big.Int) []interface{} {
+			traces = fetchInBatches[RawTraces](w.rpc, blockNumbers, w.rpc.BlocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", func(blockNum *big.Int) []interface{} {
 				return []interface{}{hexutil.EncodeBig(blockNum)}
 			})
 		}()
@@ -139,7 +144,7 @@ func (w *Worker) processBatch(blockNumbers []*big.Int) []WorkerResult {
 	return SerializeWorkerResults(w.rpc.ChainID, blocks, logs, traces)
 }
 
-func fetchInBatches[T any](RPC common.RPC, blockNumbers []*big.Int, batchSize int, method string, argsFunc func(*big.Int) []interface{}) []BatchFetchResult[T] {
+func fetchInBatches[T any](RPC common.RPC, blockNumbers []*big.Int, batchSize int, batchDelay int, method string, argsFunc func(*big.Int) []interface{}) []BatchFetchResult[T] {
 	if len(blockNumbers) <= batchSize {
 		return fetchBatch[T](RPC, blockNumbers, method, argsFunc)
 	}
@@ -155,6 +160,9 @@ func fetchInBatches[T any](RPC common.RPC, blockNumbers []*big.Int, batchSize in
 		go func(chunk []*big.Int) {
 			defer wg.Done()
 			resultsCh <- fetchBatch[T](RPC, chunk, method, argsFunc)
+			if batchDelay > 0 {
+				time.Sleep(time.Duration(batchDelay) * time.Millisecond)
+			}
 		}(chunk)
 	}
 	go func() {

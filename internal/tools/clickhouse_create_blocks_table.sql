@@ -15,6 +15,7 @@ CREATE TABLE base.blocks (
     `size` UInt64,
     `extra_data` String,
     `difficulty` UInt256,
+    `total_difficulty` UInt256,
     `transaction_count` UInt64,
     `gas_limit` UInt256,
     `gas_used` UInt256,
@@ -25,5 +26,5 @@ CREATE TABLE base.blocks (
     INDEX idx_timestamp timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_number number TYPE minmax GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
-ORDER BY (chain_id, hash) PRIMARY KEY (chain_id, hash)
+ORDER BY (chain_id, hash)
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

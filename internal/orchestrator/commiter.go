@@ -94,6 +94,10 @@ func (c *Commiter) getSequentialBlockDataToCommit() ([]common.BlockData, error) 
 	if err != nil {
 		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
 	}
+	if len(blocksToCommit) == 0 {
+		return nil, nil
+	}
+
 	blocksData, err := c.storage.StagingStorage.GetBlockData(storage.QueryFilter{BlockNumbers: blocksToCommit})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
@@ -106,6 +110,11 @@ func (c *Commiter) getSequentialBlockDataToCommit() ([]common.BlockData, error) 
 	sort.Slice(blocksData, func(i, j int) bool {
 		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
 	})
+
+	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
+		// we are missing first block in staging, meaning whole batch cannot be commited
+		return nil, fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", blocksData[0].Block.Number.String(), blocksToCommit[0].String())
+	}
 
 	var sequentialBlockData []common.BlockData
 	sequentialBlockData = append(sequentialBlockData, blocksData[0])

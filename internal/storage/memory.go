@@ -293,7 +293,7 @@ func (m *MemoryConnector) InsertTraces(traces []common.Trace) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("trace:%s:%s", trace.BlockNumber.String(), trace.ID), string(traceJson))
+		m.cache.Add(fmt.Sprintf("trace:%s:%s:%s", trace.BlockNumber.String(), trace.TransactionHash, traceAddressToString(trace.TraceAddress)), string(traceJson))
 	}
 	return nil
 }
@@ -319,4 +319,8 @@ func (m *MemoryConnector) GetTraces(qf QueryFilter) ([]common.Trace, error) {
 		}
 	}
 	return traces, nil
+}
+
+func traceAddressToString(traceAddress []uint64) string {
+	return strings.Trim(strings.Replace(fmt.Sprint(traceAddress), " ", ",", -1), "[]")
 }
