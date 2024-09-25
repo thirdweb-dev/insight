@@ -13,23 +13,23 @@ type LogConfig struct {
 }
 
 type PollerConfig struct {
-	Enabled    bool `mapstructure:"enabled"`
-	Interval   int  `mapstructure:"interval"`
-	BatchSize  int  `mapstructure:"batchSize"`
-	FromBlock  int  `mapstructure:"fromBlock"`
-	UntilBlock int  `mapstructure:"untilBlock"`
+	Enabled       bool `mapstructure:"enabled"`
+	Interval      int  `mapstructure:"interval"`
+	BlocksPerPoll int  `mapstructure:"blocksPerPoll"`
+	FromBlock     int  `mapstructure:"fromBlock"`
+	UntilBlock    int  `mapstructure:"untilBlock"`
 }
 
 type CommitterConfig struct {
-	Enabled   bool `mapstructure:"enabled"`
-	Interval  int  `mapstructure:"interval"`
-	BatchSize int  `mapstructure:"batchSize"`
+	Enabled         bool `mapstructure:"enabled"`
+	Interval        int  `mapstructure:"interval"`
+	BlocksPerCommit int  `mapstructure:"blocksPerCommit"`
 }
 
 type FailureRecovererConfig struct {
-	Enabled   bool `mapstructure:"enabled"`
-	Interval  int  `mapstructure:"interval"`
-	BatchSize int  `mapstructure:"batchSize"`
+	Enabled      bool `mapstructure:"enabled"`
+	Interval     int  `mapstructure:"interval"`
+	BlocksPerRun int  `mapstructure:"blocksPerRun"`
 }
 
 type StorageConfig struct {
@@ -62,8 +62,20 @@ type MemoryConfig struct {
 	MaxItems int `mapstructure:"maxItems"`
 }
 
+type RPCBatchSizeConfig struct {
+	BlocksPerRequest int `mapstructure:"blocksPerRequest"`
+}
+
+type RPCTracesConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	BlocksPerRequest int  `mapstructure:"blocksPerRequest"`
+}
+
 type RPCConfig struct {
-	URL string `mapstructure:"url"`
+	URL    string             `mapstructure:"url"`
+	Blocks RPCBatchSizeConfig `mapstructure:"blocks"`
+	Logs   RPCBatchSizeConfig `mapstructure:"logs"`
+	Traces RPCTracesConfig    `mapstructure:"traces"`
 }
 
 type Config struct {

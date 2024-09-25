@@ -12,6 +12,12 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 )
 
+type BlocksPerRequest struct {
+	Blocks int
+	Logs   int
+	Traces int
+}
+
 type RPC struct {
 	RPCClient          *rpc.Client
 	EthClient          *ethclient.Client
@@ -19,7 +25,13 @@ type RPC struct {
 	IsWebsocket        bool
 	URL                string
 	ChainID            *big.Int
+	BlocksPerRequest   BlocksPerRequest
 }
+
+// TODO: we should detect this automatically
+var DEFAULT_BLOCKS_PER_REQUEST = 1000
+var DEFAULT_LOGS_PER_REQUEST = 100
+var DEFAULT_TRACES_PER_REQUEST = 100
 
 func InitializeRPC() (*RPC, error) {
 	rpcUrl := config.Cfg.RPC.URL
@@ -32,6 +44,21 @@ func InitializeRPC() (*RPC, error) {
 		return nil, dialErr
 	}
 
+	blocksPerRequest := config.Cfg.RPC.Blocks.BlocksPerRequest
+	if blocksPerRequest == 0 {
+		blocksPerRequest = DEFAULT_BLOCKS_PER_REQUEST
+	}
+
+	logsBlocksPerRequest := config.Cfg.RPC.Logs.BlocksPerRequest
+	if logsBlocksPerRequest == 0 {
+		logsBlocksPerRequest = DEFAULT_LOGS_PER_REQUEST
+	}
+
+	tracesBlocksPerRequest := config.Cfg.RPC.Traces.BlocksPerRequest
+	if tracesBlocksPerRequest == 0 {
+		tracesBlocksPerRequest = DEFAULT_TRACES_PER_REQUEST
+	}
+
 	ethClient := ethclient.NewClient(rpcClient)
 
 	rpc := &RPC{
@@ -39,6 +66,11 @@ func InitializeRPC() (*RPC, error) {
 		EthClient:   ethClient,
 		URL:         rpcUrl,
 		IsWebsocket: strings.HasPrefix(rpcUrl, "ws://") || strings.HasPrefix(rpcUrl, "wss://"),
+		BlocksPerRequest: BlocksPerRequest{
+			Blocks: blocksPerRequest,
+			Logs:   logsBlocksPerRequest,
+			Traces: tracesBlocksPerRequest,
+		},
 	}
 	checkErr := rpc.checkSupportedMethods()
 	if checkErr != nil {
@@ -67,11 +99,13 @@ func (rpc *RPC) checkSupportedMethods() error {
 	}
 	log.Debug().Msg("eth_getLogs method supported")
 
-	var traceBlockResult interface{}
-	if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
-		log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
+	if config.Cfg.RPC.Traces.Enabled {
+		var traceBlockResult interface{}
+		if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
+			log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
+		}
+		rpc.SupportsTraceBlock = traceBlockResult != nil
 	}
-	rpc.SupportsTraceBlock = traceBlockResult != nil
 	log.Debug().Msgf("trace_block method supported: %v", rpc.SupportsTraceBlock)
 	return nil
 }

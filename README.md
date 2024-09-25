@@ -34,6 +34,52 @@ rpc:
   url: https://rpc.com
 ```
 
+#### RPC Blocks Per Request
+How many blocks at a time to fetch from the RPC. Default is 1000.
+
+env: `RPC_BLOCKS_BLOCKSPERREQUEST`
+yaml:
+```yaml
+rpc:
+  blocks:
+    blocksPerRequest: 1000
+```
+
+#### RPC Logs Blocks Per Request
+How many blocks at a time to query logs for from the RPC. Default is 100.
+Has no effect if it's larger than RPC blocks per request.
+
+env: `RPC_LOGS_BLOCKSPERREQUEST`
+yaml:
+```yaml
+rpc:
+  logs:
+    blocksPerRequest: 100
+```
+
+#### RPC Traces Enabled
+Whether to enable fetching traces from the RPC. Default is `true`, but it will try to detect if the RPC supports traces automatically.
+
+env: `RPC_TRACES_ENABLED`
+yaml:
+```yaml
+rpc:
+  traces:
+    enabled: true
+```
+
+#### RPC Traces Blocks Per Request
+How many blocks at a time to fetch traces for from the RPC. Default is 100.
+Has no effect if it's larger than RPC blocks per request.
+
+env: `RPC_TRACES_BLOCKSPERREQUEST`
+yaml:
+```yaml
+rpc:
+  traces:
+    blocksPerRequest: 100
+```
+
 #### Log Level
 Log level for the logger. Default is `warn`.
 
@@ -67,7 +113,7 @@ poller:
 ```
 
 #### Poller Interval
-Poller trigger interval in millisecons. Default is `1000`.
+Poller trigger interval in milliseconds. Default is `1000`.
 
 env: `POLLER_INTERVAL`
 yaml:
@@ -76,20 +122,20 @@ poller:
   interval: 3000
 ```
 
-#### Poller Batch Size
+#### Poller Blocks Per Poll
 How many blocks to poll each interval. Default is `10`.
 
-env: `POLLER_BATCH_SIZE`
+env: `POLLER_BLOCKSPERPOLL`
 yaml:
 ```yaml
 poller:
-  batchSize: 3
+  blocksPerPoll: 3
 ```
 
 #### Poller From Block
 From which block to start polling. Default is `0`.
 
-env: `POLLER_FROM_BLOCK`
+env: `POLLER_FROMBLOCK`
 yaml:
 ```yaml
 poller:
@@ -99,49 +145,49 @@ poller:
 #### Poller Until Block
 Until which block to poll. If not set, it will poll until the latest block.
 
-env: `POLLER_UNTIL_BLOCK`
+env: `POLLER_UNTILBLOCK`
 yaml:
 ```yaml
 poller:
   untilBlock: 20000010
 ```
 
-#### Commiter
-Whether to enable the commiter. Default is `true`.
+#### Committer
+Whether to enable the committer. Default is `true`.
 
-cmd: `--commiter`
-env: `COMMITER_ENABLED`
+cmd: `--committer`
+env: `COMMITTER_ENABLED`
 yaml:
 ```yaml
-commiter:
+committer:
   enabled: true
 ```
 
-#### Commiter Interval
-Commiter trigger interval in millisecons. Default is `250`.
+#### Committer Interval
+Committer trigger interval in milliseconds. Default is `250`.
 
-env: `COMMITER_INTERVAL`
+env: `COMMITTER_INTERVAL`
 yaml:
 ```yaml
-commiter:
+committer:
   interval: 3000
 ```
 
-#### Commiter Batch Size
+#### Committer Blocks Per Commit
 How many blocks to commit each interval. Default is `10`.
 
-env: `COMMITER_BATCH_SIZE`
+env: `COMMITTER_BLOCKSPERCOMMIT`
 yaml:
 ```yaml
-commiter:
-  batchSize: 3
+committer:
+  blocksPerCommit: 1000
 ```
 
 #### Failure Recoverer
 Whether to enable the failure recoverer. Default is `true`.
 
 cmd: `--failure-recoverer`
-env: `FAILURE_RECOVERER_ENABLED`
+env: `FAILURERECOVERER_ENABLED`
 yaml:
 ```yaml
 failureRecoverer:
@@ -149,23 +195,23 @@ failureRecoverer:
 ```
 
 #### Failure Recoverer Interval
-Failure recoverer trigger interval in millisecons. Default is `1000`.
+Failure recoverer trigger interval in milliseconds. Default is `1000`.
 
-env: `FAILURE_RECOVERER_INTERVAL`
+env: `FAILURERECOVERER_INTERVAL`
 yaml:
 ```yaml
 failureRecoverer:
   interval: 3000
 ```
 
-#### Failure Recoverer Batch Size
+#### Failure Recoverer Blocks Per Run
 How many blocks to recover each interval. Default is `10`.
 
-env: `FAILURE_RECOVERER_BATCH_SIZE`
+env: `FAILURERECOVERER_BLOCKSPERRUN`
 yaml:
 ```yaml
 failureRecoverer:
-  batchSize: 3
+  blocksPerRun: 100
 ```
 
 #### Storage
