@@ -1,23 +1,30 @@
+rpc:
+  blocks:
+    blocksPerRequest: 500
+  logs:
+    blocksPerRequest: 200
+  traces:
+    enabled: true
+    blocksPerRequest: 200
+
 log:
   level: debug
-  pretty: true
+  pretty: false
 
 poller:
   enabled: true
-  interval: 3000
-  batchSize: 3
-  fromBlock: 20000000
-  untilBlock: 20000010
+  interval: 1000
+  blocksPerPoll: 10000
 
-commiter:
+committer:
   enabled: true
-  interval: 10000
-  batchSize: 100
+  interval: 1000
+  blocksPerCommit: 100
 
 failureRecoverer:
   enabled: true
   interval: 3000
-  batchSize: 100
+  blocksPerRun: 100
 
 storage:
   main:

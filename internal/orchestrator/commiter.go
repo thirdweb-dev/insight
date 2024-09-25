@@ -28,7 +28,7 @@ func NewCommiter(storage storage.IStorage) *Commiter {
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITER_TRIGGER_INTERVAL
 	}
-	blocksPerCommit := config.Cfg.Committer.BatchSize
+	blocksPerCommit := config.Cfg.Committer.BlocksPerCommit
 	if blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}

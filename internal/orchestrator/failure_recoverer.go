@@ -22,7 +22,7 @@ type FailureRecoverer struct {
 }
 
 func NewFailureRecoverer(rpc common.RPC, storage storage.IStorage) *FailureRecoverer {
-	failuresPerPoll := config.Cfg.FailureRecoverer.BatchSize
+	failuresPerPoll := config.Cfg.FailureRecoverer.BlocksPerRun
 	if failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
 	}

@@ -32,7 +32,7 @@ type BlockNumberWithError struct {
 }
 
 func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
-	blocksPerPoll := config.Cfg.Poller.BatchSize
+	blocksPerPoll := config.Cfg.Poller.BlocksPerPoll
 	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
 	}
