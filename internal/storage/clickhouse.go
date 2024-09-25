@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	zLog "github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -267,81 +269,66 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 	return blocks, nil
 }
 
-func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Transaction, err error) {
+func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Transaction], error) {
 	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, data, max_fee_per_gas, max_priority_fee_per_gas, transaction_type, r, s, v, access_list"
-	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE is_deleted = 0%s",
-		columns, c.cfg.Database, getLimitClause(int(qf.Limit)))
+	return executeQuery[common.Transaction](c, "transactions", columns, qf, scanTransaction)
+}
+
+func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], error) {
+	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
+	return executeQuery[common.Log](c, "logs", columns, qf, scanLog)
+}
+
+func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf QueryFilter, scanFunc func(driver.Rows) (T, error)) (QueryResult[T], error) {
+	query := c.buildQuery(table, columns, qf)
+
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
-		return nil, err
+		return QueryResult[T]{}, err
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		var tx common.Transaction
-		var timestamp uint64
-		err := rows.Scan(
-			&tx.ChainId,
-			&tx.Hash,
-			&tx.Nonce,
-			&tx.BlockHash,
-			&tx.BlockNumber,
-			&timestamp,
-			&tx.TransactionIndex,
-			&tx.FromAddress,
-			&tx.ToAddress,
-			&tx.Value,
-			&tx.Gas,
-			&tx.GasPrice,
-			&tx.Data,
-			&tx.MaxFeePerGas,
-			&tx.MaxPriorityFeePerGas,
-			&tx.TransactionType,
-			&tx.R,
-			&tx.S,
-			&tx.V,
-			&tx.AccessListJson,
-		)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error scanning transaction")
-			return nil, err
-		}
-		tx.BlockTimestamp = time.Unix(int64(timestamp), 0)
-		txs = append(txs, tx)
+	queryResult := QueryResult[T]{
+		Data:       []T{},
+		Aggregates: map[string]string{},
 	}
-	return txs, nil
+
+	for rows.Next() {
+		item, err := scanFunc(rows)
+		if err != nil {
+			return QueryResult[T]{}, err
+		}
+		queryResult.Data = append(queryResult.Data, item)
+	}
+
+	if len(qf.Aggregates) > 0 {
+		aggregates, err := c.executeAggregateQuery(table, qf)
+		if err != nil {
+			return queryResult, err
+		}
+		queryResult.Aggregates = aggregates
+	}
+
+	return queryResult, nil
 }
 
-func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult, error) {
-	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
-	
-	// Start building the query
-	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE is_deleted = 0", columns, c.cfg.Database)
+func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) string {
+	query := fmt.Sprintf("SELECT %s FROM %s.%s FINAL WHERE is_deleted = 0", columns, c.cfg.Database, table)
 
-	// Add filters
 	if qf.ContractAddress != "" {
 		query += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
 	}
 	if qf.FunctionSig != "" {
 		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
 	}
-	if len(qf.FilterParams) > 0 {
-		for key, value := range qf.FilterParams {
-			query += fmt.Sprintf(" AND %s = '%s'", key, value)
-		}
+	for key, value := range qf.FilterParams {
+		query += fmt.Sprintf(" AND %s = '%s'", key, value)
 	}
 
-	// Add grouping (TODO: fix it by adding all needed columns)
-	// if len(qf.GroupBy) > 0 {
-	// 	query += " GROUP BY " + strings.Join(qf.GroupBy, ", ")
-	// }
-
-	// Add sorting
 	if qf.SortBy != "" {
 		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
 	}
 
-	// Add pagination
 	if qf.Page > 0 && qf.Limit > 0 {
 		offset := (qf.Page - 1) * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
@@ -349,92 +336,95 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult, error) {
 		query += getLimitClause(int(qf.Limit))
 	}
 
-	// Execute the query
-	rows, err := c.conn.Query(context.Background(), query)
+	return query
+}
+
+func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter) (map[string]string, error) {
+	aggregateQuery := "SELECT " + strings.Join(qf.Aggregates, ", ") +
+		fmt.Sprintf(" FROM %s.%s FINAL WHERE is_deleted = 0", c.cfg.Database, table)
+
+	if qf.ContractAddress != "" {
+		aggregateQuery += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
+	}
+	if qf.FunctionSig != "" {
+		aggregateQuery += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
+	}
+	for key, value := range qf.FilterParams {
+		aggregateQuery += fmt.Sprintf(" AND %s = '%s'", key, value)
+	}
+
+	row := c.conn.QueryRow(context.Background(), aggregateQuery)
+	aggregateResultsJSON, err := json.Marshal(row)
 	if err != nil {
-		return QueryResult{Data: []common.Log{}, Aggregates: map[string]string{}}, err
-	}
-	defer rows.Close()
-	queryResult := QueryResult{
-		Data: []common.Log{},
-		Aggregates: map[string]string{},
-	}
-	for rows.Next() {
-		var log common.Log
-		var timestamp uint64
-		var topics [4]string
-		err := rows.Scan(
-			&log.ChainId,
-			&log.BlockNumber,
-			&log.BlockHash,
-			&timestamp,
-			&log.TransactionHash,
-			&log.TransactionIndex,
-			&log.LogIndex,
-			&log.Address,
-			&log.Data,
-			&topics[0],
-			&topics[1],
-			&topics[2],
-			&topics[3],
-		)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error scanning log")
-			return QueryResult{Data: []common.Log{}}, err
-		}
-		log.BlockTimestamp = time.Unix(int64(timestamp), 0)
-		for _, topic := range topics {
-			if topic != "" {
-				log.Topics = append(log.Topics, topic)
-			}
-		}
-		queryResult.Data = append(queryResult.Data, log)
+		return nil, fmt.Errorf("error marshaling aggregate results to JSON: %w", err)
 	}
 
-	// Handle aggregations
-	if len(qf.Aggregates) > 0 {
-		aggregateQuery := "SELECT "
-		for i, agg := range qf.Aggregates {
-			if i > 0 {
-				aggregateQuery += ", "
-			}
-			aggregateQuery += agg
-		}
-		aggregateQuery += " FROM " + c.cfg.Database + ".logs FINAL WHERE is_deleted = 0"
-		
-		// Add the same filters as the main query
-		if qf.ContractAddress != "" {
-			aggregateQuery += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
-		}
-		if qf.FunctionSig != "" {
-			aggregateQuery += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
-		}
-		if len(qf.FilterParams) > 0 {
-			for key, value := range qf.FilterParams {
-				// TODO: add parsing for filters to get the column name and operator
-				aggregateQuery += fmt.Sprintf(" AND %s = '%s'", key, value)
-			}
-		}
-
-		row := c.conn.QueryRow(context.Background(), aggregateQuery)
-		// Marshal the result to JSON
-		// TODO: needs a typing scan
-		aggregateResultsJSON, err := json.Marshal(row)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error marshaling aggregate results to JSON")
-			return queryResult, err
-		}
-
-		var aggregateResultsMap map[string]string
-		err = json.Unmarshal(aggregateResultsJSON, &aggregateResultsMap)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error unmarshaling aggregate results JSON to map")
-			return queryResult, err
-		}
-		queryResult.Aggregates = aggregateResultsMap
+	var aggregateResultsMap map[string]string
+	err = json.Unmarshal(aggregateResultsJSON, &aggregateResultsMap)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling aggregate results JSON to map: %w", err)
 	}
 
-	return queryResult, nil
+	return aggregateResultsMap, nil
+}
+
+func scanTransaction(rows driver.Rows) (common.Transaction, error) {
+	var tx common.Transaction
+	var timestamp uint64
+	err := rows.Scan(
+		&tx.ChainId,
+		&tx.Hash,
+		&tx.Nonce,
+		&tx.BlockHash,
+		&tx.BlockNumber,
+		&timestamp,
+		&tx.TransactionIndex,
+		&tx.FromAddress,
+		&tx.ToAddress,
+		&tx.Value,
+		&tx.Gas,
+		&tx.GasPrice,
+		&tx.Data,
+		&tx.MaxFeePerGas,
+		&tx.MaxPriorityFeePerGas,
+		&tx.TransactionType,
+	)
+	if err != nil {
+		return common.Transaction{}, fmt.Errorf("error scanning transaction: %w", err)
+	}
+	tx.BlockTimestamp = time.Unix(int64(timestamp), 0)
+	return tx, nil
+}
+
+func scanLog(rows driver.Rows) (common.Log, error) {
+	var log common.Log
+	var timestamp uint64
+	var topics [4]string
+	err := rows.Scan(
+		&log.ChainId,
+		&log.BlockNumber,
+		&log.BlockHash,
+		&timestamp,
+		&log.TransactionHash,
+		&log.TransactionIndex,
+		&log.LogIndex,
+		&log.Address,
+		&log.Data,
+		&topics[0],
+		&topics[1],
+		&topics[2],
+		&topics[3],
+	)
+	if err != nil {
+		return common.Log{}, fmt.Errorf("error scanning log: %w", err)
+	}
+	log.BlockTimestamp = time.Unix(int64(timestamp), 0)
+	for _, topic := range topics {
+		if topic != "" {
+			log.Topics = append(log.Topics, topic)
+		}
+	}
+	return log, nil
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err error) {
