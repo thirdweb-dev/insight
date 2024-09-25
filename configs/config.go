@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
 type LogConfig struct {
-	Level  string `mapstructure:"level"`
-	Pretty bool   `mapstructure:"pretty"`
+	Level    string `mapstructure:"level"`
+	Prettify bool   `mapstructure:"prettify"`
 }
 
 type PollerConfig struct {
@@ -102,13 +103,13 @@ func LoadConfig(cfgFile string) error {
 		viper.AddConfigPath("./configs")
 
 		if err := viper.ReadInConfig(); err != nil {
-			return fmt.Errorf("error reading config file, %s", err)
+			log.Warn().Msgf("error reading config file, %s", err)
 		}
 
 		viper.SetConfigName("secrets")
 		err := viper.MergeInConfig()
 		if err != nil {
-			return fmt.Errorf("error loading secrets file: %v", err)
+			log.Warn().Msgf("error loading secrets file: %v", err)
 		}
 	}
 

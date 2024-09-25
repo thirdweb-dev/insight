@@ -25,7 +25,7 @@ func NewLogger(name string) zerolog.Logger {
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Str("component", name).Logger()
 	logger = logger.With().Caller().Logger()
-	if config.Cfg.Log.Pretty {
+	if config.Cfg.Log.Prettify {
 		logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 	return logger
