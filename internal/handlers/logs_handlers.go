@@ -56,7 +56,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 
 	logs, err := mainStorage.GetLogs(storage.QueryFilter{
 		FilterParams:    queryParams.FilterParams,
-		GroupBy:         queryParams.GroupBy,
+		GroupBy:         []string{queryParams.GroupBy},
 		SortBy:          queryParams.SortBy,
 		SortOrder:       queryParams.SortOrder,
 		Page:            queryParams.Page,
@@ -81,10 +81,8 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 			TotalItems:      0, // TODO: Implement total items count
 			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data: []interface{}{logs},
-		Aggregations: map[string]interface{}{
-			"aggregates": queryParams.Aggregates,
-		},
+		Data:         logs.Data,
+		Aggregations: logs.Aggregates,
 	}
 
 	sendJSONResponse(w, response)

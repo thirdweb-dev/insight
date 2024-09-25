@@ -11,7 +11,7 @@ import (
 type QueryFilter struct {
 	BlockNumbers    []*big.Int
 	FilterParams    map[string]string
-	GroupBy         string
+	GroupBy         []string
 	SortBy          string
 	SortOrder       string
 	Page            int
@@ -20,7 +20,10 @@ type QueryFilter struct {
 	ContractAddress string
 	FunctionSig     string
 }
-
+type QueryResult struct {
+	Data       []common.Log      `json:"data"`
+	Aggregates map[string]string `json:"aggregates"`
+}
 type IStorage struct {
 	OrchestratorStorage IOrchestratorStorage
 	MainStorage         IMainStorage
@@ -50,7 +53,7 @@ type IMainStorage interface {
 
 	GetBlocks(qf QueryFilter) (logs []common.Block, err error)
 	GetTransactions(qf QueryFilter) (logs []common.Transaction, err error)
-	GetLogs(qf QueryFilter) (logs []common.Log, err error)
+	GetLogs(qf QueryFilter) (logs QueryResult, err error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
 	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
 }

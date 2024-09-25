@@ -39,9 +39,9 @@ type Meta struct {
 }
 
 type QueryResponse struct {
-	Meta Meta          `json:"meta"`
-	Data []interface{} `json:"data"`
-	Aggregations map[string]interface{} `json:"aggregations,omitempty"`
+	Meta         Meta                   `json:"meta"`
+	Data         interface{}            `json:"data,omitempty"`
+	Aggregations map[string]string      `json:"aggregations,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {
@@ -75,7 +75,12 @@ func ParseQueryParams(r *http.Request) (QueryParams, error) {
 	params.FilterParams = make(map[string]string)
 	for key, values := range rawQueryParams {
 		if strings.HasPrefix(key, "filter_") {
-			params.FilterParams[key] = values[0]
+			// TODO: tmp hack remove it once we implement filtering with operators
+			strippedKey := strings.Replace(key, "filter_", "", 1)
+			if strippedKey == "event_name" {
+				strippedKey = "data"
+			}
+			params.FilterParams[strippedKey] = values[0]
 			delete(rawQueryParams, key)
 		}
 	}

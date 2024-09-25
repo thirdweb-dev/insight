@@ -312,17 +312,53 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (txs []common.Tran
 	return txs, nil
 }
 
-func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err error) {
+func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult, error) {
 	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
-	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE is_deleted = 0%s",
-		columns, c.cfg.Database, getLimitClause(int(qf.Limit)))
-	// TODO: add aggregations, filters and grouping
+	
+	// Start building the query
+	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE is_deleted = 0", columns, c.cfg.Database)
+
+	// Add filters
+	if qf.ContractAddress != "" {
+		query += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
+	}
+	if qf.FunctionSig != "" {
+		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
+	}
+	if len(qf.FilterParams) > 0 {
+		for key, value := range qf.FilterParams {
+			query += fmt.Sprintf(" AND %s = '%s'", key, value)
+		}
+	}
+
+	// Add grouping (TODO: fix it by adding all needed columns)
+	// if len(qf.GroupBy) > 0 {
+	// 	query += " GROUP BY " + strings.Join(qf.GroupBy, ", ")
+	// }
+
+	// Add sorting
+	if qf.SortBy != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+	}
+
+	// Add pagination
+	if qf.Page > 0 && qf.Limit > 0 {
+		offset := (qf.Page - 1) * qf.Limit
+		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
+	} else {
+		query += getLimitClause(int(qf.Limit))
+	}
+
+	// Execute the query
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
-		return nil, err
+		return QueryResult{Data: []common.Log{}, Aggregates: map[string]string{}}, err
 	}
 	defer rows.Close()
-
+	queryResult := QueryResult{
+		Data: []common.Log{},
+		Aggregates: map[string]string{},
+	}
 	for rows.Next() {
 		var log common.Log
 		var timestamp uint64
@@ -344,7 +380,7 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 		)
 		if err != nil {
 			zLog.Error().Err(err).Msg("Error scanning log")
-			return nil, err
+			return QueryResult{Data: []common.Log{}}, err
 		}
 		log.BlockTimestamp = time.Unix(int64(timestamp), 0)
 		for _, topic := range topics {
@@ -352,9 +388,53 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (logs []common.Log, err er
 				log.Topics = append(log.Topics, topic)
 			}
 		}
-		logs = append(logs, log)
+		queryResult.Data = append(queryResult.Data, log)
 	}
-	return logs, nil
+
+	// Handle aggregations
+	if len(qf.Aggregates) > 0 {
+		aggregateQuery := "SELECT "
+		for i, agg := range qf.Aggregates {
+			if i > 0 {
+				aggregateQuery += ", "
+			}
+			aggregateQuery += agg
+		}
+		aggregateQuery += " FROM " + c.cfg.Database + ".logs FINAL WHERE is_deleted = 0"
+		
+		// Add the same filters as the main query
+		if qf.ContractAddress != "" {
+			aggregateQuery += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
+		}
+		if qf.FunctionSig != "" {
+			aggregateQuery += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
+		}
+		if len(qf.FilterParams) > 0 {
+			for key, value := range qf.FilterParams {
+				// TODO: add parsing for filters to get the column name and operator
+				aggregateQuery += fmt.Sprintf(" AND %s = '%s'", key, value)
+			}
+		}
+
+		row := c.conn.QueryRow(context.Background(), aggregateQuery)
+		// Marshal the result to JSON
+		// TODO: needs a typing scan
+		aggregateResultsJSON, err := json.Marshal(row)
+		if err != nil {
+			zLog.Error().Err(err).Msg("Error marshaling aggregate results to JSON")
+			return queryResult, err
+		}
+
+		var aggregateResultsMap map[string]string
+		err = json.Unmarshal(aggregateResultsJSON, &aggregateResultsMap)
+		if err != nil {
+			zLog.Error().Err(err).Msg("Error unmarshaling aggregate results JSON to map")
+			return queryResult, err
+		}
+		queryResult.Aggregates = aggregateResultsMap
+	}
+
+	return queryResult, nil
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err error) {
