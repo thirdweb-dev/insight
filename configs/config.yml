@@ -1,14 +1,14 @@
 rpc:
   blocks:
     blocksPerRequest: 1000
-    batchDelay: 0
+    batchDelay: 1000
   logs:
     blocksPerRequest: 400
-    batchDelay: 100
+    batchDelay: 1000
   traces:
-    enabled: true
+    enabled: false
     blocksPerRequest: 200
-    batchDelay: 100
+    batchDelay: 1000
 
 log:
   level: debug
@@ -17,12 +17,13 @@ log:
 poller:
   enabled: true
   interval: 3000
-  blocksPerPoll: 10000
+  blocksPerPoll: 1000
+  fromBlock: 10000000
 
 committer:
   enabled: true
-  interval: 1000
-  blocksPerCommit: 10000
+  interval: 2000
+  blocksPerCommit: 1000
 
 failureRecoverer:
   enabled: true
