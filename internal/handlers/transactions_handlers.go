@@ -1,117 +1,81 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 func GetTransactions(w http.ResponseWriter, r *http.Request) {
-	chainId, err := api.GetChainId(r)
-	if err != nil {
-		api.BadRequestErrorHandler(w, err)
-		return
-	}
-
-	queryParams, err := api.ParseQueryParams(r)
-	if err != nil {
-		api.BadRequestErrorHandler(w, err)
-		return
-	}
-
-	var response = api.QueryResponse{
-		Meta: api.Meta{
-			ChainIdentifier: chainId,
-			ContractAddress: "todo",
-			FunctionSig:     "todo",
-			Page:            1,
-			Limit:           100,
-			TotalItems:      0,
-			TotalPages:      0,
-		},
-		Data: []interface{}{queryParams},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		log.Error().Err(err).Msg("Error encoding response")
-		api.InternalErrorHandler(w)
-		return
-	}
+	handleTransactionsRequest(w, r, "", "")
 }
 
-func GetTransactionsWithContract(w http.ResponseWriter, r *http.Request) {
-	chainId, err := api.GetChainId(r)
-	if err != nil {
-		api.BadRequestErrorHandler(w, err)
-		return
-	}
+func GetTransactionsByContract(w http.ResponseWriter, r *http.Request) {
 	contractAddress := chi.URLParam(r, "contractAddress")
-	queryParams, err := api.ParseQueryParams(r)
-	if err != nil {
-		api.BadRequestErrorHandler(w, err)
-		return
-	}
-
-	var response = api.QueryResponse{
-		Meta: api.Meta{
-			ChainIdentifier: chainId,
-			ContractAddress: contractAddress,
-			FunctionSig:     "todo",
-			Page:            1,
-			Limit:           100,
-			TotalItems:      0,
-			TotalPages:      0,
-		},
-		Data: []interface{}{queryParams},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		log.Error().Err(err).Msg("Error encoding response")
-		api.InternalErrorHandler(w)
-		return
-	}
-
+	handleTransactionsRequest(w, r, contractAddress, "")
 }
 
-func GetTransactionsWithContractAndSignature(w http.ResponseWriter, r *http.Request) {
-	chainId, err := api.GetChainId(r)
-	if err != nil {
-		api.BadRequestErrorHandler(w, err)
-		return
-	}
+func GetTransactionsByContractAndSignature(w http.ResponseWriter, r *http.Request) {
 	contractAddress := chi.URLParam(r, "contractAddress")
 	functionSig := chi.URLParam(r, "functionSig")
+	handleTransactionsRequest(w, r, contractAddress, functionSig)
+}
+
+func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractAddress, functionSig string) {
+	chainId, err := api.GetChainId(r)
+	if err != nil {
+		api.BadRequestErrorHandler(w, err)
+		return
+	}
+
 	queryParams, err := api.ParseQueryParams(r)
 	if err != nil {
 		api.BadRequestErrorHandler(w, err)
 		return
 	}
 
-	var response = api.QueryResponse{
+	mainStorage, err := getMainStorage()
+	if err != nil {
+		log.Error().Err(err).Msg("Error creating storage connector")
+		api.InternalErrorHandler(w)
+		return
+	}
+
+	transactions, err := mainStorage.GetTransactions(storage.QueryFilter{
+		FilterParams:    queryParams.FilterParams,
+		GroupBy:         queryParams.GroupBy,
+		SortBy:          queryParams.SortBy,
+		SortOrder:       queryParams.SortOrder,
+		Page:            queryParams.Page,
+		Limit:           queryParams.Limit,
+		Aggregates:      queryParams.Aggregates,
+		ContractAddress: contractAddress,
+		FunctionSig:     functionSig,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Error querying transactions")
+		api.InternalErrorHandler(w)
+		return
+	}
+
+	response := api.QueryResponse{
 		Meta: api.Meta{
 			ChainIdentifier: chainId,
 			ContractAddress: contractAddress,
 			FunctionSig:     functionSig,
-			Page:            1,
-			Limit:           100,
-			TotalItems:      0,
-			TotalPages:      0,
+			Page:            queryParams.Page,
+			Limit:           queryParams.Limit,
+			TotalItems:      0, // TODO: Implement total items count
+			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data: []interface{}{queryParams},
+		Data: []interface{}{transactions},
+		Aggregations: map[string]interface{}{
+			"aggregates": queryParams.Aggregates,
+		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		log.Error().Err(err).Msg("Error encoding response")
-		api.InternalErrorHandler(w)
-		return
-	}
+	sendJSONResponse(w, response)
 }

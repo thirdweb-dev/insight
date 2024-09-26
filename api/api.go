@@ -25,7 +25,7 @@ type QueryParams struct {
 	SortOrder    string            `schema:"sort_order"`
 	Page         int               `schema:"page"`
 	Limit        int               `schema:"limit"`
-	Aggregate    []string          `schema:"aggregate"`
+	Aggregates    []string          `schema:"aggregate"`
 }
 
 type Meta struct {

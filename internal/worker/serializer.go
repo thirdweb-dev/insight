@@ -123,7 +123,7 @@ func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp ti
 			return "0x0000000000000000000000000000000000000000"
 		}(),
 		Value:                hexToBigInt(tx["value"]),
-		Gas:                  hexToBigInt(tx["gas"]),
+		Gas:                  hexToUint64(tx["gas"]),
 		GasPrice:             hexToBigInt(tx["gasPrice"]),
 		Data:                 interfaceToString(tx["input"]),
 		MaxFeePerGas:         hexToBigInt(tx["maxFeePerGas"]),

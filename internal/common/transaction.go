@@ -16,7 +16,7 @@ type Transaction struct {
 	FromAddress          string
 	ToAddress            string
 	Value                *big.Int
-	Gas                  *big.Int
+	Gas                  uint64
 	GasPrice             *big.Int
 	Data                 string
 	MaxFeePerGas         *big.Int
