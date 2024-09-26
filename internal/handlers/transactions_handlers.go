@@ -53,7 +53,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		Limit:           queryParams.Limit,
 		Aggregates:      queryParams.Aggregates,
 		ContractAddress: contractAddress,
-		FunctionSig:     functionSig,
+		Signature:     functionSig,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying transactions")
@@ -65,14 +65,14 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		Meta: api.Meta{
 			ChainIdentifier: chainId,
 			ContractAddress: contractAddress,
-			FunctionSig:     functionSig,
+			Signature:       functionSig,
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
 			TotalItems:      0, // TODO: Implement total items count
 			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data: result.Data,
-		// Aggregations: queryParams.Aggregates,
+		Data:         result.Data,
+		Aggregations: result.Aggregates,
 	}
 
 	sendJSONResponse(w, response)

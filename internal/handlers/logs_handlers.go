@@ -30,11 +30,11 @@ func GetLogsByContract(w http.ResponseWriter, r *http.Request) {
 
 func GetLogsByContractAndSignature(w http.ResponseWriter, r *http.Request) {
 	contractAddress := chi.URLParam(r, "contractAddress")
-	functionSig := chi.URLParam(r, "functionSig")
-	handleLogsRequest(w, r, contractAddress, functionSig)
+	eventSig := chi.URLParam(r, "eventSig")
+	handleLogsRequest(w, r, contractAddress, eventSig)
 }
 
-func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, functionSig string) {
+func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, signature string) {
 	chainId, err := api.GetChainId(r)
 	if err != nil {
 		api.BadRequestErrorHandler(w, err)
@@ -63,7 +63,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 		Limit:           queryParams.Limit,
 		Aggregates:      queryParams.Aggregates,
 		ContractAddress: contractAddress,
-		FunctionSig:     functionSig,
+		Signature:       signature,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying logs")
@@ -75,7 +75,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 		Meta: api.Meta{
 			ChainIdentifier: chainId,
 			ContractAddress: contractAddress,
-			FunctionSig:     functionSig,
+			Signature:       signature,
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
 			TotalItems:      0, // TODO: Implement total items count
