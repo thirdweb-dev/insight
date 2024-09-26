@@ -46,7 +46,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 
 	transactions, err := mainStorage.GetTransactions(storage.QueryFilter{
 		FilterParams:    queryParams.FilterParams,
-		GroupBy:         queryParams.GroupBy,
+		GroupBy:         []string{queryParams.GroupBy},
 		SortBy:          queryParams.SortBy,
 		SortOrder:       queryParams.SortOrder,
 		Page:            queryParams.Page,
@@ -71,10 +71,8 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 			TotalItems:      0, // TODO: Implement total items count
 			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data: []interface{}{transactions},
-		Aggregations: map[string]interface{}{
-			"aggregates": queryParams.Aggregates,
-		},
+		Data: transactions,
+		// Aggregations: queryParams.Aggregates,
 	}
 
 	sendJSONResponse(w, response)
