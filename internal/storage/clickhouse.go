@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"math/big"
