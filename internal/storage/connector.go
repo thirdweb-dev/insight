@@ -32,9 +32,6 @@ type IStorage struct {
 }
 
 type IOrchestratorStorage interface {
-	GetLatestPolledBlockNumber() (blockNumber *big.Int, err error)
-	StoreLatestPolledBlockNumber(blockNumber *big.Int) error
-
 	GetBlockFailures(limit int) ([]common.BlockFailure, error)
 	StoreBlockFailures(failures []common.BlockFailure) error
 	DeleteBlockFailures(failures []common.BlockFailure) error
@@ -44,6 +41,7 @@ type IStagingStorage interface {
 	InsertBlockData(data []common.BlockData) error
 	GetBlockData(qf QueryFilter) (data []common.BlockData, err error)
 	DeleteBlockData(data []common.BlockData) error
+	GetLastStagedBlockNumber() (maxBlockNumber *big.Int, err error)
 }
 
 type IMainStorage interface {

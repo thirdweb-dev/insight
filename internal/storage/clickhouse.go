@@ -216,15 +216,6 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int) error {
-	query := "INSERT INTO " + c.cfg.Database + ".latest_polled_block_number (block_number) VALUES (?) ON DUPLICATE KEY UPDATE block_number = VALUES(block_number)"
-	err := c.conn.Exec(context.Background(), query, blockNumber)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, err error) {
 	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, total_difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
 	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE number IN (%s) AND is_deleted = 0%s",
@@ -436,6 +427,15 @@ func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err 
 	return maxBlockNumber, nil
 }
 
+func (c *ClickHouseConnector) GetLastStagedBlockNumber() (maxBlockNumber *big.Int, err error) {
+	query := fmt.Sprintf("SELECT max(block_number) FROM %s.block_data FINAL WHERE is_deleted = 0", c.cfg.Database)
+	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	return maxBlockNumber, nil
+}
+
 func (c *ClickHouseConnector) GetBlockFailures(limit int) ([]common.BlockFailure, error) {
 	query := fmt.Sprintf("SELECT * FROM %s.block_failures%s", c.cfg.Database, getLimitClause(limit))
 	rows, err := c.conn.Query(context.Background(), query)
@@ -461,15 +461,6 @@ func (c *ClickHouseConnector) GetBlockFailures(limit int) ([]common.BlockFailure
 		failures = append(failures, failure)
 	}
 	return failures, nil
-}
-
-func (c *ClickHouseConnector) GetLatestPolledBlockNumber() (blockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT block_number FROM %s.latest_polled_block_number FINAL ORDER BY inserted_at DESC LIMIT 1", c.cfg.Database)
-	err = c.conn.QueryRow(context.Background(), query).Scan(&blockNumber)
-	if err != nil {
-		return nil, err
-	}
-	return blockNumber, nil
 }
 
 func (c *ClickHouseConnector) DeleteBlockFailures(failures []common.BlockFailure) error {

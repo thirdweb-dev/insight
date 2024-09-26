@@ -23,7 +23,6 @@ type Poller struct {
 	storage           storage.IStorage
 	lastPolledBlock   *big.Int
 	pollUntilBlock    *big.Int
-	pollFromBlock     *big.Int
 }
 
 type BlockNumberWithError struct {
@@ -40,13 +39,21 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
+	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
+	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber()
+	if err != nil || lastPolledBlock == nil {
+		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
+		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
+	} else {
+		log.Info().Msgf("Last polled block found: %s", lastPolledBlock.String())
+	}
 	return &Poller{
 		rpc:               rpc,
 		triggerIntervalMs: int64(triggerInterval),
 		blocksPerPoll:     int64(blocksPerPoll),
 		storage:           storage,
+		lastPolledBlock:   lastPolledBlock,
 		pollUntilBlock:    big.NewInt(int64(config.Cfg.Poller.UntilBlock)),
-		pollFromBlock:     big.NewInt(int64(config.Cfg.Poller.FromBlock)),
 	}
 }
 
@@ -72,14 +79,8 @@ func (p *Poller) Start() {
 				}
 				endBlock := blockNumbers[len(blockNumbers)-1]
 				if endBlock != nil {
-					saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
-					if saveErr != nil {
-						log.Error().Err(saveErr).Msg("Error updating last polled block")
-					} else {
-						p.lastPolledBlock = endBlock
-					}
-
-					if p.pollUntilBlock != nil && p.pollUntilBlock.Sign() > 0 && endBlock.Cmp(p.pollUntilBlock) >= 0 {
+					p.lastPolledBlock = endBlock
+					if p.reachedPollLimit() {
 						log.Debug().Msg("Reached poll limit, exiting poller")
 						ticker.Stop()
 						return
@@ -102,6 +103,10 @@ func (p *Poller) Start() {
 	select {}
 }
 
+func (p *Poller) reachedPollLimit() bool {
+	return p.pollUntilBlock != nil && p.pollUntilBlock.Sign() > 0 && p.lastPolledBlock.Cmp(p.pollUntilBlock) >= 0
+}
+
 func (p *Poller) getBlockRange() ([]*big.Int, error) {
 	latestBlockUint64, err := p.rpc.EthClient.BlockNumber(context.Background())
 	if err != nil {
@@ -109,14 +114,9 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 	}
 	latestBlock := new(big.Int).SetUint64(latestBlockUint64)
 
-	lastPolledBlock, err := p.storage.OrchestratorStorage.GetLatestPolledBlockNumber()
-	if err != nil || lastPolledBlock == nil {
-		log.Warn().Err(err).Msgf("No last polled block found, starting from %s", p.pollFromBlock.String())
-		lastPolledBlock = new(big.Int).Sub(p.pollFromBlock, big.NewInt(1))
-	}
-	log.Debug().Msgf("Last polled block: %s", lastPolledBlock.String())
+	log.Debug().Msgf("Last polled block: %s", p.lastPolledBlock.String())
 
-	startBlock := new(big.Int).Add(lastPolledBlock, big.NewInt(1))
+	startBlock := new(big.Int).Add(p.lastPolledBlock, big.NewInt(1))
 	endBlock := new(big.Int).Add(startBlock, big.NewInt(p.blocksPerPoll-1))
 
 	if endBlock.Cmp(latestBlock) > 0 {
