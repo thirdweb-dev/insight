@@ -16,7 +16,9 @@ type QueryFilter struct {
 	SortOrder       string
 	Page            int
 	Limit           int
+	Offset          int
 	Aggregates      []string
+	FromAddress     string
 	ContractAddress string
 	Signature       string
 }

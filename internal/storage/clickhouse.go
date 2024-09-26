@@ -11,6 +11,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	ethereum "github.com/ethereum/go-ethereum/common"
 	zLog "github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -306,28 +307,80 @@ func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf Query
 func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) string {
 	query := fmt.Sprintf("SELECT %s FROM %s.%s FINAL WHERE is_deleted = 0", columns, c.cfg.Database, table)
 
-	if qf.ContractAddress != "" {
-		query += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
-	}
+	query = addContractAddress(table, query, qf.ContractAddress)
+
+	// Add signature clause
 	if qf.Signature != "" {
 		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
 	}
+	// Add filter params
 	for key, value := range qf.FilterParams {
-		query += fmt.Sprintf(" AND %s = '%s'", key, value)
+		query = addFilterParams(key, strings.ToLower(value), query)
 	}
 
+	// Add sort by clause
 	if qf.SortBy != "" {
 		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
 	}
 
+	// Add limit clause
 	if qf.Page > 0 && qf.Limit > 0 {
 		offset := (qf.Page - 1) * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else {
+		// Add limit clause
 		query += getLimitClause(int(qf.Limit))
 	}
 
 	return query
+}
+
+func addFilterParams(key, value, query string) string {
+	// if the key includes topic_0, topic_1, topic_2, topic_3, apply left padding to the value
+	if strings.Contains(key, "topic_") {
+		value = getTopicValueFormat(value)
+	}
+
+	suffix := key[len(key)-3:]
+	switch suffix {
+		case "gte":
+			query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-3], value)
+		case "lte":
+			query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-3], value)
+		case "_lt":
+			query += fmt.Sprintf(" AND %s < '%s'", key[:len(key)-3], value)
+		case "_gt":
+			query += fmt.Sprintf(" AND %s > '%s'", key[:len(key)-3], value)
+		case "_ne":
+			query += fmt.Sprintf(" AND %s != '%s'", key[:len(key)-3], value)
+		case "_in":
+			query += fmt.Sprintf(" AND %s IN (%s)", key[:len(key)-3], value)
+		default:
+			query += fmt.Sprintf(" AND %s = '%s'", key, value)
+	}
+	return query
+}
+
+func addContractAddress(table, query string, contractAddress string) string {
+	contractAddress = strings.ToLower(contractAddress)
+	// This needs to move to a query param that accept multiple addresses
+	if table == "logs" {
+		if contractAddress != "" {
+			query += fmt.Sprintf(" AND address = '%s'", contractAddress)
+		}
+	} else if table == "transactions" {
+		if contractAddress != "" {
+			query += fmt.Sprintf(" AND to_address = '%s'", contractAddress)
+		}
+	}
+	return query
+}
+
+func getTopicValueFormat(topic string) string {
+	toAddressHex := ethereum.HexToAddress(topic)
+	toAddressPadded := ethereum.LeftPadBytes(toAddressHex.Bytes(), 32)
+	toAddressTopic := ethereum.BytesToHash(toAddressPadded).Hex()
+	return toAddressTopic
 }
 
 func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter) (map[string]string, error) {
@@ -379,6 +432,10 @@ func scanTransaction(rows driver.Rows) (common.Transaction, error) {
 		&tx.MaxFeePerGas,
 		&tx.MaxPriorityFeePerGas,
 		&tx.TransactionType,
+		&tx.R,
+		&tx.S,
+		&tx.V,
+		&tx.AccessListJson,
 	)
 	if err != nil {
 		return common.Transaction{}, fmt.Errorf("error scanning transaction: %w", err)

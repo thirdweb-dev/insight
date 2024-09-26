@@ -14,17 +14,18 @@ func GetTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetTransactionsByContract(w http.ResponseWriter, r *http.Request) {
-	contractAddress := chi.URLParam(r, "contractAddress")
-	handleTransactionsRequest(w, r, contractAddress, "")
+	to := chi.URLParam(r, "to")
+	handleTransactionsRequest(w, r, to, "")
 }
 
 func GetTransactionsByContractAndSignature(w http.ResponseWriter, r *http.Request) {
-	contractAddress := chi.URLParam(r, "contractAddress")
-	functionSig := chi.URLParam(r, "functionSig")
-	handleTransactionsRequest(w, r, contractAddress, functionSig)
+	to := chi.URLParam(r, "to")
+	// TODO: Implement signature lookup before activating this
+	// signature := chi.URLParam(r, "signature")
+	handleTransactionsRequest(w, r, to, "")
 }
 
-func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractAddress, functionSig string) {
+func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractAddress, signature string) {
 	chainId, err := api.GetChainId(r)
 	if err != nil {
 		api.BadRequestErrorHandler(w, err)
@@ -36,6 +37,12 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		api.BadRequestErrorHandler(w, err)
 		return
 	}
+
+	signatureHash := ""
+	// TODO: implement signature lookup
+	// if signature != "" {
+	// 	signatureHash = crypto.Keccak256Hash([]byte(signature)).Hex()
+	// }
 
 	mainStorage, err := getMainStorage()
 	if err != nil {
@@ -53,7 +60,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		Limit:           queryParams.Limit,
 		Aggregates:      queryParams.Aggregates,
 		ContractAddress: contractAddress,
-		Signature:     functionSig,
+		Signature:       signatureHash,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying transactions")
@@ -65,7 +72,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		Meta: api.Meta{
 			ChainIdentifier: chainId,
 			ContractAddress: contractAddress,
-			Signature:       functionSig,
+			Signature:       signature,
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
 			TotalItems:      0, // TODO: Implement total items count

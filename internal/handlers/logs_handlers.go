@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
@@ -24,14 +25,14 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetLogsByContract(w http.ResponseWriter, r *http.Request) {
-	contractAddress := chi.URLParam(r, "contractAddress")
+	contractAddress := chi.URLParam(r, "contract")
 	handleLogsRequest(w, r, contractAddress, "")
 }
 
 func GetLogsByContractAndSignature(w http.ResponseWriter, r *http.Request) {
-	contractAddress := chi.URLParam(r, "contractAddress")
-	eventSig := chi.URLParam(r, "eventSig")
-	handleLogsRequest(w, r, contractAddress, eventSig)
+	contractAddress := chi.URLParam(r, "contract")
+	eventSignature := chi.URLParam(r, "signature")
+	handleLogsRequest(w, r, contractAddress, eventSignature)
 }
 
 func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, signature string) {
@@ -45,6 +46,11 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 	if err != nil {
 		api.BadRequestErrorHandler(w, err)
 		return
+	}
+
+	signatureHash := ""
+	if signature != "" {
+		signatureHash = crypto.Keccak256Hash([]byte(signature)).Hex()
 	}
 
 	mainStorage, err := getMainStorage()
@@ -63,7 +69,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 		Limit:           queryParams.Limit,
 		Aggregates:      queryParams.Aggregates,
 		ContractAddress: contractAddress,
-		Signature:       signature,
+		Signature:       signatureHash,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying logs")
@@ -75,10 +81,10 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 		Meta: api.Meta{
 			ChainIdentifier: chainId,
 			ContractAddress: contractAddress,
-			Signature:       signature,
+			Signature:       signatureHash,
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
-			TotalItems:      0, // TODO: Implement total items count
+			TotalItems:      len(logs.Data),
 			TotalPages:      0, // TODO: Implement total pages count
 		},
 		Data:         logs.Data,

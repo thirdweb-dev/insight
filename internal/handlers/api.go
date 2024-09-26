@@ -10,20 +10,20 @@ import (
 
 func Handler(r *chi.Mux) {
 	r.Use(chimiddle.StripSlashes)
-	r.Use(middleware.Authorization)
 	r.Route("/", func(router chi.Router) {
+		router.Use(middleware.Authorization)
 		// might consolidate all variants to one handler function
 		// Wild card queries
 		router.Get("/{chainId}/transactions", GetTransactions)
 		router.Get("/{chainId}/events", GetLogs)
 
 		// contract scoped queries
-		router.Get("/{chainId}/transactions/{contractAddress}", GetTransactionsByContract)
-		router.Get("/{chainId}/events/{contractAddress}", GetLogsByContract)
+		router.Get("/{chainId}/transactions/{to}", GetTransactionsByContract)
+		router.Get("/{chainId}/events/{contract}", GetLogsByContract)
 
 		// signature scoped queries
-		router.Get("/{chainId}/transactions/{contractAddress}/{functionSig}", GetTransactionsByContractAndSignature)
-		router.Get("/{chainId}/events/{contractAddress}/{eventSig}", GetLogsByContractAndSignature)
+		router.Get("/{chainId}/transactions/{to}/{signature}", GetTransactionsByContractAndSignature)
+		router.Get("/{chainId}/events/{contract}/{signature}", GetLogsByContractAndSignature)
 	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
