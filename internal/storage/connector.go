@@ -18,7 +18,7 @@ type QueryFilter struct {
 	Limit           int
 	Aggregates      []string
 	ContractAddress string
-	FunctionSig     string
+	Signature       string
 }
 type QueryResult[T any] struct {
 	// TODO: findout how to only allow Log/transaction arrays or split the result

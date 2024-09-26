@@ -23,7 +23,7 @@ func Handler(r *chi.Mux) {
 
 		// signature scoped queries
 		router.Get("/{chainId}/transactions/{contractAddress}/{functionSig}", GetTransactionsByContractAndSignature)
-		router.Get("/{chainId}/events/{contractAddress}/{functionSig}", GetLogsByContractAndSignature)
+		router.Get("/{chainId}/events/{contractAddress}/{eventSig}", GetLogsByContractAndSignature)
 	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

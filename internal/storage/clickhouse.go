@@ -318,8 +318,8 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 	if qf.ContractAddress != "" {
 		query += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
 	}
-	if qf.FunctionSig != "" {
-		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
+	if qf.Signature != "" {
+		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
 	}
 	for key, value := range qf.FilterParams {
 		query += fmt.Sprintf(" AND %s = '%s'", key, value)
@@ -346,8 +346,8 @@ func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter
 	if qf.ContractAddress != "" {
 		aggregateQuery += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
 	}
-	if qf.FunctionSig != "" {
-		aggregateQuery += fmt.Sprintf(" AND topic_0 = '%s'", qf.FunctionSig)
+	if qf.Signature != "" {
+		aggregateQuery += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
 	}
 	for key, value := range qf.FilterParams {
 		aggregateQuery += fmt.Sprintf(" AND %s = '%s'", key, value)
