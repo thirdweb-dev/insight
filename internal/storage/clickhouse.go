@@ -40,7 +40,7 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr:     []string{fmt.Sprintf("%s:%d", cfg.Host, port)},
 		Protocol: clickhouse.Native,
-		TLS:      &tls.Config{}, // enable secure TLS
+		// TLS:      &tls.Config{}, // enable secure TLS
 		Auth: clickhouse.Auth{
 			Username: cfg.Username,
 			Password: cfg.Password,
