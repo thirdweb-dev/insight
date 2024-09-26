@@ -54,40 +54,49 @@ func (p *Poller) Start() {
 	interval := time.Duration(p.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	go func() {
-		log.Debug().Msgf("Poller running")
+	// TODO: make this configurable?
+	const numWorkers = 5
+	tasks := make(chan struct{}, numWorkers)
 
-		for range ticker.C {
-			blockNumbers, err := p.getBlockRange()
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting block range")
-				continue
-			}
-			if len(blockNumbers) < 1 {
-				log.Debug().Msg("No blocks to poll, skipping")
-				continue
-			}
-			endBlock := blockNumbers[len(blockNumbers)-1]
-			if endBlock != nil {
-				saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
-				if saveErr != nil {
-					log.Error().Err(saveErr).Msg("Error updating last polled block")
-				} else {
-					p.lastPolledBlock = endBlock
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			for range tasks {
+				blockNumbers, err := p.getBlockRange()
+				if err != nil {
+					log.Error().Err(err).Msg("Error getting block range")
+					continue
 				}
-			}
-			log.Debug().Msgf("Polling blocks %s to %s", blockNumbers[0], endBlock)
+				if len(blockNumbers) < 1 {
+					log.Debug().Msg("No blocks to poll, skipping")
+					continue
+				}
+				endBlock := blockNumbers[len(blockNumbers)-1]
+				if endBlock != nil {
+					saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
+					if saveErr != nil {
+						log.Error().Err(saveErr).Msg("Error updating last polled block")
+					} else {
+						p.lastPolledBlock = endBlock
+					}
 
-			worker := worker.NewWorker(p.rpc)
-			results := worker.Run(blockNumbers)
-			p.handleWorkerResults(results)
+					if p.pollUntilBlock != nil && p.pollUntilBlock.Sign() > 0 && endBlock.Cmp(p.pollUntilBlock) >= 0 {
+						log.Debug().Msg("Reached poll limit, exiting poller")
+						ticker.Stop()
+						return
+					}
+				}
+				log.Debug().Msgf("Polling blocks %s to %s", blockNumbers[0], endBlock)
 
-			if p.pollUntilBlock != nil && p.pollUntilBlock.Sign() > 0 && endBlock.Cmp(p.pollUntilBlock) >= 0 {
-				log.Debug().Msg("Reached poll limit, exiting poller")
-				break
+				worker := worker.NewWorker(p.rpc)
+				results := worker.Run(blockNumbers)
+				p.handleWorkerResults(results)
 			}
-		}
-	}()
+		}()
+	}
+
+	for range ticker.C {
+		tasks <- struct{}{}
+	}
 
 	// Keep the program running (otherwise it will exit)
 	select {}
