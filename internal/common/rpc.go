@@ -95,17 +95,17 @@ func (rpc *RPC) checkSupportedMethods() error {
 	var getLogsResult interface{}
 	logsErr := rpc.RPCClient.Call(&getLogsResult, "eth_getLogs", map[string]string{"fromBlock": "0x0", "toBlock": "0x0"})
 	if logsErr != nil {
-		return fmt.Errorf("eth_getBlockByNumber method not supported: %v", logsErr)
+		return fmt.Errorf("eth_getLogs method not supported: %v", logsErr)
 	}
 	log.Debug().Msg("eth_getLogs method supported")
 
+	var traceBlockResult interface{}
 	if config.Cfg.RPC.Traces.Enabled {
-		var traceBlockResult interface{}
 		if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
 			log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
 		}
-		rpc.SupportsTraceBlock = traceBlockResult != nil
 	}
+	rpc.SupportsTraceBlock = traceBlockResult != nil
 	log.Debug().Msgf("trace_block method supported: %v", rpc.SupportsTraceBlock)
 	return nil
 }

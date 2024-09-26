@@ -22,7 +22,7 @@ type QueryFilter struct {
 }
 type QueryResult[T any] struct {
 	// TODO: findout how to only allow Log/transaction arrays or split the result
-	Data       []T   `json:"data"`
+	Data       []T               `json:"data"`
 	Aggregates map[string]string `json:"aggregates"`
 }
 type IStorage struct {
@@ -86,6 +86,8 @@ func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var err error
 	if cfg.Clickhouse != nil {
 		conn, err = NewClickHouseConnector(cfg.Clickhouse)
+	} else if cfg.Redis != nil {
+		conn, err = NewRedisConnector(cfg.Redis)
 	} else if cfg.Memory != nil {
 		conn, err = NewMemoryConnector(cfg.Memory)
 	} else {
