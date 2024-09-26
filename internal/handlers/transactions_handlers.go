@@ -44,7 +44,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		return
 	}
 
-	transactions, err := mainStorage.GetTransactions(storage.QueryFilter{
+	result, err := mainStorage.GetTransactions(storage.QueryFilter{
 		FilterParams:    queryParams.FilterParams,
 		GroupBy:         []string{queryParams.GroupBy},
 		SortBy:          queryParams.SortBy,
@@ -71,7 +71,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 			TotalItems:      0, // TODO: Implement total items count
 			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data: transactions,
+		Data: result.Data,
 		// Aggregations: queryParams.Aggregates,
 	}
 

@@ -20,8 +20,9 @@ type QueryFilter struct {
 	ContractAddress string
 	FunctionSig     string
 }
-type QueryResult struct {
-	Data       []common.Log      `json:"data"`
+type QueryResult[T any] struct {
+	// TODO: findout how to only allow Log/transaction arrays or split the result
+	Data       []T   `json:"data"`
 	Aggregates map[string]string `json:"aggregates"`
 }
 type IStorage struct {
@@ -52,8 +53,8 @@ type IMainStorage interface {
 	InsertTraces(traces []common.Trace) error
 
 	GetBlocks(qf QueryFilter) (logs []common.Block, err error)
-	GetTransactions(qf QueryFilter) (logs []common.Transaction, err error)
-	GetLogs(qf QueryFilter) (logs QueryResult, err error)
+	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
+	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
 	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
 }
