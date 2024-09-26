@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
@@ -45,30 +44,6 @@ func NewRedisConnector(cfg *config.RedisConfig) (*RedisConnector, error) {
 		client: client,
 		cfg:    cfg,
 	}, nil
-}
-
-func (r *RedisConnector) GetLatestPolledBlockNumber() (blockNumber *big.Int, err error) {
-	ctx := context.Background()
-	result, err := r.client.Get(ctx, "latest_polled_block").Result()
-	if err != nil {
-		if err == redis.Nil {
-			return nil, nil // Key doesn't exist
-		}
-		return nil, fmt.Errorf("failed to get latest polled block number: %w", err)
-	}
-
-	blockNumber = new(big.Int)
-	_, ok := blockNumber.SetString(result, 10)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse block number: %s", result)
-	}
-
-	return blockNumber, nil
-}
-
-func (r *RedisConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int) error {
-	ctx := context.Background()
-	return r.client.Set(ctx, "latest_polled_block", blockNumber.String(), 0).Err()
 }
 
 func (r *RedisConnector) GetBlockFailures(limit int) ([]common.BlockFailure, error) {

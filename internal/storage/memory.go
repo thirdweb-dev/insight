@@ -32,24 +32,6 @@ func NewMemoryConnector(cfg *config.MemoryConfig) (*MemoryConnector, error) {
 	}, nil
 }
 
-func (m *MemoryConnector) GetLatestPolledBlockNumber() (*big.Int, error) {
-	blockNumber, ok := m.cache.Get("latest_polled_block_number")
-	if !ok {
-		return nil, nil
-	}
-	bn := new(big.Int)
-	_, success := bn.SetString(blockNumber, 10)
-	if !success {
-		return nil, fmt.Errorf("failed to parse block number: %s", blockNumber)
-	}
-	return bn, nil
-}
-
-func (m *MemoryConnector) StoreLatestPolledBlockNumber(blockNumber *big.Int) error {
-	m.cache.Add("latest_polled_block_number", blockNumber.String())
-	return nil
-}
-
 func (m *MemoryConnector) StoreBlockFailures(failures []common.BlockFailure) error {
 	for _, failure := range failures {
 		failureJson, err := json.Marshal(failure)
@@ -198,6 +180,23 @@ func (m *MemoryConnector) GetMaxBlockNumber() (*big.Int, error) {
 	maxBlockNumber := new(big.Int)
 	for _, key := range m.cache.Keys() {
 		if strings.HasPrefix(key, "block:") {
+			blockNumberStr := strings.Split(key, ":")[1]
+			blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
+			}
+			if blockNumber.Cmp(maxBlockNumber) > 0 {
+				maxBlockNumber = blockNumber
+			}
+		}
+	}
+	return maxBlockNumber, nil
+}
+
+func (m *MemoryConnector) GetLastStagedBlockNumber() (*big.Int, error) {
+	maxBlockNumber := new(big.Int)
+	for _, key := range m.cache.Keys() {
+		if strings.HasPrefix(key, "blockData:") {
 			blockNumberStr := strings.Split(key, ":")[1]
 			blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
 			if !ok {
