@@ -38,6 +38,7 @@ rpc:
 #### RPC Blocks Per Request
 How many blocks at a time to fetch from the RPC. Default is 1000.
 
+cmd: `--rpc-blocks-blocksPerRequest`
 env: `RPC_BLOCKS_BLOCKSPERREQUEST`
 yaml:
 ```yaml
@@ -49,6 +50,7 @@ rpc:
 #### RPC Blocks Batch Delay
 Milliseconds to wait between batches of blocks when fetching from the RPC. Default is 0.
 
+cmd: `--rpc-blocks-batchDelay`
 env: `RPC_BLOCKS_BATCHDELAY`
 yaml:
 ```yaml
@@ -61,6 +63,7 @@ rpc:
 How many blocks at a time to query logs for from the RPC. Default is 100.
 Has no effect if it's larger than RPC blocks per request.
 
+cmd: `--rpc-logs-blocksPerRequest`
 env: `RPC_LOGS_BLOCKSPERREQUEST`
 yaml:
 ```yaml
@@ -72,6 +75,7 @@ rpc:
 #### RPC Logs Batch Delay
 Milliseconds to wait between batches of logs when fetching from the RPC. Default is 0.
 
+cmd: `--rpc-logs-batchDelay`
 env: `RPC_LOGS_BATCHDELAY`
 yaml:
 ```yaml
@@ -83,6 +87,7 @@ rpc:
 #### RPC Traces Enabled
 Whether to enable fetching traces from the RPC. Default is `true`, but it will try to detect if the RPC supports traces automatically.
 
+cmd: `--rpc-traces-enabled`
 env: `RPC_TRACES_ENABLED`
 yaml:
 ```yaml
@@ -95,6 +100,7 @@ rpc:
 How many blocks at a time to fetch traces for from the RPC. Default is 100.
 Has no effect if it's larger than RPC blocks per request.
 
+cmd: `--rpc-traces-blocksPerRequest`
 env: `RPC_TRACES_BLOCKSPERREQUEST`
 yaml:
 ```yaml
@@ -106,6 +112,7 @@ rpc:
 #### RPC Traces Batch Delay
 Milliseconds to wait between batches of traces when fetching from the RPC. Default is 0.
 
+cmd: `--rpc-traces-batchDelay`
 env: `RPC_TRACES_BATCHDELAY`
 yaml:
 ```yaml
@@ -125,20 +132,21 @@ log:
   level: debug
 ```
 
-#### Pretty log
-Whether to print logs in a pretty format. Affects performance. Default is `false`.
+#### Prettify logs
+Whether to print logs in a prettified format. Affects performance. Default is `false`.
 
-env: `PRETTY_LOG`
+cmd: `--log-prettify`
+env: `LOG_PRETTIFY`
 yaml:
 ```yaml
 log:
-  pretty: true
+  prettify: true
 ```
 
 #### Poller
 Whether to enable the poller. Default is `true`.
 
-cmd: `--poller`
+cmd: `--poller-enabled`
 env: `POLLER_ENABLED`
 yaml:
 ```yaml
@@ -149,6 +157,7 @@ poller:
 #### Poller Interval
 Poller trigger interval in milliseconds. Default is `1000`.
 
+cmd: `--poller-interval`
 env: `POLLER_INTERVAL`
 yaml:
 ```yaml
@@ -159,6 +168,7 @@ poller:
 #### Poller Blocks Per Poll
 How many blocks to poll each interval. Default is `10`.
 
+cmd: `--poller-blocks-per-poll`
 env: `POLLER_BLOCKSPERPOLL`
 yaml:
 ```yaml
@@ -169,6 +179,7 @@ poller:
 #### Poller From Block
 From which block to start polling. Default is `0`.
 
+cmd: `--poller-from-block`
 env: `POLLER_FROMBLOCK`
 yaml:
 ```yaml
@@ -179,6 +190,7 @@ poller:
 #### Poller Until Block
 Until which block to poll. If not set, it will poll until the latest block.
 
+cmd: `--poller-until-block`
 env: `POLLER_UNTILBLOCK`
 yaml:
 ```yaml
@@ -189,7 +201,7 @@ poller:
 #### Committer
 Whether to enable the committer. Default is `true`.
 
-cmd: `--committer`
+cmd: `--committer-enabled`
 env: `COMMITTER_ENABLED`
 yaml:
 ```yaml
@@ -200,6 +212,7 @@ committer:
 #### Committer Interval
 Committer trigger interval in milliseconds. Default is `250`.
 
+cmd: `--committer-interval`
 env: `COMMITTER_INTERVAL`
 yaml:
 ```yaml
@@ -210,6 +223,7 @@ committer:
 #### Committer Blocks Per Commit
 How many blocks to commit each interval. Default is `10`.
 
+cmd: `--committer-blocks-per-commit`
 env: `COMMITTER_BLOCKSPERCOMMIT`
 yaml:
 ```yaml
@@ -220,7 +234,7 @@ committer:
 #### Failure Recoverer
 Whether to enable the failure recoverer. Default is `true`.
 
-cmd: `--failure-recoverer`
+cmd: `--failure-recoverer-enabled`
 env: `FAILURERECOVERER_ENABLED`
 yaml:
 ```yaml
@@ -231,6 +245,7 @@ failureRecoverer:
 #### Failure Recoverer Interval
 Failure recoverer trigger interval in milliseconds. Default is `1000`.
 
+cmd: `--failure-recoverer-interval`
 env: `FAILURERECOVERER_INTERVAL`
 yaml:
 ```yaml
@@ -241,6 +256,7 @@ failureRecoverer:
 #### Failure Recoverer Blocks Per Run
 How many blocks to recover each interval. Default is `10`.
 
+cmd: `--failure-recoverer-blocks-per-run`
 env: `FAILURERECOVERER_BLOCKSPERRUN`
 yaml:
 ```yaml

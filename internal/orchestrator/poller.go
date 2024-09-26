@@ -59,14 +59,15 @@ func (p *Poller) Start() {
 
 		for range ticker.C {
 			blockNumbers, err := p.getBlockRange()
-			var endBlock *big.Int
-			if len(blockNumbers) > 0 {
-				endBlock = blockNumbers[len(blockNumbers)-1]
-			}
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting block range")
 				continue
 			}
+			if len(blockNumbers) < 1 {
+				log.Debug().Msg("No blocks to poll, skipping")
+				continue
+			}
+			endBlock := blockNumbers[len(blockNumbers)-1]
 			if endBlock != nil {
 				saveErr := p.storage.OrchestratorStorage.StoreLatestPolledBlockNumber(endBlock)
 				if saveErr != nil {
@@ -81,7 +82,7 @@ func (p *Poller) Start() {
 			results := worker.Run(blockNumbers)
 			p.handleWorkerResults(results)
 
-			if p.pollUntilBlock != nil && endBlock.Cmp(p.pollUntilBlock) >= 0 {
+			if p.pollUntilBlock != nil && p.pollUntilBlock.Sign() > 0 && endBlock.Cmp(p.pollUntilBlock) >= 0 {
 				log.Debug().Msg("Reached poll limit, exiting poller")
 				break
 			}
