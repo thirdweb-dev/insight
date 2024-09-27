@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -141,12 +143,18 @@ func (c *Commiter) commit(blockData []common.BlockData) error {
 
 	// TODO if next parts (saving or deleting) fail, we'll have to do a rollback
 	if err := c.saveDataToMainStorage(blockData); err != nil {
+		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
 		return fmt.Errorf("error saving data to main storage: %v", err)
 	}
 
 	if err := c.storage.StagingStorage.DeleteBlockData(blockData); err != nil {
+		log.Error().Err(err).Msgf("Failed to delete committed blocks from staging: %v", blockNumbers)
 		return fmt.Errorf("error deleting data from staging storage: %v", err)
 	}
+
+	// Update metrics for successful commits
+	successfulCommits.Add(float64(len(blockData)))
+	lastCommittedBlock.Set(float64(blockData[len(blockData)-1].Block.Number.Int64()))
 
 	return nil
 }
@@ -214,3 +222,15 @@ func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
 
 	return nil
 }
+
+var (
+	successfulCommits = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "commiter_successful_commits_total",
+		Help: "The total number of successful block commits",
+	})
+
+	lastCommittedBlock = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "commiter_last_committed_block",
+		Help: "The last successfully committed block number",
+	})
+)
