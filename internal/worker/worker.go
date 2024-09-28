@@ -70,7 +70,7 @@ func (w *Worker) Run(blockNumbers []*big.Int) []WorkerResult {
 	var wg sync.WaitGroup
 	resultsCh := make(chan []WorkerResult, len(chunks))
 
-	log.Debug().Msgf("Processing %d blocks in %d chunks of max %d blocks", blockCount, len(chunks), w.rpc.BlocksPerRequest.Blocks)
+	log.Debug().Msgf("Worker Processing %d blocks in %d chunks of max %d blocks", blockCount, len(chunks), w.rpc.BlocksPerRequest.Blocks)
 	for _, chunk := range chunks {
 		wg.Add(1)
 		go func(chunk []*big.Int) {

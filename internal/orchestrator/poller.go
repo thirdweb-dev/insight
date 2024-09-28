@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -173,6 +175,7 @@ func (p *Poller) handleWorkerResults(results []worker.WorkerResult) {
 				Error:       e,
 			})
 		}
+		polledBatchSize.Set(float64(len(blockData)))
 	}
 
 	if len(failedResults) > 0 {
@@ -199,3 +202,10 @@ func (p *Poller) handleBlockFailures(results []worker.WorkerResult) {
 		log.Error().Err(err).Msg("Error saving block failures")
 	}
 }
+
+var (
+	polledBatchSize = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "polled_batch_size",
+		Help: "The number of blocks polled in a single batch",
+	})
+)

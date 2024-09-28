@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -59,10 +61,17 @@ func (fr *FailureRecoverer) Start() {
 				blocksToTrigger = append(blocksToTrigger, blockFailure.BlockNumber)
 			}
 
+			// Trigger worker for recovery
 			log.Debug().Msgf("Triggering Failure Recoverer for blocks: %v", blocksToTrigger)
 			worker := worker.NewWorker(fr.rpc)
 			results := worker.Run(blocksToTrigger)
+			p := NewPoller(fr.rpc, fr.storage)
+			p.handleWorkerResults(results)
 			fr.handleWorkerResults(blockFailures, results)
+
+			// Track recovery activity
+			failureRecovererLastTriggeredBlock.Set(float64(blockFailures[len(blockFailures)-1].BlockNumber.Int64()))
+			firstBlocknumberInfailureRecovererBatch.Set(float64(blockFailures[0].BlockNumber.Int64()))
 		}
 	}()
 
@@ -71,6 +80,7 @@ func (fr *FailureRecoverer) Start() {
 }
 
 func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFailure, results []worker.WorkerResult) {
+	log.Debug().Msgf("Failure Recoverer recovered %d blocks", len(results))
 	err := fr.storage.OrchestratorStorage.DeleteBlockFailures(blockFailures)
 	if err != nil {
 		log.Error().Err(err).Msg("Error deleting block failures")
@@ -99,3 +109,15 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 	}
 	fr.storage.OrchestratorStorage.StoreBlockFailures(newBlockFailures)
 }
+
+var (
+	failureRecovererLastTriggeredBlock = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "failure_recoverer_last_triggered_block",
+		Help: "The last block number that the failure recoverer was triggered for",
+	})
+
+	firstBlocknumberInfailureRecovererBatch = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "failure_recoverer_first_block_in_batch",
+		Help: "The first block number in the failure recoverer batch",
+	})
+)
