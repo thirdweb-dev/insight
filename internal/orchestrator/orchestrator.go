@@ -56,8 +56,8 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			commiter := NewCommiter(o.storage)
-			commiter.Start()
+			committer := NewCommitter(o.storage)
+			committer.Start()
 		}()
 	}
 
