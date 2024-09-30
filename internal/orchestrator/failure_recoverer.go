@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
@@ -64,8 +65,6 @@ func (fr *FailureRecoverer) Start() {
 			log.Debug().Msgf("Triggering Failure Recoverer for blocks: %v", blocksToTrigger)
 			worker := worker.NewWorker(fr.rpc)
 			results := worker.Run(blocksToTrigger)
-			p := NewPoller(fr.rpc, fr.storage)
-			p.handleWorkerResults(results)
 			fr.handleWorkerResults(blockFailures, results)
 
 			// Track recovery activity
@@ -80,22 +79,19 @@ func (fr *FailureRecoverer) Start() {
 
 func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFailure, results []worker.WorkerResult) {
 	log.Debug().Msgf("Failure Recoverer recovered %d blocks", len(results))
-	err := fr.storage.OrchestratorStorage.DeleteBlockFailures(blockFailures)
-	if err != nil {
-		log.Error().Err(err).Msg("Error deleting block failures")
-		return
-	}
 	blockFailureMap := make(map[*big.Int]common.BlockFailure)
 	for _, failure := range blockFailures {
 		blockFailureMap[failure.BlockNumber] = failure
 	}
 	var newBlockFailures []common.BlockFailure
+	var failuresToDelete []common.BlockFailure
+	var successfulResults []common.BlockData
 	for _, result := range results {
+		blockFailureForBlock, ok := blockFailureMap[result.BlockNumber]
 		if result.Error != nil {
-			prevBlockFailure, ok := blockFailureMap[result.BlockNumber]
 			failureCount := 1
 			if ok {
-				failureCount = prevBlockFailure.FailureCount + 1
+				failureCount = blockFailureForBlock.FailureCount + 1
 			}
 			newBlockFailures = append(newBlockFailures, common.BlockFailure{
 				BlockNumber:   result.BlockNumber,
@@ -104,7 +100,26 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 				ChainId:       fr.rpc.ChainID,
 				FailureCount:  failureCount,
 			})
+		} else {
+			successfulResults = append(successfulResults, common.BlockData{
+				Block:        result.Block,
+				Logs:         result.Logs,
+				Transactions: result.Transactions,
+				Traces:       result.Traces,
+			})
+			failuresToDelete = append(failuresToDelete, blockFailureForBlock)
 		}
 	}
-	fr.storage.OrchestratorStorage.StoreBlockFailures(newBlockFailures)
+	if err := fr.storage.StagingStorage.InsertBlockData(successfulResults); err != nil {
+		log.Error().Err(fmt.Errorf("error inserting block data in failure recoverer: %v", err))
+		return
+	}
+	if err := fr.storage.OrchestratorStorage.StoreBlockFailures(newBlockFailures); err != nil {
+		log.Error().Err(err).Msg("Error storing block failures")
+		return
+	}
+	if err := fr.storage.OrchestratorStorage.DeleteBlockFailures(failuresToDelete); err != nil {
+		log.Error().Err(err).Msg("Error deleting block failures")
+		return
+	}
 }
