@@ -148,7 +148,6 @@ func (c *Commiter) commit(blockData []common.BlockData) error {
 	}
 
 	if err := c.storage.StagingStorage.DeleteBlockData(blockData); err != nil {
-		log.Error().Err(err).Msgf("Failed to delete committed blocks from staging: %v", blockNumbers)
 		return fmt.Errorf("error deleting data from staging storage: %v", err)
 	}
 
