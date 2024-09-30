@@ -211,7 +211,7 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 		err := batch.Append(
 			failure.ChainId,
 			failure.BlockNumber,
-			failure.FailureTime,
+			uint64(failure.FailureTime.Unix()),
 			failure.FailureCount,
 			failure.FailureReason,
 		)
@@ -502,17 +502,19 @@ func (c *ClickHouseConnector) GetLastStagedBlockNumber() (maxBlockNumber *big.In
 func scanBlockFailure(rows driver.Rows) (common.BlockFailure, error) {
 	var failure common.BlockFailure
 	var timestamp uint64
+	var count uint16
 	err := rows.Scan(
 		&failure.ChainId,
 		&failure.BlockNumber,
 		&timestamp,
-		&failure.FailureCount,
+		&count,
 		&failure.FailureReason,
 	)
 	if err != nil {
 		return common.BlockFailure{}, fmt.Errorf("error scanning block failure: %w", err)
 	}
 	failure.FailureTime = time.Unix(int64(timestamp), 0)
+	failure.FailureCount = int(count)
 	return failure, nil
 }
 
