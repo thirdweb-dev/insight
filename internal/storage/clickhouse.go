@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -72,7 +71,7 @@ func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 		err := batch.Append(
 			block.ChainId,
 			block.Number,
-			uint64(block.Timestamp.Unix()),
+			block.Timestamp,
 			block.Hash,
 			block.ParentHash,
 			block.Sha3Uncles,
@@ -119,7 +118,7 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 			tx.Nonce,
 			tx.BlockHash,
 			tx.BlockNumber,
-			uint64(tx.BlockTimestamp.Unix()),
+			tx.BlockTimestamp,
 			tx.TransactionIndex,
 			tx.FromAddress,
 			tx.ToAddress,
@@ -158,7 +157,7 @@ func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
 			log.ChainId,
 			log.BlockNumber,
 			log.BlockHash,
-			uint64(log.BlockTimestamp.Unix()),
+			log.BlockTimestamp,
 			log.TransactionHash,
 			log.TransactionIndex,
 			log.LogIndex,
@@ -230,13 +229,12 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 
 	for rows.Next() {
 		var block common.Block
-		var timestamp uint64
 		err := rows.Scan(
 			&block.ChainId,
 			&block.Number,
 			&block.Hash,
 			&block.ParentHash,
-			&timestamp,
+			&block.Timestamp,
 			&block.Nonce,
 			&block.Sha3Uncles,
 			&block.LogsBloom,
@@ -255,7 +253,6 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 			zLog.Error().Err(err).Msg("Error scanning block")
 			return nil, err
 		}
-		block.Timestamp = time.Unix(int64(timestamp), 0)
 		blocks = append(blocks, block)
 	}
 	return blocks, nil
@@ -343,20 +340,20 @@ func addFilterParams(key, value, query string) string {
 
 	suffix := key[len(key)-3:]
 	switch suffix {
-		case "gte":
-			query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-3], value)
-		case "lte":
-			query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-3], value)
-		case "_lt":
-			query += fmt.Sprintf(" AND %s < '%s'", key[:len(key)-3], value)
-		case "_gt":
-			query += fmt.Sprintf(" AND %s > '%s'", key[:len(key)-3], value)
-		case "_ne":
-			query += fmt.Sprintf(" AND %s != '%s'", key[:len(key)-3], value)
-		case "_in":
-			query += fmt.Sprintf(" AND %s IN (%s)", key[:len(key)-3], value)
-		default:
-			query += fmt.Sprintf(" AND %s = '%s'", key, value)
+	case "gte":
+		query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-3], value)
+	case "lte":
+		query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-3], value)
+	case "_lt":
+		query += fmt.Sprintf(" AND %s < '%s'", key[:len(key)-3], value)
+	case "_gt":
+		query += fmt.Sprintf(" AND %s > '%s'", key[:len(key)-3], value)
+	case "_ne":
+		query += fmt.Sprintf(" AND %s != '%s'", key[:len(key)-3], value)
+	case "_in":
+		query += fmt.Sprintf(" AND %s IN (%s)", key[:len(key)-3], value)
+	default:
+		query += fmt.Sprintf(" AND %s = '%s'", key, value)
 	}
 	return query
 }
@@ -414,14 +411,13 @@ func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter
 
 func scanTransaction(rows driver.Rows) (common.Transaction, error) {
 	var tx common.Transaction
-	var timestamp uint64
 	err := rows.Scan(
 		&tx.ChainId,
 		&tx.Hash,
 		&tx.Nonce,
 		&tx.BlockHash,
 		&tx.BlockNumber,
-		&timestamp,
+		&tx.BlockTimestamp,
 		&tx.TransactionIndex,
 		&tx.FromAddress,
 		&tx.ToAddress,
@@ -440,19 +436,17 @@ func scanTransaction(rows driver.Rows) (common.Transaction, error) {
 	if err != nil {
 		return common.Transaction{}, fmt.Errorf("error scanning transaction: %w", err)
 	}
-	tx.BlockTimestamp = time.Unix(int64(timestamp), 0)
 	return tx, nil
 }
 
 func scanLog(rows driver.Rows) (common.Log, error) {
 	var log common.Log
-	var timestamp uint64
 	var topics [4]string
 	err := rows.Scan(
 		&log.ChainId,
 		&log.BlockNumber,
 		&log.BlockHash,
-		&timestamp,
+		&log.BlockTimestamp,
 		&log.TransactionHash,
 		&log.TransactionIndex,
 		&log.LogIndex,
@@ -466,7 +460,6 @@ func scanLog(rows driver.Rows) (common.Log, error) {
 	if err != nil {
 		return common.Log{}, fmt.Errorf("error scanning log: %w", err)
 	}
-	log.BlockTimestamp = time.Unix(int64(timestamp), 0)
 	for _, topic := range topics {
 		if topic != "" {
 			log.Topics = append(log.Topics, topic)
@@ -645,7 +638,7 @@ func (c *ClickHouseConnector) InsertTraces(traces []common.Trace) error {
 			trace.ChainID,
 			trace.BlockNumber,
 			trace.BlockHash,
-			uint64(trace.BlockTimestamp.Unix()),
+			trace.BlockTimestamp,
 			trace.TransactionHash,
 			trace.TransactionIndex,
 			trace.Subtraces,
@@ -684,12 +677,11 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 
 	for rows.Next() {
 		var trace common.Trace
-		var timestamp uint64
 		err := rows.Scan(
 			&trace.ChainID,
 			&trace.BlockNumber,
 			&trace.BlockHash,
-			&timestamp,
+			&trace.BlockTimestamp,
 			&trace.TransactionHash,
 			&trace.TransactionIndex,
 			&trace.Subtraces,
@@ -712,7 +704,6 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 			zLog.Error().Err(err).Msg("Error scanning transaction")
 			return nil, err
 		}
-		trace.BlockTimestamp = time.Unix(int64(timestamp), 0)
 		traces = append(traces, trace)
 	}
 	return traces, nil
