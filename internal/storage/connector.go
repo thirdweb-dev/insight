@@ -9,6 +9,7 @@ import (
 )
 
 type QueryFilter struct {
+	ChainId         *big.Int
 	BlockNumbers    []*big.Int
 	FilterParams    map[string]string
 	GroupBy         []string
@@ -34,7 +35,7 @@ type IStorage struct {
 }
 
 type IOrchestratorStorage interface {
-	GetBlockFailures(limit int) ([]common.BlockFailure, error)
+	GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error)
 	StoreBlockFailures(failures []common.BlockFailure) error
 	DeleteBlockFailures(failures []common.BlockFailure) error
 }
@@ -43,7 +44,7 @@ type IStagingStorage interface {
 	InsertBlockData(data []common.BlockData) error
 	GetBlockData(qf QueryFilter) (data []common.BlockData, err error)
 	DeleteBlockData(data []common.BlockData) error
-	GetLastStagedBlockNumber(rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
+	GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
 }
 
 type IMainStorage interface {
@@ -56,7 +57,7 @@ type IMainStorage interface {
 	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
 	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
-	GetMaxBlockNumber() (maxBlockNumber *big.Int, err error)
+	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {

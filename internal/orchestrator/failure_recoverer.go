@@ -47,7 +47,10 @@ func (fr *FailureRecoverer) Start() {
 	log.Debug().Msgf("Failure Recovery running")
 	go func() {
 		for range ticker.C {
-			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(fr.failuresPerPoll)
+			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{
+				ChainId: fr.rpc.ChainID,
+				Limit:   fr.failuresPerPoll,
+			})
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get block failures")
 				continue
