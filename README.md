@@ -22,7 +22,7 @@ The Indexer's modular architecture and configuration options allow for adaptatio
 
 ### Pre-requites
 1. Install Golang v1.23
-2. Run the DB scripts here (use the clickhouse cluster indexer-local for testing, and change the db name)
+2. Run the DB scripts (change the db name)
 3. Create a clickhouse instance
 
 ### Usage
