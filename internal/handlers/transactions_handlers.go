@@ -70,7 +70,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 
 	response := api.QueryResponse{
 		Meta: api.Meta{
-			ChainIdentifier: chainId,
+			ChainId:         chainId,
 			ContractAddress: contractAddress,
 			Signature:       signature,
 			Page:            queryParams.Page,

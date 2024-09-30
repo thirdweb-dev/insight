@@ -79,7 +79,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 
 	response := api.QueryResponse{
 		Meta: api.Meta{
-			ChainIdentifier: chainId,
+			ChainId:         chainId,
 			ContractAddress: contractAddress,
 			Signature:       signatureHash,
 			Page:            queryParams.Page,

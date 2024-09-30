@@ -29,8 +29,8 @@ type QueryParams struct {
 }
 
 type Meta struct {
-	ChainIdentifier *uint64 `json:"chain_identifier"`
-	ContractAddress string  `json:"contract_address"`
+	ChainId         *uint64 `json:"chain_id"`
+	ContractAddress string  `json:"address"`
 	Signature       string  `json:"signature"`
 	Page            int     `json:"page"`
 	Limit           int     `json:"limit"`
