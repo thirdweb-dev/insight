@@ -15,8 +15,8 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
-const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 250
-const DEFAULT_BLOCKS_PER_COMMIT = 10
+const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 2000
+const DEFAULT_BLOCKS_PER_COMMIT = 1000
 
 type Committer struct {
 	triggerIntervalMs int
@@ -70,17 +70,19 @@ func (c *Committer) Start() {
 }
 
 func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
-	maxBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber()
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber()
+	log.Info().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 	if err != nil {
 		return nil, err
 	}
 
-	if maxBlockNumber.Cmp(big.NewInt(0)) == 0 {
-		maxBlockNumber = new(big.Int).Sub(c.pollFromBlock, big.NewInt(1))
+	if latestCommittedBlockNumber.Sign() == 0 {
+		// If no blocks have been committed yet, start from the fromBlock specified in the config (same start for the poller)
+		latestCommittedBlockNumber = new(big.Int).Sub(c.pollFromBlock, big.NewInt(1))
 	}
 
-	startBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
-	endBlock := new(big.Int).Add(maxBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+	startBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(1))
+	endBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
 
 	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
 	blockNumbers := make([]*big.Int, blockCount)
@@ -105,6 +107,7 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
 	}
 	if len(blocksData) == 0 {
+		log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blocksToCommit[0].Int64(), blocksToCommit[len(blocksToCommit)-1].Int64())
 		return nil, nil
 	}
 
@@ -114,7 +117,11 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	})
 
 	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
-		// we are missing first block in staging, meaning whole batch cannot be committed
+		// Note: we are missing block(s) in the beginning of the batch in staging, The Failure Recoverer will handle this
+		// increment the a gap counter in prometheus
+		gapCounter.Inc()
+		// record the first missed block number in prometheus
+		missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 		return nil, fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", blocksData[0].Block.Number.String(), blocksToCommit[0].String())
 	}
 
@@ -124,7 +131,12 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 
 	for i := 1; i < len(blocksData); i++ {
 		if blocksData[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
-			// Gap detected, stop here
+			// Note: Gap detected, stop here
+			log.Warn().Msgf("Gap detected at block %s, stopping commit", expectedBlockNumber.String())
+			// increment the a gap counter in prometheus
+			gapCounter.Inc()
+			// record the first missed block number in prometheus
+			missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 			break
 		}
 		sequentialBlockData = append(sequentialBlockData, blocksData[i])
@@ -231,5 +243,15 @@ var (
 	lastCommittedBlock = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "committer_last_committed_block",
 		Help: "The last successfully committed block number",
+	})
+
+	gapCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "committer_gap_counter",
+		Help: "The number of gaps detected during commits",
+	})
+
+	missedBlockNumbers = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "committer_first_missed_block_number",
+		Help: "The first blocknumber detected in a commit gap",
 	})
 )
