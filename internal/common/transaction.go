@@ -2,7 +2,6 @@ package common
 
 import (
 	"math/big"
-	"time"
 )
 
 type Transaction struct {
@@ -11,7 +10,7 @@ type Transaction struct {
 	Nonce                uint64    `json:"nonce"`
 	BlockHash            string    `json:"block_hash"`
 	BlockNumber          *big.Int  `json:"block_number"`
-	BlockTimestamp       time.Time `json:"block_timestamp"`
+	BlockTimestamp       uint64 `json:"block_timestamp"`
 	TransactionIndex     uint64    `json:"transaction_index"`
 	FromAddress          string    `json:"from_address"`
 	ToAddress            string    `json:"to_address"`

@@ -2,7 +2,6 @@ package common
 
 import (
 	"math/big"
-	"time"
 )
 
 type Block struct {
@@ -10,7 +9,7 @@ type Block struct {
 	Number           *big.Int  `json:"number"`
 	Hash             string    `json:"hash"`
 	ParentHash       string    `json:"parent_hash"`
-	Timestamp        time.Time `json:"timestamp"`
+	Timestamp        uint64    `json:"timestamp"`
 	Nonce            string    `json:"nonce"`
 	Sha3Uncles       string    `json:"sha3_uncles"`
 	MixHash          string    `json:"mix_hash"`

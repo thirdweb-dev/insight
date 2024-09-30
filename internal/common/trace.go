@@ -2,14 +2,13 @@ package common
 
 import (
 	"math/big"
-	"time"
 )
 
 type Trace struct {
 	ChainID          *big.Int  `json:"chain_id"`
 	BlockNumber      *big.Int  `json:"block_number"`
 	BlockHash        string    `json:"block_hash"`
-	BlockTimestamp   time.Time `json:"block_timestamp"`
+	BlockTimestamp   uint64    `json:"block_timestamp"`
 	TransactionHash  string    `json:"transaction_hash"`
 	TransactionIndex uint64    `json:"transaction_index"`
 	Subtraces        int64     `json:"subtraces"`

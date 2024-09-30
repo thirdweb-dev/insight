@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"strconv"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -68,7 +67,7 @@ func serializeBlock(chainId *big.Int, block RawBlock) common.Block {
 		Number:           hexToBigInt(block["number"]),
 		Hash:             interfaceToString(block["hash"]),
 		ParentHash:       interfaceToString(block["parentHash"]),
-		Timestamp:        hexSecondsTimestampToTime(block["timestamp"]),
+		Timestamp:        hexToUint64(block["timestamp"]),
 		Nonce:            interfaceToString(block["nonce"]),
 		Sha3Uncles:       interfaceToString(block["sha3Uncles"]),
 		MixHash:          interfaceToString(block["mixHash"]),
@@ -89,7 +88,7 @@ func serializeBlock(chainId *big.Int, block RawBlock) common.Block {
 	}
 }
 
-func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTimestamp time.Time) []common.Transaction {
+func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTimestamp uint64) []common.Transaction {
 	if len(transactions) == 0 {
 		return []common.Transaction{}
 	}
@@ -100,7 +99,7 @@ func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTi
 	return serializedTransactions
 }
 
-func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp time.Time) common.Transaction {
+func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp uint64) common.Transaction {
 	tx, ok := rawTx.(map[string]interface{})
 	if !ok {
 		log.Debug().Msgf("Failed to serialize transaction: %v", rawTx)
@@ -238,11 +237,6 @@ func hexToUint64(hex interface{}) uint64 {
 	}
 	v, _ := strconv.ParseUint(hexString[2:], 16, 64)
 	return v
-}
-
-func hexSecondsTimestampToTime(hexTimestamp interface{}) time.Time {
-	timestamp := int64(hexToUint64(hexTimestamp))
-	return time.Unix(timestamp, 0)
 }
 
 func interfaceToString(value interface{}) string {
