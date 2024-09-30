@@ -43,7 +43,7 @@ type IStagingStorage interface {
 	InsertBlockData(data []common.BlockData) error
 	GetBlockData(qf QueryFilter) (data []common.BlockData, err error)
 	DeleteBlockData(data []common.BlockData) error
-	GetLastStagedBlockNumber() (maxBlockNumber *big.Int, err error)
+	GetLastStagedBlockNumber(rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
 }
 
 type IMainStorage interface {
