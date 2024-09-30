@@ -1,8 +1,8 @@
-# indexer
+# Insight
 
-The Indexer is a blockchain data processing tool designed to fetch, process, and store on-chain data. It provides a solution for indexing blockchain data, facilitating efficient querying of transactions, logs through a simple API.
+Insight is a blockchain data processing tool designed to fetch, process, and store on-chain data. It provides a solution for indexing blockchain data, facilitating efficient querying of transactions, logs through a simple API.
 
-The Indexer's architecture consists of five main components:
+Insight's architecture consists of five main components:
 <img width="728" alt="architecture-diagram" src="https://github.com/user-attachments/assets/8ad19477-c18f-442e-a899-0f502a00bae6">
 
 1. **Poller**: The Poller is responsible for continuously fetching new blocks from the configured RPC and processing them. It uses multiple worker goroutines to concurrently retrieve block data, handles successful and failed results, and stores the processed block data and any failures.
@@ -15,7 +15,7 @@ The Indexer's architecture consists of five main components:
 
 5. **Orchestrator**: The Orchestrator is responsible for coordinating and managing the poller, failure recoverer, and committer. It initializes these components based on configuration settings and starts them concurrently, ensuring they run independently while waiting for all of them to complete their tasks.
 
-The Indexer's modular architecture and configuration options allow for adaptation to various evm chains and use cases.
+Insight's modular architecture and configuration options allow for adaptation to various evm chains and use cases.
 
 
 ## Getting started
@@ -26,10 +26,10 @@ The Indexer's modular architecture and configuration options allow for adaptatio
 3. Create a clickhouse instance
 
 ### Usage
-To run the indexer and the associated API, follow these steps:
+To run insight and the associated API, follow these steps:
 1. Clone the repo
 ```
-git clone https://github.com/thirdweb-dev/indexer.git
+git clone https://github.com/thirdweb-dev/insight.git
 ```
 2. Run the migration scripts here
 3. Create `config.yml` from `config.example.yml` and set the values by following the [config guide](#supported-configurations)
@@ -38,19 +38,19 @@ git clone https://github.com/thirdweb-dev/indexer.git
 ```
 go build -o main
 ```
-5. Run the indexer
+6. Run insight
 ```
 ./main orchestrator
 ```
-6. Run the Data API
+7. Run the Data API
 ```
 ./main api
 ```
-7. API is available at `http://localhost:3000`
+8. API is available at `http://localhost:3000`
 
 ## Metrics
 
-The indexer node exposes Prometheus metrics at `http://localhost:2112/metrics`. Here the exposed metrics [metrics.go](https://github.com/thirdweb-dev/indexer/blob/main/internal/metrics/metrics.go)
+Insight node exposes Prometheus metrics at `http://localhost:2112/metrics`. Here the exposed metrics [metrics.go](https://github.com/thirdweb-dev/insight/blob/main/internal/metrics/metrics.go)
 
 ## Configuration
 
