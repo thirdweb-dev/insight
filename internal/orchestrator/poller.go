@@ -43,7 +43,7 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 	}
 	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
 	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
-	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber(untilBlock)
+	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber(rpc.ChainID, untilBlock)
 	if err != nil || lastPolledBlock == nil || lastPolledBlock.Sign() <= 0 {
 		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
 		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())

@@ -22,9 +22,10 @@ type Committer struct {
 	blocksPerCommit   int
 	storage           storage.IStorage
 	pollFromBlock     *big.Int
+	rpc               common.RPC
 }
 
-func NewCommitter(storage storage.IStorage) *Committer {
+func NewCommitter(rpc common.RPC, storage storage.IStorage) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
@@ -39,6 +40,7 @@ func NewCommitter(storage storage.IStorage) *Committer {
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		pollFromBlock:     big.NewInt(int64(config.Cfg.Poller.FromBlock)),
+		rpc:               rpc,
 	}
 }
 
@@ -69,7 +71,7 @@ func (c *Committer) Start() {
 }
 
 func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
-	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber()
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.ChainID)
 	log.Info().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 	if err != nil {
 		return nil, err
@@ -101,7 +103,7 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 		return nil, nil
 	}
 
-	blocksData, err := c.storage.StagingStorage.GetBlockData(storage.QueryFilter{BlockNumbers: blocksToCommit})
+	blocksData, err := c.storage.StagingStorage.GetBlockData(storage.QueryFilter{BlockNumbers: blocksToCommit, ChainId: c.rpc.ChainID})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
 	}

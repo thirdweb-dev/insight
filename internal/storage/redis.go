@@ -46,15 +46,25 @@ func NewRedisConnector(cfg *config.RedisConfig) (*RedisConnector, error) {
 	}, nil
 }
 
-func (r *RedisConnector) GetBlockFailures(limit int) ([]common.BlockFailure, error) {
+func (r *RedisConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
 	ctx := context.Background()
 	var blockFailures []common.BlockFailure
 	var cursor uint64
 	var keys []string
 	var err error
 
+	keyPrefix := "block_failure:*:*"
+	if qf.ChainId.Sign() != 0 {
+		keyPrefix = fmt.Sprintf("block_failure:%s:*", qf.ChainId.String())
+	}
+
+	limit := qf.Limit
+	if limit == 0 {
+		limit = 100
+	}
+
 	for {
-		keys, cursor, err = r.client.Scan(ctx, cursor, "block_failure:*", int64(limit-len(blockFailures))).Result()
+		keys, cursor, err = r.client.Scan(ctx, cursor, keyPrefix, int64(limit-len(blockFailures))).Result()
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan block failures: %w", err)
 		}
@@ -93,7 +103,7 @@ func (r *RedisConnector) StoreBlockFailures(failures []common.BlockFailure) erro
 		if err != nil {
 			return err
 		}
-		r.client.Set(ctx, fmt.Sprintf("block_failure:%s", failure.BlockNumber.String()), string(failureJson), 0)
+		r.client.Set(ctx, fmt.Sprintf("block_failure:%s:%s", failure.ChainId.String(), failure.BlockNumber.String()), string(failureJson), 0)
 	}
 	return nil
 }
@@ -101,7 +111,7 @@ func (r *RedisConnector) StoreBlockFailures(failures []common.BlockFailure) erro
 func (r *RedisConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
 	ctx := context.Background()
 	for _, failure := range failures {
-		r.client.Del(ctx, fmt.Sprintf("block_failure:%s", failure.BlockNumber.String()))
+		r.client.Del(ctx, fmt.Sprintf("block_failure:%s:%s", failure.ChainId.String(), failure.BlockNumber.String()))
 	}
 	return nil
 }

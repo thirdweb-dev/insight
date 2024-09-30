@@ -38,18 +38,19 @@ func (m *MemoryConnector) StoreBlockFailures(failures []common.BlockFailure) err
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("block_failure:%s", failure.BlockNumber.String()), string(failureJson))
+		m.cache.Add(fmt.Sprintf("block_failure:%s:%s", failure.ChainId.String(), failure.BlockNumber.String()), string(failureJson))
 	}
 	return nil
 }
 
-func (m *MemoryConnector) GetBlockFailures(limit int) ([]common.BlockFailure, error) {
+func (m *MemoryConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
 	blockFailures := []common.BlockFailure{}
+	limit := getLimit(qf)
 	for _, key := range m.cache.Keys() {
 		if len(blockFailures) >= limit {
 			break
 		}
-		if strings.HasPrefix(key, "block_failure:") {
+		if strings.HasPrefix(key, fmt.Sprintf("block_failure:%s:", qf.ChainId.String())) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				blockFailure := common.BlockFailure{}
@@ -66,7 +67,7 @@ func (m *MemoryConnector) GetBlockFailures(limit int) ([]common.BlockFailure, er
 
 func (m *MemoryConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
 	for _, failure := range failures {
-		key := fmt.Sprintf("block_failure:%s", failure.BlockNumber.String())
+		key := fmt.Sprintf("block_failure:%s:%s", failure.ChainId.String(), failure.BlockNumber.String())
 		m.cache.Remove(key)
 	}
 	return nil
@@ -78,7 +79,7 @@ func (m *MemoryConnector) InsertBlocks(blocks []common.Block) error {
 		if err != nil {
 			return err
 		}
-		key := fmt.Sprintf("block:%s", block.Number.String())
+		key := fmt.Sprintf("block:%s:%s", block.ChainId.String(), block.Number.String())
 		m.cache.Add(key, string(blockJson))
 	}
 	return nil
@@ -93,7 +94,7 @@ func (m *MemoryConnector) GetBlocks(qf QueryFilter) ([]common.Block, error) {
 		if len(blocks) >= int(limit) {
 			break
 		}
-		if isKeyForBlock(key, "block:", blockNumbersToCheck) {
+		if isKeyForBlock(key, fmt.Sprintf("block:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				block := common.Block{}
@@ -114,7 +115,7 @@ func (m *MemoryConnector) InsertTransactions(txs []common.Transaction) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("transaction:%s:%s", tx.BlockNumber.String(), tx.Hash), string(txJson))
+		m.cache.Add(fmt.Sprintf("transaction:%s:%s:%s", tx.ChainId.String(), tx.BlockNumber.String(), tx.Hash), string(txJson))
 	}
 	return nil
 }
@@ -127,7 +128,7 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction,
 		if len(txs) >= limit {
 			break
 		}
-		if isKeyForBlock(key, "transaction:", blockNumbersToCheck) {
+		if isKeyForBlock(key, fmt.Sprintf("transaction:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				tx := common.Transaction{}
@@ -148,7 +149,7 @@ func (m *MemoryConnector) InsertLogs(logs []common.Log) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("log:%s:%s-%d", log.BlockNumber.String(), log.TransactionHash, log.LogIndex), string(logJson))
+		m.cache.Add(fmt.Sprintf("log:%s:%s:%s-%d", log.ChainId.String(), log.BlockNumber.String(), log.TransactionHash, log.LogIndex), string(logJson))
 	}
 	return nil
 }
@@ -161,7 +162,7 @@ func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
 		if len(logs) >= limit {
 			break
 		}
-		if isKeyForBlock(key, "log:", blockNumbersToCheck) {
+		if isKeyForBlock(key, fmt.Sprintf("log:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				log := common.Log{}
@@ -176,11 +177,11 @@ func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
 	return logs, nil
 }
 
-func (m *MemoryConnector) GetMaxBlockNumber() (*big.Int, error) {
+func (m *MemoryConnector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) {
 	maxBlockNumber := new(big.Int)
 	for _, key := range m.cache.Keys() {
-		if strings.HasPrefix(key, "block:") {
-			blockNumberStr := strings.Split(key, ":")[1]
+		if strings.HasPrefix(key, fmt.Sprintf("block:%s:", chainId.String())) {
+			blockNumberStr := strings.Split(key, ":")[2]
 			blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
 			if !ok {
 				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
@@ -200,11 +201,11 @@ func IsInRange(num *big.Int, rangeEnd *big.Int) bool {
 	return num.Cmp(rangeEnd) <= 0
 }
 
-func (m *MemoryConnector) GetLastStagedBlockNumber(rangeEnd *big.Int) (*big.Int, error) {
+func (m *MemoryConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (*big.Int, error) {
 	maxBlockNumber := new(big.Int)
 	for _, key := range m.cache.Keys() {
-		if strings.HasPrefix(key, "blockData:") {
-			blockNumberStr := strings.Split(key, ":")[1]
+		if strings.HasPrefix(key, fmt.Sprintf("blockData:%s:", chainId.String())) {
+			blockNumberStr := strings.Split(key, ":")[2]
 			blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
 			if !ok {
 				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
@@ -225,7 +226,7 @@ func isKeyForBlock(key string, prefix string, blocksFilter map[string]uint8) boo
 	if len(parts) < 2 {
 		return false
 	}
-	blockNumber := parts[1]
+	blockNumber := parts[2]
 	if len(blocksFilter) == 0 {
 		return true
 	}
@@ -256,7 +257,7 @@ func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("blockData:%s", blockData.Block.Number.String()), string(dataJson))
+		m.cache.Add(fmt.Sprintf("blockData:%s:%s", blockData.Block.ChainId.String(), blockData.Block.Number.String()), string(dataJson))
 	}
 	return nil
 }
@@ -270,7 +271,7 @@ func (m *MemoryConnector) GetBlockData(qf QueryFilter) ([]common.BlockData, erro
 		if len(blockData) >= int(limit) {
 			break
 		}
-		if isKeyForBlock(key, "blockData:", blockNumbersToCheck) {
+		if isKeyForBlock(key, fmt.Sprintf("blockData:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				bd := common.BlockData{}
@@ -287,7 +288,7 @@ func (m *MemoryConnector) GetBlockData(qf QueryFilter) ([]common.BlockData, erro
 
 func (m *MemoryConnector) DeleteBlockData(data []common.BlockData) error {
 	for _, blockData := range data {
-		key := fmt.Sprintf("blockData:%s", blockData.Block.Number.String())
+		key := fmt.Sprintf("blockData:%s:%s", blockData.Block.ChainId.String(), blockData.Block.Number.String())
 		m.cache.Remove(key)
 	}
 	return nil
@@ -299,7 +300,7 @@ func (m *MemoryConnector) InsertTraces(traces []common.Trace) error {
 		if err != nil {
 			return err
 		}
-		m.cache.Add(fmt.Sprintf("trace:%s:%s:%s", trace.BlockNumber.String(), trace.TransactionHash, traceAddressToString(trace.TraceAddress)), string(traceJson))
+		m.cache.Add(fmt.Sprintf("trace:%s:%s:%s:%s", trace.ChainID.String(), trace.BlockNumber.String(), trace.TransactionHash, traceAddressToString(trace.TraceAddress)), string(traceJson))
 	}
 	return nil
 }
@@ -312,7 +313,7 @@ func (m *MemoryConnector) GetTraces(qf QueryFilter) ([]common.Trace, error) {
 		if len(traces) >= limit {
 			break
 		}
-		if isKeyForBlock(key, "trace:", blockNumbersToCheck) {
+		if isKeyForBlock(key, fmt.Sprintf("trace:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
 				trace := common.Trace{}
