@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -45,6 +46,12 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
 		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
 	} else {
+		// if the configured from block is less than the last polled block,
+		// it means the user wants to re-poll from a previous block
+		// we should improve the design so users don't have to do such force re-poll
+		if pollFromBlock.Cmp(lastPolledBlock) < 0 {
+			lastPolledBlock = pollFromBlock
+		}
 		log.Info().Msgf("Last polled block found: %s", lastPolledBlock.String())
 	}
 	return &Poller{
@@ -64,11 +71,15 @@ func (p *Poller) Start() {
 	// TODO: make this configurable?
 	const numWorkers = 5
 	tasks := make(chan struct{}, numWorkers)
+	var blockRangeMutex sync.Mutex
 
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for range tasks {
+				blockRangeMutex.Lock()
 				blockNumbers, err := p.getBlockRange()
+				blockRangeMutex.Unlock()
+				
 				if err != nil {
 					log.Error().Err(err).Msg("Error getting block range")
 					continue

@@ -481,6 +481,7 @@ func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err 
 	if err != nil {
 		return nil, err
 	}
+	zLog.Debug().Msgf("Max block number in main storage is: %s", maxBlockNumber.String())
 	return maxBlockNumber, nil
 }
 
