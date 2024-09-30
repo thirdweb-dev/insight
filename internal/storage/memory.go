@@ -193,7 +193,14 @@ func (m *MemoryConnector) GetMaxBlockNumber() (*big.Int, error) {
 	return maxBlockNumber, nil
 }
 
-func (m *MemoryConnector) GetLastStagedBlockNumber() (*big.Int, error) {
+func IsInRange(num *big.Int, rangeEnd *big.Int) bool {
+	if rangeEnd.Sign() == 0 {
+		return true
+	}
+	return num.Cmp(rangeEnd) <= 0
+}
+
+func (m *MemoryConnector) GetLastStagedBlockNumber(rangeEnd *big.Int) (*big.Int, error) {
 	maxBlockNumber := new(big.Int)
 	for _, key := range m.cache.Keys() {
 		if strings.HasPrefix(key, "blockData:") {
@@ -202,7 +209,7 @@ func (m *MemoryConnector) GetLastStagedBlockNumber() (*big.Int, error) {
 			if !ok {
 				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
 			}
-			if blockNumber.Cmp(maxBlockNumber) > 0 {
+			if blockNumber.Cmp(maxBlockNumber) > 0 && IsInRange(blockNumber, rangeEnd) {
 				maxBlockNumber = blockNumber
 			}
 		}

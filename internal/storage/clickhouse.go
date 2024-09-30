@@ -490,8 +490,11 @@ func (c *ClickHouseConnector) GetMaxBlockNumber() (maxBlockNumber *big.Int, err 
 	return maxBlockNumber, nil
 }
 
-func (c *ClickHouseConnector) GetLastStagedBlockNumber() (maxBlockNumber *big.Int, err error) {
+func (c *ClickHouseConnector) GetLastStagedBlockNumber(rangeEnd *big.Int) (maxBlockNumber *big.Int, err error) {
 	query := fmt.Sprintf("SELECT max(block_number) FROM %s.block_data FINAL WHERE is_deleted = 0", c.cfg.Database)
+	if rangeEnd.Sign() > 0 {
+		query += fmt.Sprintf(" AND block_number <= %s", rangeEnd.String())
+	}
 	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
 	if err != nil {
 		return nil, err

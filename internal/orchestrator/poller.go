@@ -41,8 +41,9 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
+	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
 	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
-	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber()
+	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber(untilBlock)
 	if err != nil || lastPolledBlock == nil || lastPolledBlock.Sign() <= 0 {
 		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
 		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
@@ -60,7 +61,7 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 		blocksPerPoll:     int64(blocksPerPoll),
 		storage:           storage,
 		lastPolledBlock:   lastPolledBlock,
-		pollUntilBlock:    big.NewInt(int64(config.Cfg.Poller.UntilBlock)),
+		pollUntilBlock:    untilBlock,
 	}
 }
 
@@ -79,7 +80,7 @@ func (p *Poller) Start() {
 				blockRangeMutex.Lock()
 				blockNumbers, err := p.getBlockRange()
 				blockRangeMutex.Unlock()
-				
+
 				if err != nil {
 					log.Error().Err(err).Msg("Error getting block range")
 					continue
