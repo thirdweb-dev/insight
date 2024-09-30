@@ -76,9 +76,9 @@ func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 		return nil, err
 	}
 
-	if latestCommittedBlockNumber.Cmp(big.NewInt(0)) == 0 {
+	if latestCommittedBlockNumber.Sign() == 0 {
 		// If no blocks have been committed yet, start from the fromBlock specified in the config (same start for the poller)
-		latestCommittedBlockNumber = c.pollFromBlock
+		latestCommittedBlockNumber = new(big.Int).Sub(c.pollFromBlock, big.NewInt(1))
 	}
 
 	startBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(1))
@@ -117,16 +117,11 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	})
 
 	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
-		// we are missing block(s) in the beginning of the batch in staging, let's fill the gap
-		blockFailures := make([]common.BlockData, 0, len(blocksToCommit))
-		for _, blockNumber := range blocksToCommit {
-			blockFailures = append(blockFailures, common.BlockData{
-				Block: common.Block{
-					Number: blockNumber,
-				},
-			})
-		}
-		c.addBlocksToFailureDetector(blockFailures)
+		// Note: we are missing block(s) in the beginning of the batch in staging, The Failure Recoverer will handle this
+		// increment the a gap counter in prometheus
+		gapCounter.Inc()
+		// record the first missed block number in prometheus
+		missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 		return nil, fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", blocksData[0].Block.Number.String(), blocksToCommit[0].String())
 	}
 
@@ -136,10 +131,12 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 
 	for i := 1; i < len(blocksData); i++ {
 		if blocksData[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
-			// Gap detected, stop here
+			// Note: Gap detected, stop here
 			log.Warn().Msgf("Gap detected at block %s, stopping commit", expectedBlockNumber.String())
-			// add the blocknumber to the failure detector
-			c.addBlocksToFailureDetector(blocksData[i:])
+			// increment the a gap counter in prometheus
+			gapCounter.Inc()
+			// record the first missed block number in prometheus
+			missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 			break
 		}
 		sequentialBlockData = append(sequentialBlockData, blocksData[i])
@@ -147,25 +144,6 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	}
 
 	return sequentialBlockData, nil
-}
-
-func (c *Committer) addBlocksToFailureDetector(blocksData []common.BlockData) {
-	
-	blockFailures := make([]common.BlockFailure, 0, len(blocksData))
-	for _, block := range blocksData {
-		blockFailures = append(blockFailures, common.BlockFailure{
-			BlockNumber: block.Block.Number,
-			FailureCount: 1,
-			FailureTime:   time.Now(),
-			FailureReason: "Gap detected",
-		})
-	}
-
-	c.storage.OrchestratorStorage.StoreBlockFailures(blockFailures)
-	// increment the a gap counter in prometheus
-	gapCounter.Inc()
-	// record the first missed block number in prometheus
-	missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 }
 
 func (c *Committer) commit(blockData []common.BlockData) error {
