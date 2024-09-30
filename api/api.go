@@ -25,23 +25,23 @@ type QueryParams struct {
 	SortOrder    string            `schema:"sort_order"`
 	Page         int               `schema:"page"`
 	Limit        int               `schema:"limit"`
-	Aggregates    []string          `schema:"aggregate"`
+	Aggregates   []string          `schema:"aggregate"`
 }
 
 type Meta struct {
-	ChainIdentifier string `json:"chain_identifier"`
-	ContractAddress string `json:"contract_address"`
-	Signature       string `json:"signature"`
-	Page            int    `json:"page"`
-	Limit           int    `json:"limit"`
-	TotalItems      int    `json:"total_items"`
-	TotalPages      int    `json:"total_pages"`
+	ChainIdentifier *uint64 `json:"chain_identifier"`
+	ContractAddress string  `json:"contract_address"`
+	Signature       string  `json:"signature"`
+	Page            int     `json:"page"`
+	Limit           int     `json:"limit"`
+	TotalItems      int     `json:"total_items"`
+	TotalPages      int     `json:"total_pages"`
 }
 
 type QueryResponse struct {
-	Meta         Meta                   `json:"meta"`
-	Data         interface{}            `json:"data,omitempty"`
-	Aggregations map[string]string      `json:"aggregations,omitempty"`
+	Meta         Meta              `json:"meta"`
+	Data         interface{}       `json:"data,omitempty"`
+	Aggregations map[string]string `json:"aggregations,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {
@@ -97,12 +97,13 @@ func ParseQueryParams(r *http.Request) (QueryParams, error) {
 	return params, nil
 }
 
-func GetChainId(r *http.Request) (string, error) {
+func GetChainId(r *http.Request) (*uint64, error) {
 	// TODO: check chainId agains the chain-service to ensure it's valid
 	chainId := chi.URLParam(r, "chainId")
-	if _, err := strconv.Atoi(chainId); err != nil {
-		log.Error().Err(err).Msg("Error getting chainId")
-		return "", err
+	chainIdInt, err := strconv.ParseUint(chainId, 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Error parsing chainId")
+		return nil, err
 	}
-	return chainId, nil
+	return &chainIdInt, nil
 }
