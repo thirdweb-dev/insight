@@ -46,10 +46,9 @@ func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
 		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
 		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
 	} else {
-		// if the configured from block is less than the last polled block,
-		// it means the user wants to re-poll from a previous block
-		// we should improve the design so users don't have to do such force re-poll
-		if pollFromBlock.Cmp(lastPolledBlock) < 0 {
+		// In the case where the start block in staging introduces a gap with main storage,
+		// This hack allows us to re-poll from the start block without having to delete the staging data
+		if config.Cfg.Poller.ForceFromBlock {
 			lastPolledBlock = pollFromBlock
 		}
 		log.Info().Msgf("Last polled block found: %s", lastPolledBlock.String())

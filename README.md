@@ -20,7 +20,7 @@ For example to configure the `rpc.url` configuration to `https://my-rpc.com`, yo
 ### Configuration using configuration files
 The default configuration should live in `configs/config.yml`. Copy `configs/config.example.yml` to get started.  
 Or you can use the `--config` flag to specify a different configuration file.  
-If you want to add secrets to the configuration file, you can copy `configs/secrets.example.yml` to `configs/secrets.yml` and add the secrets. They won't be commited to the repository or the built image.
+If you want to add secrets to the configuration file, you can copy `configs/secrets.example.yml` to `configs/secrets.yml` and add the secrets. They won't be committed to the repository or the built image.
 
 ### Supported configurations:
 
@@ -185,6 +185,17 @@ yaml:
 ```yaml
 poller:
   fromBlock: 20000000
+```
+
+#### Poller Force Start Block
+From which block to start polling. Default is `false`.
+
+cmd: `--poller-force-from-block`
+env: `POLLER_FORCEFROMBLOCK`
+yaml:
+```yaml
+poller:
+  forceFromBlock: false
 ```
 
 #### Poller Until Block

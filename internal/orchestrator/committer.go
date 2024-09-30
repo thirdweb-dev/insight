@@ -15,27 +15,27 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
-const DEFAULT_COMMITER_TRIGGER_INTERVAL = 250
+const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 250
 const DEFAULT_BLOCKS_PER_COMMIT = 10
 
-type Commiter struct {
+type Committer struct {
 	triggerIntervalMs int
 	blocksPerCommit   int
 	storage           storage.IStorage
 	pollFromBlock     *big.Int
 }
 
-func NewCommiter(storage storage.IStorage) *Commiter {
+func NewCommitter(storage storage.IStorage) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
-		triggerInterval = DEFAULT_COMMITER_TRIGGER_INTERVAL
+		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
 	}
 	blocksPerCommit := config.Cfg.Committer.BlocksPerCommit
 	if blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
-	return &Commiter{
+	return &Committer{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
@@ -43,11 +43,11 @@ func NewCommiter(storage storage.IStorage) *Commiter {
 	}
 }
 
-func (c *Commiter) Start() {
+func (c *Committer) Start() {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	log.Debug().Msgf("Commiter running")
+	log.Debug().Msgf("Committer running")
 	go func() {
 		for range ticker.C {
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit()
@@ -69,7 +69,7 @@ func (c *Commiter) Start() {
 	select {}
 }
 
-func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
+func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 	maxBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber()
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (c *Commiter) getBlockNumbersToCommit() ([]*big.Int, error) {
 	return blockNumbers, nil
 }
 
-func (c *Commiter) getSequentialBlockDataToCommit() ([]common.BlockData, error) {
+func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error) {
 	blocksToCommit, err := c.getBlockNumbersToCommit()
 	if err != nil {
 		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
@@ -114,7 +114,7 @@ func (c *Commiter) getSequentialBlockDataToCommit() ([]common.BlockData, error) 
 	})
 
 	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
-		// we are missing first block in staging, meaning whole batch cannot be commited
+		// we are missing first block in staging, meaning whole batch cannot be committed
 		return nil, fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", blocksData[0].Block.Number.String(), blocksToCommit[0].String())
 	}
 
@@ -134,7 +134,7 @@ func (c *Commiter) getSequentialBlockDataToCommit() ([]common.BlockData, error) 
 	return sequentialBlockData, nil
 }
 
-func (c *Commiter) commit(blockData []common.BlockData) error {
+func (c *Committer) commit(blockData []common.BlockData) error {
 	blockNumbers := make([]*big.Int, len(blockData))
 	for i, block := range blockData {
 		blockNumbers[i] = block.Block.Number
@@ -158,7 +158,7 @@ func (c *Commiter) commit(blockData []common.BlockData) error {
 	return nil
 }
 
-func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
+func (c *Committer) saveDataToMainStorage(blockData []common.BlockData) error {
 	var commitWg sync.WaitGroup
 	commitWg.Add(4)
 
@@ -224,12 +224,12 @@ func (c *Commiter) saveDataToMainStorage(blockData []common.BlockData) error {
 
 var (
 	successfulCommits = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "commiter_successful_commits_total",
+		Name: "committer_successful_commits_total",
 		Help: "The total number of successful block commits",
 	})
 
 	lastCommittedBlock = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "commiter_last_committed_block",
+		Name: "committer_last_committed_block",
 		Help: "The last successfully committed block number",
 	})
 )
