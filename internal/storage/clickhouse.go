@@ -197,18 +197,23 @@ func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
 }
 
 func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "INSERT INTO "+c.cfg.Database+".block_failures")
+	query := `
+		INSERT INTO ` + c.cfg.Database + `.block_failures (
+			chain_id, block_number, last_error_timestamp, count, reason
+		)
+	`
+	batch, err := c.conn.PrepareBatch(context.Background(), query)
 	if err != nil {
 		return err
 	}
 
 	for _, failure := range failures {
 		err := batch.Append(
-			failure.BlockNumber,
 			failure.ChainId,
+			failure.BlockNumber,
 			failure.FailureTime,
-			failure.FailureReason,
 			failure.FailureCount,
+			failure.FailureReason,
 		)
 		if err != nil {
 			return err
@@ -343,20 +348,20 @@ func addFilterParams(key, value, query string) string {
 
 	suffix := key[len(key)-3:]
 	switch suffix {
-		case "gte":
-			query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-3], value)
-		case "lte":
-			query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-3], value)
-		case "_lt":
-			query += fmt.Sprintf(" AND %s < '%s'", key[:len(key)-3], value)
-		case "_gt":
-			query += fmt.Sprintf(" AND %s > '%s'", key[:len(key)-3], value)
-		case "_ne":
-			query += fmt.Sprintf(" AND %s != '%s'", key[:len(key)-3], value)
-		case "_in":
-			query += fmt.Sprintf(" AND %s IN (%s)", key[:len(key)-3], value)
-		default:
-			query += fmt.Sprintf(" AND %s = '%s'", key, value)
+	case "gte":
+		query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-3], value)
+	case "lte":
+		query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-3], value)
+	case "_lt":
+		query += fmt.Sprintf(" AND %s < '%s'", key[:len(key)-3], value)
+	case "_gt":
+		query += fmt.Sprintf(" AND %s > '%s'", key[:len(key)-3], value)
+	case "_ne":
+		query += fmt.Sprintf(" AND %s != '%s'", key[:len(key)-3], value)
+	case "_in":
+		query += fmt.Sprintf(" AND %s IN (%s)", key[:len(key)-3], value)
+	default:
+		query += fmt.Sprintf(" AND %s = '%s'", key, value)
 	}
 	return query
 }
@@ -494,45 +499,58 @@ func (c *ClickHouseConnector) GetLastStagedBlockNumber() (maxBlockNumber *big.In
 	return maxBlockNumber, nil
 }
 
+func scanBlockFailure(rows driver.Rows) (common.BlockFailure, error) {
+	var failure common.BlockFailure
+	var timestamp uint64
+	err := rows.Scan(
+		&failure.ChainId,
+		&failure.BlockNumber,
+		&timestamp,
+		&failure.FailureCount,
+		&failure.FailureReason,
+	)
+	if err != nil {
+		return common.BlockFailure{}, fmt.Errorf("error scanning block failure: %w", err)
+	}
+	failure.FailureTime = time.Unix(int64(timestamp), 0)
+	return failure, nil
+}
+
 func (c *ClickHouseConnector) GetBlockFailures(limit int) ([]common.BlockFailure, error) {
-	query := fmt.Sprintf("SELECT * FROM %s.block_failures%s", c.cfg.Database, getLimitClause(limit))
-	rows, err := c.conn.Query(context.Background(), query)
+	columns := "chain_id, block_number, last_error_timestamp, count, reason"
+	qf := QueryFilter{
+		Limit: limit,
+	}
+	result, err := executeQuery[common.BlockFailure](c, "block_failures", columns, qf, scanBlockFailure)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var failures []common.BlockFailure
-	for rows.Next() {
-		var failure common.BlockFailure
-		err := rows.Scan(
-			&failure.BlockNumber,
-			&failure.ChainId,
-			&failure.FailureTime,
-			&failure.FailureReason,
-			&failure.FailureCount,
-		)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error scanning block failure")
-			return nil, err
-		}
-		failures = append(failures, failure)
-	}
-	return failures, nil
+	return result.Data, nil
 }
 
 func (c *ClickHouseConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
-	batch, err := c.conn.PrepareBatch(context.Background(), "DELETE FROM "+c.cfg.Database+".block_failures")
+	query := fmt.Sprintf(`
+        INSERT INTO %s.block_failures (
+            chain_id, block_number, is_deleted
+        ) VALUES (?, ?, ?)
+    `, c.cfg.Database)
+
+	batch, err := c.conn.PrepareBatch(context.Background(), query)
 	if err != nil {
 		return err
 	}
 
 	for _, failure := range failures {
-		err := batch.Append(failure.BlockNumber)
+		err := batch.Append(
+			failure.ChainId,
+			failure.BlockNumber,
+			1,
+		)
 		if err != nil {
 			return err
 		}
 	}
+
 	return batch.Send()
 }
 
