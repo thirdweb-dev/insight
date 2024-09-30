@@ -6,24 +6,24 @@ import (
 )
 
 type Transaction struct {
-	ChainId              *big.Int
-	Hash                 string
-	Nonce                uint64
-	BlockHash            string
-	BlockNumber          *big.Int
-	BlockTimestamp       time.Time
-	TransactionIndex     uint64
-	FromAddress          string
-	ToAddress            string
-	Value                *big.Int
-	Gas                  uint64
-	GasPrice             *big.Int
-	Data                 string
-	MaxFeePerGas         *big.Int
-	MaxPriorityFeePerGas *big.Int
-	TransactionType      uint8
-	R                    *big.Int
-	S                    *big.Int
-	V                    *big.Int
-	AccessListJson       string
+	ChainId              *big.Int  `json:"chain_id"`
+	Hash                 string    `json:"hash"`
+	Nonce                uint64    `json:"nonce"`
+	BlockHash            string    `json:"block_hash"`
+	BlockNumber          *big.Int  `json:"block_number"`
+	BlockTimestamp       time.Time `json:"block_timestamp"`
+	TransactionIndex     uint64    `json:"transaction_index"`
+	FromAddress          string    `json:"from_address"`
+	ToAddress            string    `json:"to_address"`
+	Value                *big.Int  `json:"value"`
+	Gas                  uint64    `json:"gas"`
+	GasPrice             *big.Int  `json:"gas_price"`
+	Data                 string    `json:"data"`
+	MaxFeePerGas         *big.Int  `json:"max_fee_per_gas"`
+	MaxPriorityFeePerGas *big.Int  `json:"max_priority_fee_per_gas"`
+	TransactionType      uint8     `json:"transaction_type"`
+	R                    *big.Int  `json:"r"`
+	S                    *big.Int  `json:"s"`
+	V                    *big.Int  `json:"v"`
+	AccessListJson       string    `json:"access_list_json"`
 }

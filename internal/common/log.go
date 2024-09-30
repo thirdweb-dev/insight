@@ -6,14 +6,14 @@ import (
 )
 
 type Log struct {
-	ChainId          *big.Int
-	BlockNumber      *big.Int
-	BlockHash        string
-	BlockTimestamp   time.Time
-	TransactionHash  string
-	TransactionIndex uint64
-	LogIndex         uint64
-	Address          string
-	Data             string
-	Topics           []string
+	ChainId          *big.Int  `json:"chain_id"`
+	BlockNumber      *big.Int  `json:"block_number"`
+	BlockHash        string    `json:"block_hash"`
+	BlockTimestamp   time.Time `json:"block_timestamp"`
+	TransactionHash  string    `json:"transaction_hash"`
+	TransactionIndex uint64    `json:"transaction_index"`
+	LogIndex         uint64    `json:"log_index"`
+	Address          string    `json:"address"`
+	Data             string    `json:"data"`
+	Topics           []string  `json:"topics"`
 }
