@@ -7,11 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
@@ -119,9 +118,9 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
 		// Note: we are missing block(s) in the beginning of the batch in staging, The Failure Recoverer will handle this
 		// increment the a gap counter in prometheus
-		gapCounter.Inc()
+		metrics.GapCounter.Inc()
 		// record the first missed block number in prometheus
-		missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
+		metrics.MissedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 		return nil, fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", blocksData[0].Block.Number.String(), blocksToCommit[0].String())
 	}
 
@@ -134,9 +133,9 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 			// Note: Gap detected, stop here
 			log.Warn().Msgf("Gap detected at block %s, stopping commit", expectedBlockNumber.String())
 			// increment the a gap counter in prometheus
-			gapCounter.Inc()
+			metrics.GapCounter.Inc()
 			// record the first missed block number in prometheus
-			missedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
+			metrics.MissedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 			break
 		}
 		sequentialBlockData = append(sequentialBlockData, blocksData[i])
@@ -164,8 +163,8 @@ func (c *Committer) commit(blockData []common.BlockData) error {
 	}
 
 	// Update metrics for successful commits
-	successfulCommits.Add(float64(len(blockData)))
-	lastCommittedBlock.Set(float64(blockData[len(blockData)-1].Block.Number.Int64()))
+	metrics.SuccessfulCommits.Add(float64(len(blockData)))
+	metrics.LastCommittedBlock.Set(float64(blockData[len(blockData)-1].Block.Number.Int64()))
 
 	return nil
 }
@@ -233,25 +232,3 @@ func (c *Committer) saveDataToMainStorage(blockData []common.BlockData) error {
 
 	return nil
 }
-
-var (
-	successfulCommits = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "committer_successful_commits_total",
-		Help: "The total number of successful block commits",
-	})
-
-	lastCommittedBlock = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "committer_last_committed_block",
-		Help: "The last successfully committed block number",
-	})
-
-	gapCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "committer_gap_counter",
-		Help: "The number of gaps detected during commits",
-	})
-
-	missedBlockNumbers = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "committer_first_missed_block_number",
-		Help: "The first blocknumber detected in a commit gap",
-	})
-)

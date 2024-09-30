@@ -8,11 +8,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
 type Worker struct {
@@ -95,7 +94,7 @@ func (w *Worker) Run(blockNumbers []*big.Int) []WorkerResult {
 	if len(results) > 0 {
 		// dividing by 10 to avoid scientific notation (e.g. 1.23456e+07)
 		// TODO: find a solution
-		lastFetchedBlock.Set(float64(results[len(results)-1].BlockNumber.Uint64()) / 10)
+		metrics.LastFetchedBlock.Set(float64(results[len(results)-1].BlockNumber.Uint64()) / 10)
 	}
 	return results
 }
@@ -219,9 +218,3 @@ func fetchBatch[T any](RPC common.RPC, blockNumbers []*big.Int, method string, a
 
 	return results
 }
-
-// Add a gauge to track the fetched block numbers in Prometheus
-var lastFetchedBlock = promauto.NewGauge(prometheus.GaugeOpts{
-	Name: "worker_last_fetched_block_from_rpc",
-	Help: "The last block number fetched by the worker from the RPC",
-})	

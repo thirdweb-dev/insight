@@ -4,11 +4,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
@@ -70,8 +69,8 @@ func (fr *FailureRecoverer) Start() {
 			fr.handleWorkerResults(blockFailures, results)
 
 			// Track recovery activity
-			failureRecovererLastTriggeredBlock.Set(float64(blockFailures[len(blockFailures)-1].BlockNumber.Int64()))
-			firstBlocknumberInfailureRecovererBatch.Set(float64(blockFailures[0].BlockNumber.Int64()))
+			metrics.FailureRecovererLastTriggeredBlock.Set(float64(blockFailures[len(blockFailures)-1].BlockNumber.Int64()))
+			metrics.FirstBlocknumberInFailureRecovererBatch.Set(float64(blockFailures[0].BlockNumber.Int64()))
 		}
 	}()
 
@@ -109,15 +108,3 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 	}
 	fr.storage.OrchestratorStorage.StoreBlockFailures(newBlockFailures)
 }
-
-var (
-	failureRecovererLastTriggeredBlock = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "failure_recoverer_last_triggered_block",
-		Help: "The last block number that the failure recoverer was triggered for",
-	})
-
-	firstBlocknumberInfailureRecovererBatch = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "failure_recoverer_first_block_in_batch",
-		Help: "The first block number in the failure recoverer batch",
-	})
-)
