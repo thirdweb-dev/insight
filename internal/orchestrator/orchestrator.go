@@ -61,5 +61,13 @@ func (o *Orchestrator) Start() {
 		}()
 	}
 
+	// The chain tracker is always running
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		chainTracker := NewChainTracker(o.rpc)
+		chainTracker.Start()
+	}()
+
 	wg.Wait()
 }
