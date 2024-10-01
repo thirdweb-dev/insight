@@ -1,8 +1,17 @@
 {
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "description": "API for querying blockchain transactions and events",
+        "title": "Thirdweb Insight",
+        "contact": {},
+        "license": {
+            "name": "Apache 2.0",
+            "url": "https://github.com/thirdweb-dev/indexer/blob/main/LICENSE"
+        },
+        "version": "v0.0.1-beta"
     },
+    "host": "localhost:3000",
+    "basePath": "/",
     "paths": {
         "/{chainId}/events": {
             "get": {
@@ -923,5 +932,15 @@
                 }
             }
         }
-    }
+    },
+    "securityDefinitions": {
+        "BasicAuth": {
+            "type": "basic"
+        }
+    },
+    "security": [
+        {
+            "BasicAuth": []
+        }
+    ]
 }

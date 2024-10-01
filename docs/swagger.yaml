@@ -1,3 +1,4 @@
+basePath: /
 definitions:
   api.Error:
     description: Error represents an API error response
@@ -120,8 +121,15 @@ definitions:
       value:
         type: string
     type: object
+host: localhost:3000
 info:
   contact: {}
+  description: API for querying blockchain transactions and events
+  license:
+    name: Apache 2.0
+    url: https://github.com/thirdweb-dev/indexer/blob/main/LICENSE
+  title: Thirdweb Insight
+  version: v0.0.1-beta
 paths:
   /{chainId}/events:
     get:
@@ -592,4 +600,9 @@ paths:
       summary: Get transactions by contract and signature
       tags:
       - transactions
+security:
+- BasicAuth: []
+securityDefinitions:
+  BasicAuth:
+    type: basic
 swagger: "2.0"
