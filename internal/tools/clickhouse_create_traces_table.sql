@@ -1,4 +1,4 @@
-CREATE TABLE base.traces (
+CREATE TABLE traces (
     `chain_id` UInt256,
     `block_number` UInt256,
     `block_hash` FixedString(66),

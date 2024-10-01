@@ -1,4 +1,4 @@
-CREATE TABLE base.blocks (
+CREATE TABLE blocks (
     `chain_id` UInt256,
     `number` UInt256,
     `timestamp` UInt64 CODEC(Delta, ZSTD),

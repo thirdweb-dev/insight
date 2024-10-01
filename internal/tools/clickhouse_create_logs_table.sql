@@ -1,4 +1,4 @@
-CREATE TABLE base.logs (
+CREATE TABLE logs (
     `chain_id` UInt256,
     `block_number` UInt256,
     `block_hash` FixedString(66),
@@ -19,6 +19,6 @@ CREATE TABLE base.logs (
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
     INDEX idx_address address TYPE bloom_filter GRANULARITY 1,
     INDEX idx_topic0 topic_0 TYPE bloom_filter GRANULARITY 1,
-) ENGINE = SharedReplacingMergeTree(insert_timestamp, is_deleted)
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, transaction_hash, log_index, block_hash)
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
