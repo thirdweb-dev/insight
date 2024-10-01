@@ -3,12 +3,11 @@ package cmd
 import (
 	"net/http"
 
-	"github.com/rs/zerolog/log"
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 
-	"github.com/go-chi/chi/middleware"
-	"github.com/go-chi/chi/v5"
 	"github.com/thirdweb-dev/indexer/internal/handlers"
+	"github.com/thirdweb-dev/indexer/internal/middleware"
 )
 
 var (
@@ -23,16 +22,30 @@ var (
 )
 
 func RunApi(cmd *cobra.Command, args []string) {
-	var r *chi.Mux = chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestID)
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
 
-	handlers.Handler(r)
+	root := r.Group("/:chainId")
+	{
+		root.Use(middleware.Authorization)
+		// wildcard queries
+		root.GET("/transactions", handlers.GetTransactions)
+		root.GET("/events", handlers.GetLogs)
 
-	log.Info().Msg("Starting Server on port 3000")
-	err := http.ListenAndServe(":3000", r)
-	if err != nil {
-		log.Error().Err(err).Msg("Error starting server")
+		// contract scoped queries
+		root.GET("/transactions/:to", handlers.GetTransactionsByContract)
+		root.GET("/events/:contract", handlers.GetLogsByContract)
+
+		// signature scoped queries
+		root.GET("/transactions/:to/:signature", handlers.GetTransactionsByContractAndSignature)
+		root.GET("/events/:contract/:signature", handlers.GetLogsByContractAndSignature)
 	}
+
+	r.GET("/health", func(c *gin.Context) {
+		// TODO: implement a simple query before going live
+		c.String(http.StatusOK, "ok")
+	})
+
+	r.Run(":3000")
 }

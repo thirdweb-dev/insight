@@ -1,12 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
 	config "github.com/thirdweb-dev/indexer/configs"
@@ -20,31 +19,31 @@ var (
 	storageErr  error
 )
 
-func GetLogs(w http.ResponseWriter, r *http.Request) {
-	handleLogsRequest(w, r, "", "")
+func GetLogs(c *gin.Context) {
+	handleLogsRequest(c, "", "")
 }
 
-func GetLogsByContract(w http.ResponseWriter, r *http.Request) {
-	contractAddress := chi.URLParam(r, "contract")
-	handleLogsRequest(w, r, contractAddress, "")
+func GetLogsByContract(c *gin.Context) {
+	contractAddress := c.Param("contract")
+	handleLogsRequest(c, contractAddress, "")
 }
 
-func GetLogsByContractAndSignature(w http.ResponseWriter, r *http.Request) {
-	contractAddress := chi.URLParam(r, "contract")
-	eventSignature := chi.URLParam(r, "signature")
-	handleLogsRequest(w, r, contractAddress, eventSignature)
+func GetLogsByContractAndSignature(c *gin.Context) {
+	contractAddress := c.Param("contract")
+	eventSignature := c.Param("signature")
+	handleLogsRequest(c, contractAddress, eventSignature)
 }
 
-func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, signature string) {
-	chainId, err := api.GetChainId(r)
+func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
+	chainId, err := api.GetChainId(c)
 	if err != nil {
-		api.BadRequestErrorHandler(w, err)
+		api.BadRequestErrorHandler(c, err)
 		return
 	}
 
-	queryParams, err := api.ParseQueryParams(r)
+	queryParams, err := api.ParseQueryParams(c.Request)
 	if err != nil {
-		api.BadRequestErrorHandler(w, err)
+		api.BadRequestErrorHandler(c, err)
 		return
 	}
 
@@ -56,7 +55,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 	mainStorage, err := getMainStorage()
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting main storage")
-		api.InternalErrorHandler(w)
+		api.InternalErrorHandler(c)
 		return
 	}
 
@@ -70,16 +69,17 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 		Aggregates:      queryParams.Aggregates,
 		ContractAddress: contractAddress,
 		Signature:       signatureHash,
+		ChainId:         chainId,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying logs")
-		api.InternalErrorHandler(w)
+		api.InternalErrorHandler(c)
 		return
 	}
 
 	response := api.QueryResponse{
 		Meta: api.Meta{
-			ChainId:         chainId,
+			ChainId:         chainId.Uint64(),
 			ContractAddress: contractAddress,
 			Signature:       signatureHash,
 			Page:            queryParams.Page,
@@ -91,7 +91,7 @@ func handleLogsRequest(w http.ResponseWriter, r *http.Request, contractAddress, 
 		Aggregations: logs.Aggregates,
 	}
 
-	sendJSONResponse(w, response)
+	sendJSONResponse(c, response)
 }
 
 func getMainStorage() (storage.IMainStorage, error) {
@@ -106,10 +106,6 @@ func getMainStorage() (storage.IMainStorage, error) {
 	return mainStorage, storageErr
 }
 
-func sendJSONResponse(w http.ResponseWriter, response interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Error().Err(err).Msg("Error encoding response")
-		api.InternalErrorHandler(w)
-	}
+func sendJSONResponse(c *gin.Context, response interface{}) {
+	c.JSON(http.StatusOK, response)
 }
