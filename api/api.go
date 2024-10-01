@@ -13,35 +13,63 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Error represents an API error response
+// @Description Error represents an API error response
 type Error struct {
-	Code      int    `json:"code"`
-	Message   string `json:"message"`
+	// @Description HTTP status code
+	Code int `json:"code"`
+	// @Description Error message
+	Message string `json:"message"`
+	// @Description Support ID for tracking the error
 	SupportId string `json:"support_id"`
 }
 
+// QueryParams represents the parameters for querying data
+// @Description QueryParams represents the parameters for querying data
 type QueryParams struct {
+	// @Description Map of filter parameters
 	FilterParams map[string]string `schema:"-"`
-	GroupBy      string            `schema:"group_by"`
-	SortBy       string            `schema:"sort_by"`
-	SortOrder    string            `schema:"sort_order"`
-	Page         int               `schema:"page"`
-	Limit        int               `schema:"limit"`
-	Aggregates   []string          `schema:"aggregate"`
+	// @Description Field to group results by
+	GroupBy string `schema:"group_by"`
+	// @Description Field to sort results by
+	SortBy string `schema:"sort_by"`
+	// @Description Sort order (asc or desc)
+	SortOrder string `schema:"sort_order"`
+	// @Description Page number for pagination
+	Page int `schema:"page"`
+	// @Description Number of items per page
+	Limit int `schema:"limit"`
+	// @Description List of aggregate functions to apply
+	Aggregates []string `schema:"aggregate"`
 }
 
+// Meta represents metadata for a query response
+// @Description Meta represents metadata for a query response
 type Meta struct {
-	ChainId         uint64 `json:"chain_id"`
+	// @Description Chain ID of the blockchain
+	ChainId uint64 `json:"chain_id"`
+	// @Description Contract address
 	ContractAddress string `json:"address"`
-	Signature       string `json:"signature"`
-	Page            int    `json:"page"`
-	Limit           int    `json:"limit"`
-	TotalItems      int    `json:"total_items"`
-	TotalPages      int    `json:"total_pages"`
+	// @Description Function or event signature
+	Signature string `json:"signature"`
+	// @Description Current page number
+	Page int `json:"page"`
+	// @Description Number of items per page
+	Limit int `json:"limit"`
+	// @Description Total number of items
+	TotalItems int `json:"total_items"`
+	// @Description Total number of pages
+	TotalPages int `json:"total_pages"`
 }
 
+// QueryResponse represents the response structure for a query
+// @Description QueryResponse represents the response structure for a query
 type QueryResponse struct {
-	Meta         Meta              `json:"meta"`
-	Data         interface{}       `json:"data,omitempty"`
+	// @Description Metadata for the query response
+	Meta Meta `json:"meta"`
+	// @Description Query result data
+	Data interface{} `json:"data,omitempty"`
+	// @Description Aggregation results
 	Aggregations map[string]string `json:"aggregations,omitempty"`
 }
 
