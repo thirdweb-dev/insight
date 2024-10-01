@@ -29,20 +29,12 @@ var (
 // @title Thirdweb Insight
 // @version v0.0.1-beta
 // @description API for querying blockchain transactions and events
-// @termsOfService http://swagger.io/terms/
-
-// @contact.name Thirdweb Support
-// @contact.url https://thirdweb.com/support
-// @contact.email support@thirdweb.com
-
 // @license.name Apache 2.0
 // @license.url https://github.com/thirdweb-dev/indexer/blob/main/LICENSE
-
 // @host localhost:3000
 // @BasePath /
-
+// @Security BasicAuth
 // @securityDefinitions.basic BasicAuth
-
 func RunApi(cmd *cobra.Command, args []string) {
 	r := gin.New()
 	r.Use(gin.Logger())
