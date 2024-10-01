@@ -2,12 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/schema"
 	"github.com/rs/zerolog/log"
 )
@@ -29,13 +30,13 @@ type QueryParams struct {
 }
 
 type Meta struct {
-	ChainId         *uint64 `json:"chain_id"`
-	ContractAddress string  `json:"address"`
-	Signature       string  `json:"signature"`
-	Page            int     `json:"page"`
-	Limit           int     `json:"limit"`
-	TotalItems      int     `json:"total_items"`
-	TotalPages      int     `json:"total_pages"`
+	ChainId         uint64 `json:"chain_id"`
+	ContractAddress string `json:"address"`
+	Signature       string `json:"signature"`
+	Page            int    `json:"page"`
+	Limit           int    `json:"limit"`
+	TotalItems      int    `json:"total_items"`
+	TotalPages      int    `json:"total_pages"`
 }
 
 type QueryResponse struct {
@@ -58,14 +59,14 @@ func writeError(w http.ResponseWriter, message string, code int) {
 }
 
 var (
-	BadRequestErrorHandler = func(w http.ResponseWriter, err error) {
-		writeError(w, err.Error(), http.StatusBadRequest)
+	BadRequestErrorHandler = func(c *gin.Context, err error) {
+		writeError(c.Writer, err.Error(), http.StatusBadRequest)
 	}
-	InternalErrorHandler = func(w http.ResponseWriter) {
-		writeError(w, "An unexpected error occurred.", http.StatusInternalServerError)
+	InternalErrorHandler = func(c *gin.Context) {
+		writeError(c.Writer, "An unexpected error occurred.", http.StatusInternalServerError)
 	}
-	UnauthorizedErrorHandler = func(w http.ResponseWriter, err error) {
-		writeError(w, err.Error(), http.StatusUnauthorized)
+	UnauthorizedErrorHandler = func(c *gin.Context, err error) {
+		writeError(c.Writer, err.Error(), http.StatusUnauthorized)
 	}
 )
 
@@ -97,13 +98,13 @@ func ParseQueryParams(r *http.Request) (QueryParams, error) {
 	return params, nil
 }
 
-func GetChainId(r *http.Request) (*uint64, error) {
+func GetChainId(c *gin.Context) (*big.Int, error) {
 	// TODO: check chainId agains the chain-service to ensure it's valid
-	chainId := chi.URLParam(r, "chainId")
+	chainId := c.Param("chainId")
 	chainIdInt, err := strconv.ParseUint(chainId, 10, 64)
 	if err != nil {
 		log.Error().Err(err).Msg("Error parsing chainId")
 		return nil, err
 	}
-	return &chainIdInt, nil
+	return big.NewInt(int64(chainIdInt)), nil
 }

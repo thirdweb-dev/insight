@@ -3,38 +3,37 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
-func GetTransactions(w http.ResponseWriter, r *http.Request) {
-	handleTransactionsRequest(w, r, "", "")
+func GetTransactions(c *gin.Context) {
+	handleTransactionsRequest(c, "", "")
 }
 
-func GetTransactionsByContract(w http.ResponseWriter, r *http.Request) {
-	to := chi.URLParam(r, "to")
-	handleTransactionsRequest(w, r, to, "")
+func GetTransactionsByContract(c *gin.Context) {
+	to := c.Param("to")
+	handleTransactionsRequest(c, to, "")
 }
 
-func GetTransactionsByContractAndSignature(w http.ResponseWriter, r *http.Request) {
-	to := chi.URLParam(r, "to")
+func GetTransactionsByContractAndSignature(c *gin.Context) {
+	to := c.Param("to")
 	// TODO: Implement signature lookup before activating this
-	// signature := chi.URLParam(r, "signature")
-	handleTransactionsRequest(w, r, to, "")
+	handleTransactionsRequest(c, to, "")
 }
 
-func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractAddress, signature string) {
-	chainId, err := api.GetChainId(r)
+func handleTransactionsRequest(c *gin.Context, contractAddress, signature string) {
+	chainId, err := api.GetChainId(c)
 	if err != nil {
-		api.BadRequestErrorHandler(w, err)
+		api.BadRequestErrorHandler(c, err)
 		return
 	}
 
-	queryParams, err := api.ParseQueryParams(r)
+	queryParams, err := api.ParseQueryParams(c.Request)
 	if err != nil {
-		api.BadRequestErrorHandler(w, err)
+		api.BadRequestErrorHandler(c, err)
 		return
 	}
 
@@ -47,7 +46,7 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 	mainStorage, err := getMainStorage()
 	if err != nil {
 		log.Error().Err(err).Msg("Error creating storage connector")
-		api.InternalErrorHandler(w)
+		api.InternalErrorHandler(c)
 		return
 	}
 
@@ -61,16 +60,17 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		Aggregates:      queryParams.Aggregates,
 		ContractAddress: contractAddress,
 		Signature:       signatureHash,
+		ChainId:         chainId,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying transactions")
-		api.InternalErrorHandler(w)
+		api.InternalErrorHandler(c)
 		return
 	}
 
 	response := api.QueryResponse{
 		Meta: api.Meta{
-			ChainId:         chainId,
+			ChainId:         chainId.Uint64(),
 			ContractAddress: contractAddress,
 			Signature:       signature,
 			Page:            queryParams.Page,
@@ -82,5 +82,5 @@ func handleTransactionsRequest(w http.ResponseWriter, r *http.Request, contractA
 		Aggregations: result.Aggregates,
 	}
 
-	sendJSONResponse(w, response)
+	c.JSON(http.StatusOK, response)
 }
