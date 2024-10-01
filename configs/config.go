@@ -14,12 +14,12 @@ type LogConfig struct {
 }
 
 type PollerConfig struct {
-	Enabled         bool `mapstructure:"enabled"`
-	Interval        int  `mapstructure:"interval"`
-	BlocksPerPoll   int  `mapstructure:"blocksPerPoll"`
-	FromBlock       int  `mapstructure:"fromBlock"`
-	ForceFromBlock  bool `mapstructure:"forceFromBlock"`
-	UntilBlock      int  `mapstructure:"untilBlock"`
+	Enabled        bool `mapstructure:"enabled"`
+	Interval       int  `mapstructure:"interval"`
+	BlocksPerPoll  int  `mapstructure:"blocksPerPoll"`
+	FromBlock      int  `mapstructure:"fromBlock"`
+	ForceFromBlock bool `mapstructure:"forceFromBlock"`
+	UntilBlock     int  `mapstructure:"untilBlock"`
 }
 
 type CommitterConfig struct {
