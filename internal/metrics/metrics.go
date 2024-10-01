@@ -34,6 +34,14 @@ var LastFetchedBlock = promauto.NewGauge(prometheus.GaugeOpts{
 	Help: "The last block number fetched by the worker from the RPC",
 })
 
+// ChainTracker Metrics
+var (
+	ChainHead = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "chain_tracker_chain_head",
+		Help: "The latest block number in the current chain",
+	})
+)
+
 // Poller metrics
 var (
 	PolledBatchSize = promauto.NewGauge(prometheus.GaugeOpts{
