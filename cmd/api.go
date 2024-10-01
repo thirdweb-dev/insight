@@ -5,9 +5,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/thirdweb-dev/indexer/internal/handlers"
 	"github.com/thirdweb-dev/indexer/internal/middleware"
+
+	// Import the generated Swagger docs
+	_ "github.com/thirdweb-dev/indexer/docs"
 )
 
 var (
@@ -21,10 +26,30 @@ var (
 	}
 )
 
+// @title Thirdweb Insight
+// @version v0.0.1-beta
+// @description API for querying blockchain transactions and events
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name Thirdweb Support
+// @contact.url https://thirdweb.com/support
+// @contact.email support@thirdweb.com
+
+// @license.name Apache 2.0
+// @license.url https://github.com/thirdweb-dev/indexer/blob/main/LICENSE
+
+// @host localhost:3000
+// @BasePath /
+
+// @securityDefinitions.basic BasicAuth
+
 func RunApi(cmd *cobra.Command, args []string) {
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
+
+	// Add Swagger route
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	root := r.Group("/:chainId")
 	{
