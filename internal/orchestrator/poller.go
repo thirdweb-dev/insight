@@ -98,7 +98,7 @@ func (p *Poller) Start() {
 						return
 					}
 				}
-				log.Debug().Msgf("Polling blocks %s to %s", blockNumbers[0], endBlock)
+				log.Debug().Msgf("Polling %d blocks starting from %s to %s", len(blockNumbers), blockNumbers[0], endBlock)
 
 				worker := worker.NewWorker(p.rpc)
 				results := worker.Run(blockNumbers)
@@ -131,11 +131,15 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 	startBlock := new(big.Int).Add(p.lastPolledBlock, big.NewInt(1))
 	endBlock := new(big.Int).Add(startBlock, big.NewInt(p.blocksPerPoll-1))
 
+	if startBlock.Cmp(latestBlock) > 0 {
+		log.Debug().Msgf("Start block %s is greater than latest block %s, skipping", startBlock, latestBlock)
+		return nil, nil
+	}
 	if endBlock.Cmp(latestBlock) > 0 {
 		endBlock = latestBlock
 	}
 
-	blockCount := endBlock.Sub(endBlock, startBlock).Int64() + 1
+	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
 	blockNumbers := make([]*big.Int, blockCount)
 	for i := int64(0); i < blockCount; i++ {
 		blockNumbers[i] = new(big.Int).Add(startBlock, big.NewInt(i))
