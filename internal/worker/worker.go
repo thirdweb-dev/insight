@@ -92,9 +92,8 @@ func (w *Worker) Run(blockNumbers []*big.Int) []WorkerResult {
 
 	// track the last fetched block number
 	if len(results) > 0 {
-		// dividing by 10 to avoid scientific notation (e.g. 1.23456e+07)
-		// TODO: find a solution
-		metrics.LastFetchedBlock.Set(float64(results[len(results)-1].BlockNumber.Uint64()) / 10)
+		lastBlockNumberFloat, _ := results[len(results)-1].BlockNumber.Float64()
+		metrics.LastFetchedBlock.Set(lastBlockNumberFloat)
 	}
 	return results
 }

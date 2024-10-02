@@ -50,6 +50,13 @@ var (
 	})
 )
 
+var (
+	PollerLastTriggeredBlock = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "poller_last_triggered_block",
+		Help: "The last block number that the poller was triggered for",
+	})
+)
+
 // Failure Recoverer Metrics
 var (
 	FailureRecovererLastTriggeredBlock = promauto.NewGauge(prometheus.GaugeOpts{

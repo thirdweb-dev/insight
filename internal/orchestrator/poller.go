@@ -95,6 +95,9 @@ func (p *Poller) Start() {
 				}
 				log.Debug().Msgf("Polling %d blocks starting from %s to %s", len(blockNumbers), blockNumbers[0], endBlock)
 
+				endBlockNumberFloat, _ := endBlock.Float64()
+				metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
+
 				worker := worker.NewWorker(p.rpc)
 				results := worker.Run(blockNumbers)
 				p.handleWorkerResults(results)
