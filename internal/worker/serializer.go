@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"strconv"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock], logs []BatchFetchResult[RawLogs], traces []BatchFetchResult[RawTraces]) []WorkerResult {
-	results := make([]WorkerResult, len(blocks))
+	results := make([]WorkerResult, 0, len(blocks))
 
 	rawLogsMap := make(map[string]BatchFetchResult[RawLogs])
 	for _, rawLogs := range logs {
@@ -22,14 +23,20 @@ func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock
 		rawTracesMap[rawTraces.BlockNumber.String()] = rawTraces
 	}
 
-	for i, rawBlock := range blocks {
+	for _, rawBlock := range blocks {
 		result := WorkerResult{
 			BlockNumber: rawBlock.BlockNumber,
+		}
+		if rawBlock.Result == nil {
+			log.Warn().Msgf("Received a nil block result for block %s.", rawBlock.BlockNumber.String())
+			result.Error = fmt.Errorf("received a nil block result from RPC")
+			results = append(results, result)
+			continue
 		}
 
 		if rawBlock.Error != nil {
 			result.Error = rawBlock.Error
-			results[i] = result
+			results = append(results, result)
 			continue
 		}
 
@@ -55,7 +62,7 @@ func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock
 			}
 		}
 
-		results[i] = result
+		results = append(results, result)
 	}
 
 	return results
