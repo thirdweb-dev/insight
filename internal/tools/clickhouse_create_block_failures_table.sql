@@ -1,4 +1,4 @@
-CREATE TABLE orchestrator.block_failures (
+CREATE TABLE block_failures (
     `chain_id` UInt256,
     `block_number` UInt256,
     `last_error_timestamp` UInt64 CODEC(Delta, ZSTD),

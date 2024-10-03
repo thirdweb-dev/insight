@@ -1,4 +1,4 @@
-CREATE TABLE staging.block_data (
+CREATE TABLE block_data (
     `chain_id` UInt256,
     `block_number` UInt256,
     `data` String,

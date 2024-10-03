@@ -1,4 +1,4 @@
-CREATE TABLE base.transactions (
+CREATE TABLE transactions (
     `chain_id` UInt256,
     `hash` FixedString(66),
     `nonce` UInt64,
