@@ -609,7 +609,7 @@ func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (blockDataList *[]common.BlockData, err error) {
+func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (*[]common.BlockData, error) {
 	query := fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0",
 		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
@@ -625,6 +625,7 @@ func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (blockDataList *[]c
 	}
 	defer rows.Close()
 
+	blockDataList := make([]common.BlockData, 0)
 	for rows.Next() {
 		var blockDataJson string
 		err := rows.Scan(
@@ -639,9 +640,9 @@ func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (blockDataList *[]c
 		if err != nil {
 			return nil, err
 		}
-		*blockDataList = append(*blockDataList, blockData)
+		blockDataList = append(blockDataList, blockData)
 	}
-	return blockDataList, nil
+	return &blockDataList, nil
 }
 
 func (c *ClickHouseConnector) DeleteStagingData(data *[]common.BlockData) error {
@@ -761,6 +762,116 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 		traces = append(traces, trace)
 	}
 	return traces, nil
+}
+
+func (c *ClickHouseConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	query := fmt.Sprintf("SELECT cursor_value FROM %s.cursors FINAL WHERE cursor_type = 'reorg'", c.cfg.Database)
+	if chainId.Sign() > 0 {
+		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
+	}
+	var blockNumberString string
+	err := c.conn.QueryRow(context.Background(), query).Scan(&blockNumberString)
+	if err != nil {
+		return nil, err
+	}
+	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberString)
+	}
+	return blockNumber, nil
+}
+
+func (c *ClickHouseConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	query := fmt.Sprintf("INSERT INTO %s.cursors (chain_id, cursor_type, cursor_value) VALUES (%s, 'reorg', '%s')", c.cfg.Database, chainId, blockNumber.String())
+	err := c.conn.Exec(context.Background(), query)
+	return err
+}
+
+func (c *ClickHouseConnector) LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) (blockHeaders []common.BlockHeader, err error) {
+	query := fmt.Sprintf("SELECT number, hash, parent_hash FROM %s.blocks WHERE chain_id = %s AND number <= %s AND is_deleted = 0 ORDER BY number DESC", c.cfg.Database, chainId.String(), lookbackStart.String())
+	query += getLimitClause(limit)
+
+	rows, err := c.conn.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var blockHeader common.BlockHeader
+		err := rows.Scan(&blockHeader.Number, &blockHeader.Hash, &blockHeader.ParentHash)
+		if err != nil {
+			return nil, err
+		}
+		blockHeaders = append(blockHeaders, blockHeader)
+	}
+	return blockHeaders, nil
+}
+
+func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error {
+	var saveErr error
+	var saveErrMutex sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+		if err := c.deleteBatch(chainId, blockNumbers, "blocks", "number"); err != nil {
+			saveErrMutex.Lock()
+			saveErr = fmt.Errorf("error deleting blocks: %v", err)
+			saveErrMutex.Unlock()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := c.deleteBatch(chainId, blockNumbers, "logs", "block_number"); err != nil {
+			saveErrMutex.Lock()
+			saveErr = fmt.Errorf("error deleting logs: %v", err)
+			saveErrMutex.Unlock()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := c.deleteBatch(chainId, blockNumbers, "transactions", "block_number"); err != nil {
+			saveErrMutex.Lock()
+			saveErr = fmt.Errorf("error deleting transactions: %v", err)
+			saveErrMutex.Unlock()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := c.deleteBatch(chainId, blockNumbers, "traces", "block_number"); err != nil {
+			saveErrMutex.Lock()
+			saveErr = fmt.Errorf("error deleting traces: %v", err)
+			saveErrMutex.Unlock()
+		}
+	}()
+
+	wg.Wait()
+
+	if saveErr != nil {
+		return saveErr
+	}
+	return nil
+}
+
+func (c *ClickHouseConnector) deleteBatch(chainId *big.Int, blockNumbers []*big.Int, table string, blockNumberColumn string) error {
+	query := fmt.Sprintf("ALTER TABLE %s.%s DELETE WHERE chain_id = ? AND %s IN (?)", c.cfg.Database, table, blockNumberColumn)
+
+	blockNumbersStr := make([]string, len(blockNumbers))
+	for i, bn := range blockNumbers {
+		blockNumbersStr[i] = bn.String()
+	}
+
+	err := c.conn.Exec(context.Background(), query, chainId, blockNumbersStr)
+	if err != nil {
+		return fmt.Errorf("error deleting from %s: %w", table, err)
+	}
+
+	return nil
 }
 
 // TODO make this atomic
