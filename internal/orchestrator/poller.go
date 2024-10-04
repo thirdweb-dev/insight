@@ -11,6 +11,7 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
@@ -19,7 +20,7 @@ const DEFAULT_BLOCKS_PER_POLL = 10
 const DEFAULT_TRIGGER_INTERVAL = 1000
 
 type Poller struct {
-	rpc               common.RPC
+	rpc               rpc.Client
 	blocksPerPoll     int64
 	triggerIntervalMs int64
 	storage           storage.IStorage
@@ -32,7 +33,7 @@ type BlockNumberWithError struct {
 	Error       error
 }
 
-func NewPoller(rpc common.RPC, storage storage.IStorage) *Poller {
+func NewPoller(rpc rpc.Client, storage storage.IStorage) *Poller {
 	blocksPerPoll := config.Cfg.Poller.BlocksPerPoll
 	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -169,9 +170,9 @@ func (p *Poller) getEndBlockForRange(startBlock *big.Int, latestBlock *big.Int) 
 	return endBlock
 }
 
-func (p *Poller) handleWorkerResults(results []worker.WorkerResult) {
-	var successfulResults []worker.WorkerResult
-	var failedResults []worker.WorkerResult
+func (p *Poller) handleWorkerResults(results []rpc.GetFullBlockResult) {
+	var successfulResults []rpc.GetFullBlockResult
+	var failedResults []rpc.GetFullBlockResult
 
 	for _, result := range results {
 		if result.Error != nil {
@@ -185,17 +186,17 @@ func (p *Poller) handleWorkerResults(results []worker.WorkerResult) {
 	blockData := make([]common.BlockData, 0, len(successfulResults))
 	for _, result := range successfulResults {
 		blockData = append(blockData, common.BlockData{
-			Block:        result.Block,
-			Logs:         result.Logs,
-			Transactions: result.Transactions,
-			Traces:       result.Traces,
+			Block:        result.Data.Block,
+			Logs:         result.Data.Logs,
+			Transactions: result.Data.Transactions,
+			Traces:       result.Data.Traces,
 		})
 	}
 	if err := p.storage.StagingStorage.InsertBlockData(blockData); err != nil {
 		e := fmt.Errorf("error inserting block data: %v", err)
 		log.Error().Err(e)
 		for _, result := range successfulResults {
-			failedResults = append(failedResults, worker.WorkerResult{
+			failedResults = append(failedResults, rpc.GetFullBlockResult{
 				BlockNumber: result.BlockNumber,
 				Error:       e,
 			})
@@ -208,7 +209,7 @@ func (p *Poller) handleWorkerResults(results []worker.WorkerResult) {
 	}
 }
 
-func (p *Poller) handleBlockFailures(results []worker.WorkerResult) {
+func (p *Poller) handleBlockFailures(results []rpc.GetFullBlockResult) {
 	var blockFailures []common.BlockFailure
 	for _, result := range results {
 		if result.Error != nil {

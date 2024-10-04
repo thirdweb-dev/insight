@@ -1,4 +1,4 @@
-package worker
+package rpc
 
 import (
 	"encoding/json"
@@ -10,21 +10,21 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
-func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock], logs []BatchFetchResult[RawLogs], traces []BatchFetchResult[RawTraces]) []WorkerResult {
-	results := make([]WorkerResult, 0, len(blocks))
+func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock], logs []RPCFetchBatchResult[common.RawLogs], traces []RPCFetchBatchResult[common.RawTraces]) []GetFullBlockResult {
+	results := make([]GetFullBlockResult, 0, len(blocks))
 
-	rawLogsMap := make(map[string]BatchFetchResult[RawLogs])
+	rawLogsMap := make(map[string]RPCFetchBatchResult[common.RawLogs])
 	for _, rawLogs := range logs {
 		rawLogsMap[rawLogs.BlockNumber.String()] = rawLogs
 	}
 
-	rawTracesMap := make(map[string]BatchFetchResult[RawTraces])
+	rawTracesMap := make(map[string]RPCFetchBatchResult[common.RawTraces])
 	for _, rawTraces := range traces {
 		rawTracesMap[rawTraces.BlockNumber.String()] = rawTraces
 	}
 
 	for _, rawBlock := range blocks {
-		result := WorkerResult{
+		result := GetFullBlockResult{
 			BlockNumber: rawBlock.BlockNumber,
 		}
 		if rawBlock.Result == nil {
@@ -40,15 +40,15 @@ func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock
 			continue
 		}
 
-		result.Block = serializeBlock(chainId, rawBlock.Result)
-		blockTimestamp := result.Block.Timestamp
-		result.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp)
+		result.Data.Block = serializeBlock(chainId, rawBlock.Result)
+		blockTimestamp := result.Data.Block.Timestamp
+		result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp)
 
 		if rawLogs, exists := rawLogsMap[rawBlock.BlockNumber.String()]; exists {
 			if rawLogs.Error != nil {
 				result.Error = rawLogs.Error
 			} else {
-				result.Logs = serializeLogs(chainId, rawLogs.Result, result.Block)
+				result.Data.Logs = serializeLogs(chainId, rawLogs.Result, result.Data.Block)
 			}
 		}
 
@@ -57,7 +57,7 @@ func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock
 				if rawTraces.Error != nil {
 					result.Error = rawTraces.Error
 				} else {
-					result.Traces = serializeTraces(chainId, rawTraces.Result, result.Block)
+					result.Data.Traces = serializeTraces(chainId, rawTraces.Result, result.Data.Block)
 				}
 			}
 		}
@@ -68,7 +68,34 @@ func SerializeWorkerResults(chainId *big.Int, blocks []BatchFetchResult[RawBlock
 	return results
 }
 
-func serializeBlock(chainId *big.Int, block RawBlock) common.Block {
+func SerializeBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock]) []GetBlocksResult {
+	results := make([]GetBlocksResult, 0, len(blocks))
+
+	for _, rawBlock := range blocks {
+		result := GetBlocksResult{
+			BlockNumber: rawBlock.BlockNumber,
+		}
+		if rawBlock.Result == nil {
+			log.Warn().Msgf("Received a nil block result for block %s.", rawBlock.BlockNumber.String())
+			result.Error = fmt.Errorf("received a nil block result from RPC")
+			results = append(results, result)
+			continue
+		}
+
+		if rawBlock.Error != nil {
+			result.Error = rawBlock.Error
+			results = append(results, result)
+			continue
+		}
+
+		result.Data = serializeBlock(chainId, rawBlock.Result)
+		results = append(results, result)
+	}
+
+	return results
+}
+
+func serializeBlock(chainId *big.Int, block common.RawBlock) common.Block {
 	return common.Block{
 		ChainId:          chainId,
 		Number:           hexToBigInt(block["number"]),

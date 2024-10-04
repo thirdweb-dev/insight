@@ -35,3 +35,5 @@ type BlockData struct {
 	Logs         []Log
 	Traces       []Trace
 }
+
+type RawBlock = map[string]interface{}

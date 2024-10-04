@@ -27,3 +27,5 @@ type Trace struct {
 	RewardType       string   `json:"reward_type"`
 	RefundAddress    string   `json:"refund_address"`
 }
+
+type RawTraces = []map[string]interface{}

@@ -9,6 +9,7 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
@@ -20,10 +21,10 @@ type FailureRecoverer struct {
 	failuresPerPoll   int
 	triggerIntervalMs int
 	storage           storage.IStorage
-	rpc               common.RPC
+	rpc               rpc.Client
 }
 
-func NewFailureRecoverer(rpc common.RPC, storage storage.IStorage) *FailureRecoverer {
+func NewFailureRecoverer(rpc rpc.Client, storage storage.IStorage) *FailureRecoverer {
 	failuresPerPoll := config.Cfg.FailureRecoverer.BlocksPerRun
 	if failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
@@ -80,7 +81,7 @@ func (fr *FailureRecoverer) Start() {
 	select {}
 }
 
-func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFailure, results []worker.WorkerResult) {
+func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFailure, results []rpc.GetFullBlockResult) {
 	log.Debug().Msgf("Failure Recoverer recovered %d blocks", len(results))
 	blockFailureMap := make(map[*big.Int]common.BlockFailure)
 	for _, failure := range blockFailures {
@@ -105,10 +106,10 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 			})
 		} else {
 			successfulResults = append(successfulResults, common.BlockData{
-				Block:        result.Block,
-				Logs:         result.Logs,
-				Transactions: result.Transactions,
-				Traces:       result.Traces,
+				Block:        result.Data.Block,
+				Logs:         result.Data.Logs,
+				Transactions: result.Data.Transactions,
+				Traces:       result.Data.Traces,
 			})
 			failuresToDelete = append(failuresToDelete, blockFailureForBlock)
 		}
