@@ -43,7 +43,7 @@ func RunApi(cmd *cobra.Command, args []string) {
 	// Add Swagger route
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	// Add Swagger JSON endpoint
-	r.GET("/json", func(c *gin.Context) {
+	r.GET("/openapi.json", func(c *gin.Context) {
 		c.File("./docs/swagger.json")
 	})
 
