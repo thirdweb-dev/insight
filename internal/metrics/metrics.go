@@ -69,3 +69,16 @@ var (
 		Help: "The first block number in the failure recoverer batch",
 	})
 )
+
+// Reorg Handler Metrics
+var (
+	ReorgHandlerLastCheckedBlock = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "reorg_handler_last_checked_block",
+		Help: "The last block number that the reorg handler checked",
+	})
+
+	ReorgCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "reorg_handler_reorg_counter",
+		Help: "The number of reorgs detected",
+	})
+)
