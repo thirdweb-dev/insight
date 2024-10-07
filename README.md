@@ -343,6 +343,7 @@ storage:
       user: "admin"
       password: "admin"
       database: "base"
+      disableTLS: false
   staging:
     driver: "memory"
     memory:

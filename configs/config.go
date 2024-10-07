@@ -54,11 +54,12 @@ type StorageConnectionConfig struct {
 }
 
 type ClickhouseConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	Database string `mapstructure:"database"`
+	Host       string `mapstructure:"host"`
+	Port       int    `mapstructure:"port"`
+	Username   string `mapstructure:"username"`
+	Password   string `mapstructure:"password"`
+	Database   string `mapstructure:"database"`
+	DisableTLS bool   `mapstructure:"disableTLS"`
 }
 
 type MemoryConfig struct {
