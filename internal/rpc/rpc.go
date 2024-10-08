@@ -32,17 +32,28 @@ type BlocksPerRequestConfig struct {
 	Traces int
 }
 
+type IRPCClient interface {
+	GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult
+	GetBlocks(blockNumbers []*big.Int) []GetBlocksResult
+	GetLatestBlockNumber() (*big.Int, error)
+	GetChainID() *big.Int
+	GetURL() string
+	GetBlocksPerRequest() BlocksPerRequestConfig
+	IsWebsocket() bool
+	SupportsTraceBlock() bool
+}
+
 type Client struct {
 	RPCClient          *gethRpc.Client
 	EthClient          *ethclient.Client
-	SupportsTraceBlock bool
-	IsWebsocket        bool
-	URL                string
-	ChainID            *big.Int
-	BlocksPerRequest   BlocksPerRequestConfig
+	supportsTraceBlock bool
+	isWebsocket        bool
+	url                string
+	chainID            *big.Int
+	blocksPerRequest   BlocksPerRequestConfig
 }
 
-func Initialize() (*Client, error) {
+func Initialize() (IRPCClient, error) {
 	rpcUrl := config.Cfg.RPC.URL
 	if rpcUrl == "" {
 		return nil, fmt.Errorf("RPC_URL environment variable is not set")
@@ -58,9 +69,9 @@ func Initialize() (*Client, error) {
 	rpc := &Client{
 		RPCClient:        rpcClient,
 		EthClient:        ethClient,
-		URL:              rpcUrl,
-		IsWebsocket:      strings.HasPrefix(rpcUrl, "ws://") || strings.HasPrefix(rpcUrl, "wss://"),
-		BlocksPerRequest: GetBlockPerRequestConfig(),
+		url:              rpcUrl,
+		isWebsocket:      strings.HasPrefix(rpcUrl, "ws://") || strings.HasPrefix(rpcUrl, "wss://"),
+		blocksPerRequest: GetBlockPerRequestConfig(),
 	}
 	checkErr := rpc.checkSupportedMethods()
 	if checkErr != nil {
@@ -71,7 +82,27 @@ func Initialize() (*Client, error) {
 	if chainIdErr != nil {
 		return nil, chainIdErr
 	}
-	return rpc, nil
+	return IRPCClient(rpc), nil
+}
+
+func (rpc *Client) GetChainID() *big.Int {
+	return rpc.chainID
+}
+
+func (rpc *Client) GetURL() string {
+	return rpc.url
+}
+
+func (rpc *Client) GetBlocksPerRequest() BlocksPerRequestConfig {
+	return rpc.blocksPerRequest
+}
+
+func (rpc *Client) IsWebsocket() bool {
+	return rpc.isWebsocket
+}
+
+func (rpc *Client) SupportsTraceBlock() bool {
+	return rpc.supportsTraceBlock
 }
 
 func (rpc *Client) Close() {
@@ -100,8 +131,8 @@ func (rpc *Client) checkSupportedMethods() error {
 			log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
 		}
 	}
-	rpc.SupportsTraceBlock = traceBlockResult != nil
-	log.Debug().Msgf("trace_block method supported: %v", rpc.SupportsTraceBlock)
+	rpc.supportsTraceBlock = traceBlockResult != nil
+	log.Debug().Msgf("trace_block method supported: %v", rpc.supportsTraceBlock)
 	return nil
 }
 
@@ -110,7 +141,7 @@ func (rpc *Client) setChainID() error {
 	if err != nil {
 		return fmt.Errorf("failed to get chain ID: %v", err)
 	}
-	rpc.ChainID = chainID
+	rpc.chainID = chainID
 	return nil
 }
 
@@ -129,20 +160,20 @@ func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 
 	go func() {
 		defer wg.Done()
-		logs = RPCFetchInBatches[common.RawLogs](rpc, blockNumbers, rpc.BlocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
+		logs = RPCFetchInBatches[common.RawLogs](rpc, blockNumbers, rpc.blocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
 	}()
 
-	if rpc.SupportsTraceBlock {
+	if rpc.supportsTraceBlock {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			traces = RPCFetchInBatches[common.RawTraces](rpc, blockNumbers, rpc.BlocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
+			traces = RPCFetchInBatches[common.RawTraces](rpc, blockNumbers, rpc.blocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
 		}()
 	}
 
 	wg.Wait()
 
-	return SerializeFullBlocks(rpc.ChainID, blocks, logs, traces)
+	return SerializeFullBlocks(rpc.chainID, blocks, logs, traces)
 }
 
 func (rpc *Client) GetBlocks(blockNumbers []*big.Int) []GetBlocksResult {
@@ -157,5 +188,13 @@ func (rpc *Client) GetBlocks(blockNumbers []*big.Int) []GetBlocksResult {
 	}()
 	wg.Wait()
 
-	return SerializeBlocks(rpc.ChainID, blocks)
+	return SerializeBlocks(rpc.chainID, blocks)
+}
+
+func (rpc *Client) GetLatestBlockNumber() (*big.Int, error) {
+	blockNumber, err := rpc.EthClient.BlockNumber(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest block number: %v", err)
+	}
+	return new(big.Int).SetUint64(blockNumber), nil
 }

@@ -15,7 +15,7 @@ import (
 )
 
 type ReorgHandler struct {
-	rpc              rpc.Client
+	rpc              rpc.IRPCClient
 	storage          storage.IStorage
 	triggerInterval  int
 	blocksPerScan    int
@@ -26,7 +26,7 @@ type ReorgHandler struct {
 const DEFAULT_REORG_HANDLER_INTERVAL = 1000
 const DEFAULT_REORG_HANDLER_BLOCKS_PER_SCAN = 100
 
-func NewReorgHandler(rpc rpc.Client, storage storage.IStorage) *ReorgHandler {
+func NewReorgHandler(rpc rpc.IRPCClient, storage storage.IStorage) *ReorgHandler {
 	triggerInterval := config.Cfg.ReorgHandler.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_REORG_HANDLER_INTERVAL
@@ -41,7 +41,7 @@ func NewReorgHandler(rpc rpc.Client, storage storage.IStorage) *ReorgHandler {
 		worker:           worker.NewWorker(rpc),
 		triggerInterval:  triggerInterval,
 		blocksPerScan:    blocksPerScan,
-		lastCheckedBlock: getInitialCheckedBlockNumber(storage, rpc.ChainID),
+		lastCheckedBlock: getInitialCheckedBlockNumber(storage, rpc.GetChainID()),
 	}
 }
 
@@ -72,7 +72,7 @@ func (rh *ReorgHandler) Start() {
 	go func() {
 		for range ticker.C {
 			lookbackFrom := new(big.Int).Add(rh.lastCheckedBlock, big.NewInt(int64(rh.blocksPerScan)))
-			blockHeaders, err := rh.storage.MainStorage.LookbackBlockHeaders(rh.rpc.ChainID, rh.blocksPerScan, lookbackFrom)
+			blockHeaders, err := rh.storage.MainStorage.LookbackBlockHeaders(rh.rpc.GetChainID(), rh.blocksPerScan, lookbackFrom)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting recent block headers")
 				continue
@@ -85,7 +85,7 @@ func (rh *ReorgHandler) Start() {
 			reorgEndIndex := findReorgEndIndex(blockHeaders)
 			if reorgEndIndex == -1 {
 				rh.lastCheckedBlock = mostRecentBlockHeader.Number
-				rh.storage.OrchestratorStorage.SetLastReorgCheckedBlockNumber(rh.rpc.ChainID, mostRecentBlockHeader.Number)
+				rh.storage.OrchestratorStorage.SetLastReorgCheckedBlockNumber(rh.rpc.GetChainID(), mostRecentBlockHeader.Number)
 				metrics.ReorgHandlerLastCheckedBlock.Set(float64(mostRecentBlockHeader.Number.Int64()))
 				continue
 			}
@@ -101,7 +101,7 @@ func (rh *ReorgHandler) Start() {
 				continue
 			}
 			rh.lastCheckedBlock = mostRecentBlockHeader.Number
-			rh.storage.OrchestratorStorage.SetLastReorgCheckedBlockNumber(rh.rpc.ChainID, mostRecentBlockHeader.Number)
+			rh.storage.OrchestratorStorage.SetLastReorgCheckedBlockNumber(rh.rpc.GetChainID(), mostRecentBlockHeader.Number)
 			metrics.ReorgHandlerLastCheckedBlock.Set(float64(mostRecentBlockHeader.Number.Int64()))
 		}
 	}()
@@ -147,7 +147,7 @@ func (rh *ReorgHandler) findForkPoint(reversedBlockHeaders []common.BlockHeader)
 		}
 	}
 	lookbackFrom := reversedBlockHeaders[len(reversedBlockHeaders)-1].Number
-	nextHeadersBatch, err := rh.storage.MainStorage.LookbackBlockHeaders(rh.rpc.ChainID, rh.blocksPerScan, lookbackFrom)
+	nextHeadersBatch, err := rh.storage.MainStorage.LookbackBlockHeaders(rh.rpc.GetChainID(), rh.blocksPerScan, lookbackFrom)
 	if err != nil {
 		return nil, fmt.Errorf("error getting next headers batch: %w", err)
 	}
@@ -190,7 +190,7 @@ func (rh *ReorgHandler) handleReorg(reorgStart *big.Int, reorgEnd *big.Int) erro
 		})
 	}
 	// TODO make delete and insert atomic
-	if err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.ChainID, blockRange); err != nil {
+	if err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blockRange); err != nil {
 		return fmt.Errorf("error deleting data for blocks %v: %w", blockRange, err)
 	}
 	if err := rh.storage.MainStorage.InsertBlockData(&data); err != nil {

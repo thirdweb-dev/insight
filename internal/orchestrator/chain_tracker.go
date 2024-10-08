@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"context"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -12,11 +11,11 @@ import (
 const DEFAULT_CHAIN_TRACKER_POLL_INTERVAL = 300000 // 5 minutes
 
 type ChainTracker struct {
-	rpc               rpc.Client
+	rpc               rpc.IRPCClient
 	triggerIntervalMs int
 }
 
-func NewChainTracker(rpc rpc.Client) *ChainTracker {
+func NewChainTracker(rpc rpc.IRPCClient) *ChainTracker {
 	return &ChainTracker{
 		rpc:               rpc,
 		triggerIntervalMs: DEFAULT_CHAIN_TRACKER_POLL_INTERVAL,
@@ -30,23 +29,16 @@ func (ct *ChainTracker) Start() {
 	log.Debug().Msgf("Chain tracker running")
 	go func() {
 		for range ticker.C {
-			latestBlockNumber, err := ct.getLatestBlockNumber()
+			latestBlockNumber, err := ct.rpc.GetLatestBlockNumber()
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting latest block number")
 				continue
 			}
-			metrics.ChainHead.Set(float64(latestBlockNumber) / 100)
+			latestBlockNumberFloat, _ := latestBlockNumber.Float64()
+			metrics.ChainHead.Set(latestBlockNumberFloat)
 		}
 	}()
 
 	// Keep the program running (otherwise it will exit)
 	select {}
-}
-
-func (ct *ChainTracker) getLatestBlockNumber() (uint64, error) {
-	blockNumber, err := ct.rpc.EthClient.BlockNumber(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	return blockNumber, nil
 }
