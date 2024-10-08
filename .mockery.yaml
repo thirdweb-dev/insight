@@ -1,0 +1,16 @@
+with-expecter: true
+mockname: "Mock{{.InterfaceName}}"
+filename: "{{.MockName}}.go"
+outpkg: mocks
+dir: test/mocks
+mock-build-tags: "!production"
+packages:
+    github.com/thirdweb-dev/indexer/internal/rpc:
+        interfaces:
+            IRPCClient:
+    github.com/thirdweb-dev/indexer/internal/storage:
+        interfaces:
+            IStorage:
+            IMainStorage:
+            IStagingStorage:
+            IOrchestratorStorage:

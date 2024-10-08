@@ -36,7 +36,7 @@ git clone https://github.com/thirdweb-dev/insight.git
 4. Create `secrets.yml` from `secrects.example.yml` and set the needed credentials
 5. Build an instance
 ```
-go build -o main
+go build -o main -tags=production
 ```
 6. Run insight
 ```
