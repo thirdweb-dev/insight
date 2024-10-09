@@ -12,7 +12,8 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/middleware"
 
 	// Import the generated Swagger docs
-	_ "github.com/thirdweb-dev/indexer/docs"
+	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/docs"
 )
 
 var (
@@ -31,11 +32,12 @@ var (
 // @description API for querying blockchain transactions and events
 // @license.name Apache 2.0
 // @license.url https://github.com/thirdweb-dev/indexer/blob/main/LICENSE
-// @host localhost:3000
 // @BasePath /
 // @Security BasicAuth
 // @securityDefinitions.basic BasicAuth
 func RunApi(cmd *cobra.Command, args []string) {
+	docs.SwaggerInfo.Host = config.Cfg.API.Host
+
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
