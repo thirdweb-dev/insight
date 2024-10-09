@@ -121,7 +121,6 @@ definitions:
       value:
         type: string
     type: object
-host: localhost:3000
 info:
   contact: {}
   description: API for querying blockchain transactions and events

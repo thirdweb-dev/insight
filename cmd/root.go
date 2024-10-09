@@ -78,6 +78,7 @@ func init() {
 	rootCmd.PersistentFlags().String("storage-main-clickhouse-password", "", "Clickhouse password for main storage")
 	rootCmd.PersistentFlags().String("storage-staging-clickhouse-username", "", "Clickhouse username for staging storage")
 	rootCmd.PersistentFlags().String("storage-staging-clickhouse-password", "", "Clickhouse password for staging storage")
+	rootCmd.PersistentFlags().String("api-host", "localhost:3000", "API host")
 	viper.BindPFlag("rpc.url", rootCmd.PersistentFlags().Lookup("rpc-url"))
 	viper.BindPFlag("rpc.blocks.blocksPerRequest", rootCmd.PersistentFlags().Lookup("rpc-blocks-blocksPerRequest"))
 	viper.BindPFlag("rpc.blocks.batchDelay", rootCmd.PersistentFlags().Lookup("rpc-blocks-batchDelay"))
@@ -120,6 +121,7 @@ func init() {
 	viper.BindPFlag("storage.orchestrator.redis.addr", rootCmd.PersistentFlags().Lookup("storage-orchestrator-redis-addr"))
 	viper.BindPFlag("storage.orchestrator.redis.password", rootCmd.PersistentFlags().Lookup("storage-orchestrator-redis-password"))
 	viper.BindPFlag("storage.orchestrator.redis.db", rootCmd.PersistentFlags().Lookup("storage-orchestrator-redis-db"))
+	viper.BindPFlag("api.host", rootCmd.PersistentFlags().Lookup("api-host"))
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
 }

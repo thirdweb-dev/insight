@@ -91,6 +91,10 @@ type RPCConfig struct {
 	Traces RPCTracesConfig    `mapstructure:"traces"`
 }
 
+type APIConfig struct {
+	Host string `mapstructure:"host"`
+}
+
 type Config struct {
 	RPC              RPCConfig              `mapstructure:"rpc"`
 	Log              LogConfig              `mapstructure:"log"`
@@ -98,6 +102,7 @@ type Config struct {
 	Committer        CommitterConfig        `mapstructure:"committer"`
 	FailureRecoverer FailureRecovererConfig `mapstructure:"failureRecoverer"`
 	Storage          StorageConfig          `mapstructure:"storage"`
+	API              APIConfig              `mapstructure:"api"`
 }
 
 var Cfg Config
