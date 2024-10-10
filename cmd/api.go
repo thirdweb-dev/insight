@@ -4,9 +4,11 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/swaggo/swag"
 
 	"github.com/thirdweb-dev/indexer/internal/handlers"
 	"github.com/thirdweb-dev/indexer/internal/middleware"
@@ -46,7 +48,14 @@ func RunApi(cmd *cobra.Command, args []string) {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	// Add Swagger JSON endpoint
 	r.GET("/openapi.json", func(c *gin.Context) {
-		c.File("./docs/swagger.json")
+		doc, err := swag.ReadDoc()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to read Swagger documentation")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to provide Swagger documentation"})
+			return
+		}
+		c.Header("Content-Type", "application/json")
+		c.String(http.StatusOK, doc)
 	})
 
 	root := r.Group("/:chainId")
