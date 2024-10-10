@@ -28,7 +28,7 @@ func RunOrchestrator(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("Failed to initialize RPC")
 	}
 
-	orchestrator, err := orchestrator.NewOrchestrator(*rpc)
+	orchestrator, err := orchestrator.NewOrchestrator(rpc)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create orchestrator")
 	}

@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -20,7 +19,7 @@ const DEFAULT_BLOCKS_PER_POLL = 10
 const DEFAULT_TRIGGER_INTERVAL = 1000
 
 type Poller struct {
-	rpc               rpc.Client
+	rpc               rpc.IRPCClient
 	blocksPerPoll     int64
 	triggerIntervalMs int64
 	storage           storage.IStorage
@@ -33,7 +32,7 @@ type BlockNumberWithError struct {
 	Error       error
 }
 
-func NewPoller(rpc rpc.Client, storage storage.IStorage) *Poller {
+func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	blocksPerPoll := config.Cfg.Poller.BlocksPerPoll
 	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -44,7 +43,7 @@ func NewPoller(rpc rpc.Client, storage storage.IStorage) *Poller {
 	}
 	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
 	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
-	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber(rpc.ChainID, untilBlock)
+	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber(rpc.GetChainID(), untilBlock)
 	if err != nil || lastPolledBlock == nil || lastPolledBlock.Sign() <= 0 {
 		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
 		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
@@ -124,7 +123,7 @@ func (p *Poller) reachedPollLimit(blockNumber *big.Int) bool {
 }
 
 func (p *Poller) getBlockRange() ([]*big.Int, error) {
-	latestBlock, err := p.getLatestBlockNumber()
+	latestBlock, err := p.rpc.GetLatestBlockNumber()
 	if err != nil {
 		return nil, err
 	}
@@ -148,14 +147,6 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 	}
 
 	return blockNumbers, nil
-}
-
-func (p *Poller) getLatestBlockNumber() (*big.Int, error) {
-	latestBlockUint64, err := p.rpc.EthClient.BlockNumber(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest block number: %v", err)
-	}
-	return new(big.Int).SetUint64(latestBlockUint64), nil
 }
 
 func (p *Poller) getEndBlockForRange(startBlock *big.Int, latestBlock *big.Int) *big.Int {
@@ -217,7 +208,7 @@ func (p *Poller) handleBlockFailures(results []rpc.GetFullBlockResult) {
 				BlockNumber:   result.BlockNumber,
 				FailureReason: result.Error.Error(),
 				FailureTime:   time.Now(),
-				ChainId:       p.rpc.ChainID,
+				ChainId:       p.rpc.GetChainID(),
 				FailureCount:  1,
 			})
 		}

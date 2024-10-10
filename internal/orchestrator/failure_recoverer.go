@@ -21,10 +21,10 @@ type FailureRecoverer struct {
 	failuresPerPoll   int
 	triggerIntervalMs int
 	storage           storage.IStorage
-	rpc               rpc.Client
+	rpc               rpc.IRPCClient
 }
 
-func NewFailureRecoverer(rpc rpc.Client, storage storage.IStorage) *FailureRecoverer {
+func NewFailureRecoverer(rpc rpc.IRPCClient, storage storage.IStorage) *FailureRecoverer {
 	failuresPerPoll := config.Cfg.FailureRecoverer.BlocksPerRun
 	if failuresPerPoll == 0 {
 		failuresPerPoll = DEFAULT_FAILURES_PER_POLL
@@ -49,7 +49,7 @@ func (fr *FailureRecoverer) Start() {
 	go func() {
 		for range ticker.C {
 			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{
-				ChainId: fr.rpc.ChainID,
+				ChainId: fr.rpc.GetChainID(),
 				Limit:   fr.failuresPerPoll,
 			})
 			if err != nil {
@@ -101,7 +101,7 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 				BlockNumber:   result.BlockNumber,
 				FailureReason: result.Error.Error(),
 				FailureTime:   time.Now(),
-				ChainId:       fr.rpc.ChainID,
+				ChainId:       fr.rpc.GetChainID(),
 				FailureCount:  failureCount,
 			})
 		} else {

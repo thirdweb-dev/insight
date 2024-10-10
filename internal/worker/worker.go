@@ -13,10 +13,10 @@ import (
 )
 
 type Worker struct {
-	rpc rpc.Client
+	rpc rpc.IRPCClient
 }
 
-func NewWorker(rpc rpc.Client) *Worker {
+func NewWorker(rpc rpc.IRPCClient) *Worker {
 	return &Worker{
 		rpc: rpc,
 	}
@@ -24,12 +24,12 @@ func NewWorker(rpc rpc.Client) *Worker {
 
 func (w *Worker) Run(blockNumbers []*big.Int) []rpc.GetFullBlockResult {
 	blockCount := len(blockNumbers)
-	chunks := common.BigIntSliceToChunks(blockNumbers, w.rpc.BlocksPerRequest.Blocks)
+	chunks := common.BigIntSliceToChunks(blockNumbers, w.rpc.GetBlocksPerRequest().Blocks)
 
 	var wg sync.WaitGroup
 	resultsCh := make(chan []rpc.GetFullBlockResult, len(chunks))
 
-	log.Debug().Msgf("Worker Processing %d blocks in %d chunks of max %d blocks", blockCount, len(chunks), w.rpc.BlocksPerRequest.Blocks)
+	log.Debug().Msgf("Worker Processing %d blocks in %d chunks of max %d blocks", blockCount, len(chunks), w.rpc.GetBlocksPerRequest().Blocks)
 	for _, chunk := range chunks {
 		wg.Add(1)
 		go func(chunk []*big.Int) {

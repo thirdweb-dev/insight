@@ -22,10 +22,10 @@ type Committer struct {
 	blocksPerCommit   int
 	storage           storage.IStorage
 	pollFromBlock     *big.Int
-	rpc               rpc.Client
+	rpc               rpc.IRPCClient
 }
 
-func NewCommitter(rpc rpc.Client, storage storage.IStorage) *Committer {
+func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
@@ -71,7 +71,7 @@ func (c *Committer) Start() {
 }
 
 func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
-	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.ChainID)
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
 	log.Info().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (c *Committer) getSequentialBlockDataToCommit() (*[]common.BlockData, error
 		return nil, nil
 	}
 
-	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{BlockNumbers: blocksToCommit, ChainId: c.rpc.ChainID})
+	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{BlockNumbers: blocksToCommit, ChainId: c.rpc.GetChainID()})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
 	}
@@ -180,7 +180,7 @@ func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBloc
 	}
 	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
 
-	existingBlockFailures, err := c.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{BlockNumbers: missingBlockNumbers, ChainId: c.rpc.ChainID})
+	existingBlockFailures, err := c.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{BlockNumbers: missingBlockNumbers, ChainId: c.rpc.GetChainID()})
 	if err != nil {
 		return fmt.Errorf("error getting block failures while handling gap: %v", err)
 	}
@@ -197,7 +197,7 @@ func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBloc
 		if _, ok := existingBlockFailuresMap[blockNumberStr]; !ok {
 			blockFailures = append(blockFailures, common.BlockFailure{
 				BlockNumber:   blockNumber,
-				ChainId:       c.rpc.ChainID,
+				ChainId:       c.rpc.GetChainID(),
 				FailureTime:   time.Now(),
 				FailureCount:  1,
 				FailureReason: "Gap detected for this block",

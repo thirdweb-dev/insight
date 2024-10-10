@@ -9,7 +9,7 @@ import (
 )
 
 type Orchestrator struct {
-	rpc                     rpc.Client
+	rpc                     rpc.IRPCClient
 	storage                 storage.IStorage
 	pollerEnabled           bool
 	failureRecovererEnabled bool
@@ -17,7 +17,7 @@ type Orchestrator struct {
 	reorgHandlerEnabled     bool
 }
 
-func NewOrchestrator(rpc rpc.Client) (*Orchestrator, error) {
+func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
 	storage, err := storage.NewStorageConnector(&config.Cfg.Storage)
 	if err != nil {
 		return nil, err
