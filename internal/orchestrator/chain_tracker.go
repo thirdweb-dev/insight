@@ -5,19 +5,18 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 )
 
 const DEFAULT_CHAIN_TRACKER_POLL_INTERVAL = 300000 // 5 minutes
 
 type ChainTracker struct {
-	rpc               common.RPC
+	rpc               rpc.Client
 	triggerIntervalMs int
 }
 
-func NewChainTracker(rpc common.RPC) *ChainTracker {
-
+func NewChainTracker(rpc rpc.Client) *ChainTracker {
 	return &ChainTracker{
 		rpc:               rpc,
 		triggerIntervalMs: DEFAULT_CHAIN_TRACKER_POLL_INTERVAL,

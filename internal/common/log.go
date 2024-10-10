@@ -16,3 +16,5 @@ type Log struct {
 	Data             string   `json:"data"`
 	Topics           []string `json:"topics"`
 }
+
+type RawLogs = []map[string]interface{}

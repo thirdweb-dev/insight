@@ -11,6 +11,7 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
@@ -22,10 +23,10 @@ type Committer struct {
 	blocksPerCommit   int
 	storage           storage.IStorage
 	pollFromBlock     *big.Int
-	rpc               common.RPC
+	rpc               rpc.Client
 }
 
-func NewCommitter(rpc common.RPC, storage storage.IStorage) *Committer {
+func NewCommitter(rpc rpc.Client, storage storage.IStorage) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL

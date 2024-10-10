@@ -4,19 +4,19 @@ import (
 	"sync"
 
 	config "github.com/thirdweb-dev/indexer/configs"
-	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 type Orchestrator struct {
-	rpc                     common.RPC
+	rpc                     rpc.Client
 	storage                 storage.IStorage
 	pollerEnabled           bool
 	failureRecovererEnabled bool
 	committerEnabled        bool
 }
 
-func NewOrchestrator(rpc common.RPC) (*Orchestrator, error) {
+func NewOrchestrator(rpc rpc.Client) (*Orchestrator, error) {
 	storage, err := storage.NewStorageConnector(&config.Cfg.Storage)
 	if err != nil {
 		return nil, err
