@@ -41,19 +41,16 @@ type IOrchestratorStorage interface {
 }
 
 type IStagingStorage interface {
-	InsertBlockData(data []common.BlockData) error
-	GetBlockData(qf QueryFilter) (data []common.BlockData, err error)
-	DeleteBlockData(data []common.BlockData) error
+	InsertStagingData(data []common.BlockData) error
+	GetStagingData(qf QueryFilter) (data *[]common.BlockData, err error)
+	DeleteStagingData(data *[]common.BlockData) error
 	GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
 }
 
 type IMainStorage interface {
-	InsertBlocks(blocks []common.Block) error
-	InsertTransactions(txs []common.Transaction) error
-	InsertLogs(logs []common.Log) error
-	InsertTraces(traces []common.Trace) error
+	InsertBlockData(data *[]common.BlockData) error
 
-	GetBlocks(qf QueryFilter) (logs []common.Block, err error)
+	GetBlocks(qf QueryFilter) (blocks []common.Block, err error)
 	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
 	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)

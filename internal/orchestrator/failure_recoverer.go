@@ -114,7 +114,7 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 			failuresToDelete = append(failuresToDelete, blockFailureForBlock)
 		}
 	}
-	if err := fr.storage.StagingStorage.InsertBlockData(successfulResults); err != nil {
+	if err := fr.storage.StagingStorage.InsertStagingData(successfulResults); err != nil {
 		log.Error().Err(fmt.Errorf("error inserting block data in failure recoverer: %v", err))
 		return
 	}

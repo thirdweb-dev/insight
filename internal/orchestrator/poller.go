@@ -192,7 +192,7 @@ func (p *Poller) handleWorkerResults(results []rpc.GetFullBlockResult) {
 			Traces:       result.Data.Traces,
 		})
 	}
-	if err := p.storage.StagingStorage.InsertBlockData(blockData); err != nil {
+	if err := p.storage.StagingStorage.InsertStagingData(blockData); err != nil {
 		e := fmt.Errorf("error inserting block data: %v", err)
 		log.Error().Err(e)
 		for _, result := range successfulResults {

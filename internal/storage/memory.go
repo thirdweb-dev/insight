@@ -73,8 +73,8 @@ func (m *MemoryConnector) DeleteBlockFailures(failures []common.BlockFailure) er
 	return nil
 }
 
-func (m *MemoryConnector) InsertBlocks(blocks []common.Block) error {
-	for _, block := range blocks {
+func (m *MemoryConnector) insertBlocks(blocks *[]common.Block) error {
+	for _, block := range *blocks {
 		blockJson, err := json.Marshal(block)
 		if err != nil {
 			return err
@@ -109,8 +109,8 @@ func (m *MemoryConnector) GetBlocks(qf QueryFilter) ([]common.Block, error) {
 	return blocks, nil
 }
 
-func (m *MemoryConnector) InsertTransactions(txs []common.Transaction) error {
-	for _, tx := range txs {
+func (m *MemoryConnector) insertTransactions(txs *[]common.Transaction) error {
+	for _, tx := range *txs {
 		txJson, err := json.Marshal(tx)
 		if err != nil {
 			return err
@@ -143,8 +143,8 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction,
 	return txs, nil
 }
 
-func (m *MemoryConnector) InsertLogs(logs []common.Log) error {
-	for _, log := range logs {
+func (m *MemoryConnector) insertLogs(logs *[]common.Log) error {
+	for _, log := range *logs {
 		logJson, err := json.Marshal(log)
 		if err != nil {
 			return err
@@ -251,7 +251,7 @@ func getBlockNumbersToCheck(qf QueryFilter) map[string]uint8 {
 	return blockNumbersToCheck
 }
 
-func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
+func (m *MemoryConnector) InsertStagingData(data []common.BlockData) error {
 	for _, blockData := range data {
 		dataJson, err := json.Marshal(blockData)
 		if err != nil {
@@ -262,7 +262,7 @@ func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetBlockData(qf QueryFilter) ([]common.BlockData, error) {
+func (m *MemoryConnector) GetStagingData(qf QueryFilter) (*[]common.BlockData, error) {
 	blockData := []common.BlockData{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
@@ -283,19 +283,19 @@ func (m *MemoryConnector) GetBlockData(qf QueryFilter) ([]common.BlockData, erro
 			}
 		}
 	}
-	return blockData, nil
+	return &blockData, nil
 }
 
-func (m *MemoryConnector) DeleteBlockData(data []common.BlockData) error {
-	for _, blockData := range data {
+func (m *MemoryConnector) DeleteStagingData(data *[]common.BlockData) error {
+	for _, blockData := range *data {
 		key := fmt.Sprintf("blockData:%s:%s", blockData.Block.ChainId.String(), blockData.Block.Number.String())
 		m.cache.Remove(key)
 	}
 	return nil
 }
 
-func (m *MemoryConnector) InsertTraces(traces []common.Trace) error {
-	for _, trace := range traces {
+func (m *MemoryConnector) insertTraces(traces *[]common.Trace) error {
+	for _, trace := range *traces {
 		traceJson, err := json.Marshal(trace)
 		if err != nil {
 			return err
@@ -330,4 +330,32 @@ func (m *MemoryConnector) GetTraces(qf QueryFilter) ([]common.Trace, error) {
 
 func traceAddressToString(traceAddress []uint64) string {
 	return strings.Trim(strings.Replace(fmt.Sprint(traceAddress), " ", ",", -1), "[]")
+}
+
+func (m *MemoryConnector) InsertBlockData(data *[]common.BlockData) error {
+	blocks := make([]common.Block, 0, len(*data))
+	logs := make([]common.Log, 0)
+	transactions := make([]common.Transaction, 0)
+	traces := make([]common.Trace, 0)
+
+	for _, blockData := range *data {
+		blocks = append(blocks, blockData.Block)
+		logs = append(logs, blockData.Logs...)
+		transactions = append(transactions, blockData.Transactions...)
+		traces = append(traces, blockData.Traces...)
+	}
+
+	if err := m.insertBlocks(&blocks); err != nil {
+		return err
+	}
+	if err := m.insertLogs(&logs); err != nil {
+		return err
+	}
+	if err := m.insertTransactions(&transactions); err != nil {
+		return err
+	}
+	if err := m.insertTraces(&traces); err != nil {
+		return err
+	}
+	return nil
 }

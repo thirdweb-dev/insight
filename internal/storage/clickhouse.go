@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -60,7 +61,7 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	return conn, nil
 }
 
-func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
+func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block) error {
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.blocks (
 			chain_id, number, timestamp, hash, parent_hash, sha3_uncles, nonce,
@@ -73,7 +74,7 @@ func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 	if err != nil {
 		return err
 	}
-	for _, block := range blocks {
+	for _, block := range *blocks {
 		err := batch.Append(
 			block.ChainId,
 			block.Number,
@@ -105,7 +106,7 @@ func (c *ClickHouseConnector) InsertBlocks(blocks []common.Block) error {
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error {
+func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction) error {
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.transactions (
 			chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index,
@@ -117,7 +118,7 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 	if err != nil {
 		return err
 	}
-	for _, tx := range txs {
+	for _, tx := range *txs {
 		err := batch.Append(
 			tx.ChainId,
 			tx.Hash,
@@ -147,7 +148,7 @@ func (c *ClickHouseConnector) InsertTransactions(txs []common.Transaction) error
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
+func (c *ClickHouseConnector) insertLogs(logs *[]common.Log) error {
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.logs (
 			chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index,
@@ -158,7 +159,7 @@ func (c *ClickHouseConnector) InsertLogs(logs []common.Log) error {
 	if err != nil {
 		return err
 	}
-	for _, log := range logs {
+	for _, log := range *logs {
 		err := batch.Append(
 			log.ChainId,
 			log.BlockNumber,
@@ -585,7 +586,7 @@ func getBlockNumbersStringArray(blockNumbers []*big.Int) string {
 	return blockNumbersString
 }
 
-func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
+func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 	query := `INSERT INTO ` + c.cfg.Database + `.block_data (chain_id, block_number, data)`
 	batch, err := c.conn.PrepareBatch(context.Background(), query)
 	if err != nil {
@@ -608,7 +609,7 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) GetBlockData(qf QueryFilter) (blockDataList []common.BlockData, err error) {
+func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (blockDataList *[]common.BlockData, err error) {
 	query := fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0",
 		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
@@ -638,12 +639,12 @@ func (c *ClickHouseConnector) GetBlockData(qf QueryFilter) (blockDataList []comm
 		if err != nil {
 			return nil, err
 		}
-		blockDataList = append(blockDataList, blockData)
+		*blockDataList = append(*blockDataList, blockData)
 	}
 	return blockDataList, nil
 }
 
-func (c *ClickHouseConnector) DeleteBlockData(data []common.BlockData) error {
+func (c *ClickHouseConnector) DeleteStagingData(data *[]common.BlockData) error {
 	query := fmt.Sprintf(`
         INSERT INTO %s.block_data (
             chain_id, block_number, is_deleted
@@ -655,7 +656,7 @@ func (c *ClickHouseConnector) DeleteBlockData(data []common.BlockData) error {
 		return err
 	}
 
-	for _, blockData := range data {
+	for _, blockData := range *data {
 		err := batch.Append(
 			blockData.Block.ChainId,
 			blockData.Block.Number,
@@ -668,7 +669,7 @@ func (c *ClickHouseConnector) DeleteBlockData(data []common.BlockData) error {
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) InsertTraces(traces []common.Trace) error {
+func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace) error {
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.traces (
 			chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index,
@@ -680,7 +681,7 @@ func (c *ClickHouseConnector) InsertTraces(traces []common.Trace) error {
 	if err != nil {
 		return err
 	}
-	for _, trace := range traces {
+	for _, trace := range *traces {
 		err = batch.Append(
 			trace.ChainID,
 			trace.BlockNumber,
@@ -760,4 +761,78 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 		traces = append(traces, trace)
 	}
 	return traces, nil
+}
+
+// TODO make this atomic
+func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
+	blocks := make([]common.Block, 0, len(*data))
+	logs := make([]common.Log, 0)
+	transactions := make([]common.Transaction, 0)
+	traces := make([]common.Trace, 0)
+
+	for _, blockData := range *data {
+		blocks = append(blocks, blockData.Block)
+		logs = append(logs, blockData.Logs...)
+		transactions = append(transactions, blockData.Transactions...)
+		traces = append(traces, blockData.Traces...)
+	}
+
+	var saveErr error
+	var saveErrMutex sync.Mutex
+	var wg sync.WaitGroup
+
+	if len(blocks) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := c.insertBlocks(&blocks); err != nil {
+				saveErrMutex.Lock()
+				saveErr = fmt.Errorf("error deleting blocks: %v", err)
+				saveErrMutex.Unlock()
+			}
+		}()
+	}
+
+	if len(logs) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := c.insertLogs(&logs); err != nil {
+				saveErrMutex.Lock()
+				saveErr = fmt.Errorf("error deleting logs: %v", err)
+				saveErrMutex.Unlock()
+			}
+		}()
+	}
+
+	if len(transactions) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := c.insertTransactions(&transactions); err != nil {
+				saveErrMutex.Lock()
+				saveErr = fmt.Errorf("error deleting transactions: %v", err)
+				saveErrMutex.Unlock()
+			}
+		}()
+	}
+
+	if len(traces) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := c.insertTraces(&traces); err != nil {
+				saveErrMutex.Lock()
+				saveErr = fmt.Errorf("error deleting traces: %v", err)
+				saveErrMutex.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if saveErr != nil {
+		return saveErr
+	}
+	return nil
 }
