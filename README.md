@@ -294,6 +294,61 @@ committer:
   blocksPerCommit: 1000
 ```
 
+#### Reorg Handler
+Whether to enable the reorg handler. Default is `true`.
+
+cmd: `--reorgHandler-enabled`
+env: `REORGHANDLER_ENABLED`
+yaml:
+```yaml
+reorgHandler:
+  enabled: true
+```
+
+#### Reorg Handler Interval
+Reorg handler trigger interval in milliseconds. Default is `1000`.
+
+cmd: `--reorgHandler-interval`
+env: `REORGHANDLER_INTERVAL`
+yaml:
+```yaml
+reorgHandler:
+  interval: 3000
+```
+
+#### Reorg Handler Blocks Per Scan
+How many blocks to scan for reorgs. Default is `100`.
+
+cmd: `--reorgHandler-blocks-per-scan`
+env: `REORGHANDLER_BLOCKSPERSCAN`
+yaml:
+```yaml
+reorgHandler:
+  blocksPerScan: 1000
+```
+
+#### Reorg Handler From Block
+From which block to start scanning for reorgs. Default is `0`.
+
+cmd: `--reorgHandler-from-block`
+env: `REORGHANDLER_FROMBLOCK`
+yaml:
+```yaml
+reorgHandler:
+  fromBlock: 20000000
+```
+
+#### Reorg Handler Force From Block
+Whether to force the reorg handler to start from the block specified in `reorgHandler-from-block`. Default is `false`.
+
+cmd: `--reorgHandler-force-from-block`
+env: `REORGHANDLER_FORCEFROMBLOCK`  
+yaml:
+```yaml
+reorgHandler:
+  forceFromBlock: true
+```
+
 #### Failure Recoverer
 Whether to enable the failure recoverer. Default is `true`.
 

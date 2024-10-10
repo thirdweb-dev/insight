@@ -28,6 +28,14 @@ type CommitterConfig struct {
 	BlocksPerCommit int  `mapstructure:"blocksPerCommit"`
 }
 
+type ReorgHandlerConfig struct {
+	Enabled        bool `mapstructure:"enabled"`
+	Interval       int  `mapstructure:"interval"`
+	BlocksPerScan  int  `mapstructure:"blocksPerScan"`
+	FromBlock      int  `mapstructure:"fromBlock"`
+	ForceFromBlock bool `mapstructure:"forceFromBlock"`
+}
+
 type FailureRecovererConfig struct {
 	Enabled      bool `mapstructure:"enabled"`
 	Interval     int  `mapstructure:"interval"`
@@ -101,6 +109,7 @@ type Config struct {
 	Poller           PollerConfig           `mapstructure:"poller"`
 	Committer        CommitterConfig        `mapstructure:"committer"`
 	FailureRecoverer FailureRecovererConfig `mapstructure:"failureRecoverer"`
+	ReorgHandler     ReorgHandlerConfig     `mapstructure:"reorgHandler"`
 	Storage          StorageConfig          `mapstructure:"storage"`
 	API              APIConfig              `mapstructure:"api"`
 }
