@@ -36,4 +36,10 @@ type BlockData struct {
 	Traces       []Trace
 }
 
+type BlockHeader struct {
+	Number     *big.Int `json:"number"`
+	Hash       string   `json:"hash"`
+	ParentHash string   `json:"parent_hash"`
+}
+
 type RawBlock = map[string]interface{}

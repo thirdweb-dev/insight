@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
@@ -113,5 +114,24 @@ func (r *RedisConnector) DeleteBlockFailures(failures []common.BlockFailure) err
 	for _, failure := range failures {
 		r.client.Del(ctx, fmt.Sprintf("block_failure:%s:%s", failure.ChainId.String(), failure.BlockNumber.String()))
 	}
+	return nil
+}
+
+func (r *RedisConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	ctx := context.Background()
+	blockNumberString, err := r.client.Get(ctx, fmt.Sprintf("reorg_check:%s", chainId.String())).Result()
+	if err != nil {
+		return nil, err
+	}
+	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberString)
+	}
+	return blockNumber, nil
+}
+
+func (r *RedisConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	ctx := context.Background()
+	r.client.Set(ctx, fmt.Sprintf("reorg_check:%s", chainId.String()), blockNumber.String(), 0)
 	return nil
 }

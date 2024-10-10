@@ -38,6 +38,8 @@ type IOrchestratorStorage interface {
 	GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error)
 	StoreBlockFailures(failures []common.BlockFailure) error
 	DeleteBlockFailures(failures []common.BlockFailure) error
+	GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error)
+	SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
 }
 
 type IStagingStorage interface {
@@ -55,6 +57,11 @@ type IMainStorage interface {
 	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
+	/**
+	 * Get block headers ordered from latest to oldest.
+	 */
+	LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) (blockHeaders []common.BlockHeader, err error)
+	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {

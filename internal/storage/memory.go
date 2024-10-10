@@ -218,6 +218,15 @@ func (m *MemoryConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *b
 	return maxBlockNumber, nil
 }
 
+func isKeyForSomeBlock(key string, prefixes []string, blocksFilter map[string]uint8) bool {
+	for _, prefix := range prefixes {
+		if isKeyForBlock(key, prefix, blocksFilter) {
+			return true
+		}
+	}
+	return false
+}
+
 func isKeyForBlock(key string, prefix string, blocksFilter map[string]uint8) bool {
 	if !strings.HasPrefix(key, prefix) {
 		return false
@@ -332,6 +341,24 @@ func traceAddressToString(traceAddress []uint64) string {
 	return strings.Trim(strings.Replace(fmt.Sprint(traceAddress), " ", ",", -1), "[]")
 }
 
+func (m *MemoryConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	key := fmt.Sprintf("reorg_check:%s", chainId.String())
+	value, ok := m.cache.Get(key)
+	if !ok {
+		return nil, fmt.Errorf("no reorg check block number found for chain %s", chainId.String())
+	}
+	blockNumber, ok := new(big.Int).SetString(value, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", value)
+	}
+	return blockNumber, nil
+}
+
+func (m *MemoryConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	m.cache.Add(fmt.Sprintf("reorg_check:%s", chainId.String()), blockNumber.String())
+	return nil
+}
+
 func (m *MemoryConnector) InsertBlockData(data *[]common.BlockData) error {
 	blocks := make([]common.Block, 0, len(*data))
 	logs := make([]common.Log, 0)
@@ -358,4 +385,43 @@ func (m *MemoryConnector) InsertBlockData(data *[]common.BlockData) error {
 		return err
 	}
 	return nil
+}
+
+func (m *MemoryConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error {
+	blockNumbersToCheck := getBlockNumbersToCheck(QueryFilter{BlockNumbers: blockNumbers})
+	for _, key := range m.cache.Keys() {
+		prefixes := []string{fmt.Sprintf("block:%s:", chainId.String()), fmt.Sprintf("log:%s:", chainId.String()), fmt.Sprintf("transaction:%s:", chainId.String()), fmt.Sprintf("trace:%s:", chainId.String())}
+		shouldDelete := isKeyForSomeBlock(key, prefixes, blockNumbersToCheck)
+		if shouldDelete {
+			m.cache.Remove(key)
+		}
+	}
+	return nil
+}
+
+func (m *MemoryConnector) LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) ([]common.BlockHeader, error) {
+	blockHeaders := []common.BlockHeader{}
+	for _, key := range m.cache.Keys() {
+		if strings.HasPrefix(key, fmt.Sprintf("block:%s:", chainId.String())) {
+			blockNumberStr := strings.Split(key, ":")[2]
+			blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
+			}
+			if blockNumber.Cmp(lookbackStart) <= 0 {
+				value, _ := m.cache.Get(key)
+				block := common.Block{}
+				err := json.Unmarshal([]byte(value), &block)
+				if err != nil {
+					return nil, err
+				}
+				blockHeaders = append(blockHeaders, common.BlockHeader{
+					Number:     blockNumber,
+					Hash:       block.Hash,
+					ParentHash: block.ParentHash,
+				})
+			}
+		}
+	}
+	return blockHeaders, nil
 }
