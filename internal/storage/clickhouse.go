@@ -230,7 +230,7 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 
 func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, err error) {
 	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, total_difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
-	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE number IN (%s) AND is_deleted = 0",
+	query := fmt.Sprintf("SELECT %s FROM %s.blocks WHERE number IN (%s) AND is_deleted = 0",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
 	if qf.ChainId.Sign() > 0 {
@@ -320,7 +320,7 @@ func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf Query
 }
 
 func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) string {
-	query := fmt.Sprintf("SELECT %s FROM %s.%s FINAL WHERE is_deleted = 0", columns, c.cfg.Database, table)
+	query := fmt.Sprintf("SELECT %s FROM %s.%s WHERE is_deleted = 0", columns, c.cfg.Database, table)
 
 	if qf.ChainId.Sign() > 0 {
 		query = addFilterParams("chain_id", qf.ChainId.String(), query)
@@ -403,7 +403,7 @@ func getTopicValueFormat(topic string) string {
 
 func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter) (map[string]string, error) {
 	aggregateQuery := "SELECT " + strings.Join(qf.Aggregates, ", ") +
-		fmt.Sprintf(" FROM %s.%s FINAL WHERE is_deleted = 0", c.cfg.Database, table)
+		fmt.Sprintf(" FROM %s.%s WHERE is_deleted = 0", c.cfg.Database, table)
 
 	if qf.ContractAddress != "" {
 		aggregateQuery += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
@@ -490,7 +490,7 @@ func scanLog(rows driver.Rows) (common.Log, error) {
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT max(number) FROM %s.blocks FINAL WHERE is_deleted = 0", c.cfg.Database)
+	query := fmt.Sprintf("SELECT max(number) FROM %s.blocks WHERE is_deleted = 0", c.cfg.Database)
 	if chainId.Sign() > 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
 	}
@@ -503,7 +503,7 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 }
 
 func (c *ClickHouseConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT max(block_number) FROM %s.block_data FINAL WHERE is_deleted = 0", c.cfg.Database)
+	query := fmt.Sprintf("SELECT max(block_number) FROM %s.block_data WHERE is_deleted = 0", c.cfg.Database)
 	if chainId.Sign() > 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
 	}
@@ -715,7 +715,7 @@ func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace) error {
 
 func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, err error) {
 	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, subtraces, trace_address, type, call_type, error, from_address, to_address, gas, gas_used, input, output, value, author, reward_type, refund_address"
-	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE block_number IN (%s) AND is_deleted = 0",
+	query := fmt.Sprintf("SELECT %s FROM %s.traces WHERE block_number IN (%s) AND is_deleted = 0",
 		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
 	if qf.ChainId.Sign() > 0 {
