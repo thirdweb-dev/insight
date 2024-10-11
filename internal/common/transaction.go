@@ -18,6 +18,7 @@ type Transaction struct {
 	Gas                  uint64   `json:"gas"`
 	GasPrice             *big.Int `json:"gas_price"`
 	Data                 string   `json:"data"`
+	FunctionSelector     string   `json:"function_selector"`
 	MaxFeePerGas         *big.Int `json:"max_fee_per_gas"`
 	MaxPriorityFeePerGas *big.Int `json:"max_priority_fee_per_gas"`
 	TransactionType      uint8    `json:"transaction_type"`

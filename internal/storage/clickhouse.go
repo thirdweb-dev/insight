@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -110,7 +111,7 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction) erro
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.transactions (
 			chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index,
-			from_address, to_address, value, gas, gas_price, data, max_fee_per_gas, max_priority_fee_per_gas,
+			from_address, to_address, value, gas, gas_price, data, function_selector, max_fee_per_gas, max_priority_fee_per_gas,
 			transaction_type, r, s, v, access_list
 		)
 	`
@@ -133,6 +134,7 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction) erro
 			tx.Gas,
 			tx.GasPrice,
 			tx.Data,
+			tx.FunctionSelector,
 			tx.MaxFeePerGas,
 			tx.MaxPriorityFeePerGas,
 			tx.TransactionType,
@@ -490,12 +492,16 @@ func scanLog(rows driver.Rows) (common.Log, error) {
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT max(number) FROM %s.blocks WHERE is_deleted = 0", c.cfg.Database)
+	query := fmt.Sprintf("SELECT number FROM %s.blocks WHERE is_deleted = 0", c.cfg.Database)
 	if chainId.Sign() > 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
 	}
+	query += " ORDER BY number DESC LIMIT 1"
 	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
 		return nil, err
 	}
 	zLog.Debug().Msgf("Max block number in main storage is: %s", maxBlockNumber.String())
@@ -503,15 +509,19 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 }
 
 func (c *ClickHouseConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT max(block_number) FROM %s.block_data WHERE is_deleted = 0", c.cfg.Database)
+	query := fmt.Sprintf("SELECT block_number FROM %s.block_data WHERE is_deleted = 0", c.cfg.Database)
 	if chainId.Sign() > 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
 	}
 	if rangeEnd.Sign() > 0 {
 		query += fmt.Sprintf(" AND block_number <= %s", rangeEnd.String())
 	}
+	query += " ORDER BY block_number DESC LIMIT 1"
 	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
 		return nil, err
 	}
 	return maxBlockNumber, nil
