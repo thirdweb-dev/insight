@@ -33,11 +33,13 @@ storage:
   main:
     clickhouse:
       port: 9440
-      database: "base"
+      database: "default"
+      disableTLS: true
   staging:
     clickhouse:
       port: 9440
-      database: "staging"
+      database: "default"
+      disableTLS: true
   orchestrator:
     memory:
       maxItems: 10000

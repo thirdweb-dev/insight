@@ -1,6 +1,6 @@
 # Insight
 
-Insight is a blockchain data processing tool designed to fetch, process, and store on-chain data. It provides a solution for indexing blockchain data, facilitating efficient querying of transactions, logs through a simple API.
+Insight is a blockchain data processing tool designed to fetch, process, and store on-chain data. It provides a solution for indexing blockchain data, facilitating efficient querying of transactions and logs through a simple API.
 
 Insight's architecture consists of five main components:
 <img width="728" alt="architecture-diagram" src="https://github.com/user-attachments/assets/8ad19477-c18f-442e-a899-0f502a00bae6">
@@ -15,15 +15,14 @@ Insight's architecture consists of five main components:
 
 5. **Orchestrator**: The Orchestrator is responsible for coordinating and managing the poller, failure recoverer, and committer. It initializes these components based on configuration settings and starts them concurrently, ensuring they run independently while waiting for all of them to complete their tasks.
 
-Insight's modular architecture and configuration options allow for adaptation to various evm chains and use cases.
+Insight's modular architecture and configuration options allow for adaptation to various EVM chains and use cases.
 
 
 ## Getting started
 
 ### Pre-requites
-1. Install Golang v1.23
-2. Run the DB scripts (change the db name)
-3. Create a clickhouse instance
+1. Golang v1.23
+2. Clickhouse instance (`docker-compose` includes it for local development)
 
 ### Usage
 To run insight and the associated API, follow these steps:
@@ -31,7 +30,8 @@ To run insight and the associated API, follow these steps:
 ```
 git clone https://github.com/thirdweb-dev/insight.git
 ```
-2. Run the migration scripts here
+2. ~~Run the migration scripts here~~
+2. Apply the migrations from [here](internal/tools/)
 3. Create `config.yml` from `config.example.yml` and set the values by following the [config guide](#supported-configurations)
 4. Create `secrets.yml` from `secrects.example.yml` and set the needed credentials
 5. Build an instance
@@ -383,26 +383,37 @@ failureRecoverer:
 ```
 
 #### Storage
-This application has 3 kinds of strorage. Main, Staging and Orchestrator.
-Each of them takes similar configuration depending on the driver you want to use.
-
+This application has 3 kinds of storage: `main`, `staging` and `orchestrator`.
+Each of them takes similar configuration, slightly depending on the driver you want to use.
 There are no defaults, so this needs to be configured.
 
+For example, this can be a part of `config.yml`:
 ```yaml
 storage:
   main:
-    driver: "clickhouse"
     clickhouse:
-      host: "localhost"
       port: 3000
-      user: "admin"
-      password: "admin"
       database: "base"
-      disableTLS: false
+      disableTLS: true
   staging:
-    driver: "memory"
-    memory:
-      maxItems: 1000000
+    clickhouse:
+      port: 3000
+      database: "staging"
   orchestrator:
-    driver: "memory"
+    memory:
+      maxItems: 10000
+```
+With the corresponding `secrets.yml`:
+```yaml
+storage:
+  main:
+    clickhouse:
+      host: localhost
+      user: admin
+      password: password
+  staging:
+    clickhouse:
+      host: localhost
+      username: admin
+      password: password
 ```
