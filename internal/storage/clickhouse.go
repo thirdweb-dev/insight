@@ -516,10 +516,13 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 	return maxBlockNumber, nil
 }
 
-func (c *ClickHouseConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error) {
+func (c *ClickHouseConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error) {
 	query := fmt.Sprintf("SELECT block_number FROM %s.block_data WHERE is_deleted = 0", c.cfg.Database)
 	if chainId.Sign() > 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
+	}
+	if rangeStart.Sign() > 0 {
+		query += fmt.Sprintf(" AND block_number >= %s", rangeStart.String())
 	}
 	if rangeEnd.Sign() > 0 {
 		query += fmt.Sprintf(" AND block_number <= %s", rangeEnd.String())

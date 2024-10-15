@@ -194,14 +194,14 @@ func (m *MemoryConnector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) 
 	return maxBlockNumber, nil
 }
 
-func IsInRange(num *big.Int, rangeEnd *big.Int) bool {
+func IsInRange(num *big.Int, rangeStart *big.Int, rangeEnd *big.Int) bool {
 	if rangeEnd.Sign() == 0 {
 		return true
 	}
-	return num.Cmp(rangeEnd) <= 0
+	return num.Cmp(rangeStart) >= 0 && num.Cmp(rangeEnd) <= 0
 }
 
-func (m *MemoryConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (*big.Int, error) {
+func (m *MemoryConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
 	maxBlockNumber := new(big.Int)
 	for _, key := range m.cache.Keys() {
 		if strings.HasPrefix(key, fmt.Sprintf("blockData:%s:", chainId.String())) {
@@ -210,7 +210,7 @@ func (m *MemoryConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *b
 			if !ok {
 				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
 			}
-			if blockNumber.Cmp(maxBlockNumber) > 0 && IsInRange(blockNumber, rangeEnd) {
+			if blockNumber.Cmp(maxBlockNumber) > 0 && IsInRange(blockNumber, rangeStart, rangeEnd) {
 				maxBlockNumber = blockNumber
 			}
 		}
