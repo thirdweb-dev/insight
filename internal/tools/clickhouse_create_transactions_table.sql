@@ -12,6 +12,7 @@ CREATE TABLE transactions (
     `gas` UInt64,
     `gas_price` UInt256,
     `data` String,
+    `function_selector` FixedString(10),
     `max_fee_per_gas` UInt128,
     `max_priority_fee_per_gas` UInt128,
     `transaction_type` UInt8,
@@ -22,9 +23,10 @@ CREATE TABLE transactions (
     `is_deleted` UInt8 DEFAULT 0,
     `insert_timestamp` DateTime DEFAULT now(),
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
-    INDEX idx_block_number block_number TYPE minmax GRANULARITY 1,
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 1,
     INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 1,
     INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
-ORDER BY (chain_id, hash) SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+ORDER BY (chain_id, block_number, hash) SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

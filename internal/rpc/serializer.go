@@ -159,6 +159,7 @@ func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp ui
 		Gas:                  hexToUint64(tx["gas"]),
 		GasPrice:             hexToBigInt(tx["gasPrice"]),
 		Data:                 interfaceToString(tx["input"]),
+		FunctionSelector:     extractFunctionSelector(interfaceToString(tx["input"])),
 		MaxFeePerGas:         hexToBigInt(tx["maxFeePerGas"]),
 		MaxPriorityFeePerGas: hexToBigInt(tx["maxPriorityFeePerGas"]),
 		TransactionType:      uint8(hexToUint64(tx["type"])),
@@ -167,6 +168,16 @@ func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp ui
 		V:                    hexToBigInt(tx["v"]),
 		AccessListJson:       interfaceToJsonString(tx["accessList"]),
 	}
+}
+
+/**
+ * Extracts the function selector (first 4 bytes) from a transaction input.
+ */
+func extractFunctionSelector(s string) string {
+	if len(s) < 10 {
+		return ""
+	}
+	return s[0:10]
 }
 
 func serializeLogs(chainId *big.Int, rawLogs []map[string]interface{}, block common.Block) []common.Log {

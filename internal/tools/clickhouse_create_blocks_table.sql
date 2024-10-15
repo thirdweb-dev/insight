@@ -24,7 +24,7 @@ CREATE TABLE blocks (
     `insert_timestamp` DateTime DEFAULT now(),
     `is_deleted` UInt8 DEFAULT 0,
     INDEX idx_timestamp timestamp TYPE minmax GRANULARITY 1,
-    INDEX idx_number number TYPE minmax GRANULARITY 1,
+    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
-ORDER BY (chain_id, hash)
+ORDER BY (chain_id, number)
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
