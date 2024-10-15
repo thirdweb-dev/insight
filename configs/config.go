@@ -81,22 +81,22 @@ type RedisConfig struct {
 	DB       int    `mapstructure:"db"`
 }
 
-type RPCBatchSizeConfig struct {
+type RPCBatchRequestConfig struct {
 	BlocksPerRequest int `mapstructure:"blocksPerRequest"`
 	BatchDelay       int `mapstructure:"batchDelay"`
 }
 
-type RPCTracesConfig struct {
-	Enabled          bool `mapstructure:"enabled"`
-	BlocksPerRequest int  `mapstructure:"blocksPerRequest"`
-	BatchDelay       int  `mapstructure:"batchDelay"`
+type ToggleableRPCBatchRequestConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	RPCBatchRequestConfig
 }
 
 type RPCConfig struct {
-	URL    string             `mapstructure:"url"`
-	Blocks RPCBatchSizeConfig `mapstructure:"blocks"`
-	Logs   RPCBatchSizeConfig `mapstructure:"logs"`
-	Traces RPCTracesConfig    `mapstructure:"traces"`
+	URL           string                          `mapstructure:"url"`
+	Blocks        RPCBatchRequestConfig           `mapstructure:"blocks"`
+	Logs          RPCBatchRequestConfig           `mapstructure:"logs"`
+	BlockReceipts ToggleableRPCBatchRequestConfig `mapstructure:"blockReceipts"`
+	Traces        ToggleableRPCBatchRequestConfig `mapstructure:"traces"`
 }
 
 type APIConfig struct {

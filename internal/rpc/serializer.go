@@ -10,20 +10,17 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
-func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock], logs []RPCFetchBatchResult[common.RawLogs], traces []RPCFetchBatchResult[common.RawTraces]) []GetFullBlockResult {
-	results := make([]GetFullBlockResult, 0, len(blocks))
-
-	rawLogsMap := make(map[string]RPCFetchBatchResult[common.RawLogs])
-	for _, rawLogs := range logs {
-		rawLogsMap[rawLogs.BlockNumber.String()] = rawLogs
+func SerializeFullBlocks(chainId *big.Int, blocks *[]RPCFetchBatchResult[common.RawBlock], logs *[]RPCFetchBatchResult[common.RawLogs], traces *[]RPCFetchBatchResult[common.RawTraces], receipts *[]RPCFetchBatchResult[common.RawReceipts]) []GetFullBlockResult {
+	if blocks == nil {
+		return []GetFullBlockResult{}
 	}
+	results := make([]GetFullBlockResult, 0, len(*blocks))
 
-	rawTracesMap := make(map[string]RPCFetchBatchResult[common.RawTraces])
-	for _, rawTraces := range traces {
-		rawTracesMap[rawTraces.BlockNumber.String()] = rawTraces
-	}
+	rawLogsMap := mapBatchResultsByBlockNumber[common.RawLogs](logs)
+	rawReceiptsMap := mapBatchResultsByBlockNumber[common.RawReceipts](receipts)
+	rawTracesMap := mapBatchResultsByBlockNumber[common.RawTraces](traces)
 
-	for _, rawBlock := range blocks {
+	for _, rawBlock := range *blocks {
 		result := GetFullBlockResult{
 			BlockNumber: rawBlock.BlockNumber,
 		}
@@ -42,13 +39,22 @@ func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.R
 
 		result.Data.Block = serializeBlock(chainId, rawBlock.Result)
 		blockTimestamp := result.Data.Block.Timestamp
-		result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp)
 
-		if rawLogs, exists := rawLogsMap[rawBlock.BlockNumber.String()]; exists {
-			if rawLogs.Error != nil {
-				result.Error = rawLogs.Error
+		if rawReceipts, exists := rawReceiptsMap[rawBlock.BlockNumber.String()]; exists {
+			if rawReceipts.Error != nil {
+				result.Error = rawReceipts.Error
 			} else {
-				result.Data.Logs = serializeLogs(chainId, rawLogs.Result, result.Data.Block)
+				result.Data.Logs = serializeLogsFromReceipts(chainId, &rawReceipts.Result, result.Data.Block)
+				result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp, &rawReceipts.Result)
+			}
+		} else {
+			if rawLogs, exists := rawLogsMap[rawBlock.BlockNumber.String()]; exists {
+				if rawLogs.Error != nil {
+					result.Error = rawLogs.Error
+				} else {
+					result.Data.Logs = serializeLogs(chainId, rawLogs.Result, result.Data.Block)
+					result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp, nil)
+				}
 			}
 		}
 
@@ -66,6 +72,17 @@ func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.R
 	}
 
 	return results
+}
+
+func mapBatchResultsByBlockNumber[T any](results *[]RPCFetchBatchResult[T]) map[string]*RPCFetchBatchResult[T] {
+	if results == nil {
+		return make(map[string]*RPCFetchBatchResult[T], 0)
+	}
+	resultsMap := make(map[string]*RPCFetchBatchResult[T], len(*results))
+	for _, result := range *results {
+		resultsMap[result.BlockNumber.String()] = &result
+	}
+	return resultsMap
 }
 
 func SerializeBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock]) []GetBlocksResult {
@@ -122,23 +139,32 @@ func serializeBlock(chainId *big.Int, block common.RawBlock) common.Block {
 	}
 }
 
-func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTimestamp uint64) []common.Transaction {
+func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTimestamp uint64, receipts *common.RawReceipts) []common.Transaction {
 	if len(transactions) == 0 {
 		return []common.Transaction{}
 	}
+	receiptMap := make(map[string]*common.RawReceipt)
+	if receipts != nil && len(*receipts) > 0 {
+		for _, receipt := range *receipts {
+			txHash := interfaceToString(receipt["transactionHash"])
+			if txHash != "" {
+				receiptMap[txHash] = &receipt
+			}
+		}
+	}
 	serializedTransactions := make([]common.Transaction, 0, len(transactions))
-	for _, tx := range transactions {
-		serializedTransactions = append(serializedTransactions, serializeTransaction(chainId, tx, blockTimestamp))
+	for _, rawTx := range transactions {
+		tx, ok := rawTx.(map[string]interface{})
+		if !ok {
+			log.Debug().Msgf("Failed to serialize transaction: %v", rawTx)
+			continue
+		}
+		serializedTransactions = append(serializedTransactions, serializeTransaction(chainId, tx, blockTimestamp, receiptMap[interfaceToString(tx["hash"])]))
 	}
 	return serializedTransactions
 }
 
-func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp uint64) common.Transaction {
-	tx, ok := rawTx.(map[string]interface{})
-	if !ok {
-		log.Debug().Msgf("Failed to serialize transaction: %v", rawTx)
-		return common.Transaction{}
-	}
+func serializeTransaction(chainId *big.Int, tx map[string]interface{}, blockTimestamp uint64, receipt *common.RawReceipt) common.Transaction {
 	return common.Transaction{
 		ChainId:          chainId,
 		Hash:             interfaceToString(tx["hash"]),
@@ -166,7 +192,78 @@ func serializeTransaction(chainId *big.Int, rawTx interface{}, blockTimestamp ui
 		R:                    hexToBigInt(tx["r"]),
 		S:                    hexToBigInt(tx["s"]),
 		V:                    hexToBigInt(tx["v"]),
-		AccessListJson:       interfaceToJsonString(tx["accessList"]),
+		AccessListJson: func() *string {
+			if tx["accessList"] != nil {
+				jsonString := interfaceToJsonString(tx["accessList"])
+				if jsonString == "" {
+					return nil
+				}
+				return &jsonString
+			}
+			return nil
+		}(),
+		ContractAddress: func() *string {
+			if receipt != nil {
+				contractAddress := interfaceToString((*receipt)["contractAddress"])
+				if contractAddress == "" {
+					return nil
+				}
+				return &contractAddress
+			}
+			return nil
+		}(),
+		GasUsed: func() *uint64 {
+			if receipt != nil {
+				gasUsed := hexToUint64((*receipt)["gasUsed"])
+				return &gasUsed
+			}
+			return nil
+		}(),
+		CumulativeGasUsed: func() *uint64 {
+			if receipt != nil {
+				cumulativeGasUsed := hexToUint64((*receipt)["cumulativeGasUsed"])
+				return &cumulativeGasUsed
+			}
+			return nil
+		}(),
+		EffectiveGasPrice: func() *big.Int {
+			if receipt != nil {
+				effectiveGasPrice := hexToBigInt((*receipt)["effectiveGasPrice"])
+				return effectiveGasPrice
+			}
+			return nil
+		}(),
+		BlobGasUsed: func() *uint64 {
+			if receipt != nil {
+				blobGasUsed := hexToUint64((*receipt)["blobGasUsed"])
+				return &blobGasUsed
+			}
+			return nil
+		}(),
+		BlobGasPrice: func() *big.Int {
+			if receipt != nil {
+				blobGasPrice := hexToBigInt((*receipt)["blobGasPrice"])
+				return blobGasPrice
+			}
+			return nil
+		}(),
+		LogsBloom: func() *string {
+			if receipt != nil {
+				logsBloom := interfaceToString((*receipt)["logsBloom"])
+				if logsBloom == "" {
+					return nil
+				}
+				return &logsBloom
+			}
+			return nil
+		}(),
+		Status: func() *uint64 {
+			if receipt != nil {
+				status := hexToUint64((*receipt)["status"])
+				return &status
+			}
+			return nil
+		}(),
 	}
 }
 
@@ -178,6 +275,30 @@ func extractFunctionSelector(s string) string {
 		return ""
 	}
 	return s[0:10]
+}
+
+func serializeLogsFromReceipts(chainId *big.Int, rawReceipts *[]map[string]interface{}, block common.Block) []common.Log {
+	logs := make([]common.Log, 0)
+	if rawReceipts == nil {
+		return logs
+	}
+
+	for _, receipt := range *rawReceipts {
+		rawLogs, ok := receipt["logs"].([]interface{})
+		if !ok {
+			log.Debug().Msgf("Failed to serialize logs: %v", receipt["logs"])
+			continue
+		}
+		for _, rawLog := range rawLogs {
+			logMap, ok := rawLog.(map[string]interface{})
+			if !ok {
+				log.Debug().Msgf("Invalid log format: %v", rawLog)
+				continue
+			}
+			logs = append(logs, serializeLog(chainId, logMap, block))
+		}
+	}
+	return logs
 }
 
 func serializeLogs(chainId *big.Int, rawLogs []map[string]interface{}, block common.Block) []common.Log {

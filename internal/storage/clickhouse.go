@@ -112,7 +112,7 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction) erro
 		INSERT INTO ` + c.cfg.Database + `.transactions (
 			chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index,
 			from_address, to_address, value, gas, gas_price, data, function_selector, max_fee_per_gas, max_priority_fee_per_gas,
-			transaction_type, r, s, v, access_list
+			transaction_type, r, s, v, access_list, contract_address, gas_used, cumulative_gas_used, effective_gas_price, blob_gas_used, blob_gas_price, logs_bloom, status
 		)
 	`
 	batch, err := c.conn.PrepareBatch(context.Background(), query)
@@ -142,6 +142,14 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction) erro
 			tx.S,
 			tx.V,
 			tx.AccessListJson,
+			tx.ContractAddress,
+			tx.GasUsed,
+			tx.CumulativeGasUsed,
+			tx.EffectiveGasPrice,
+			tx.BlobGasUsed,
+			tx.BlobGasPrice,
+			tx.LogsBloom,
+			tx.Status,
 		)
 		if err != nil {
 			return err

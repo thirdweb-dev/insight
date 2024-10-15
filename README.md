@@ -136,6 +136,43 @@ rpc:
     batchDelay: 100
 ```
 
+#### RPC Block Receipts Enabled
+If this is `true`, will use `eth_getBlockReceipts` instead of `eth_getLogs` if the RPC supports it. Allows getting receipt data for transactions, but is not supported by every RPC. Default is `false`.
+
+cmd: `--rpc-block-receipts-enabled`
+env: `RPC_BLOCKRECEIPTS_ENABLED`
+yaml:
+```yaml
+rpc:
+  blockReceipts:
+    enabled: true
+```
+
+#### RPC Block Receipts Blocks Per Request
+How many blocks at a time to fetch block receipts for from the RPC. Default is 250.
+Has no effect if it's larger than RPC blocks per request.
+
+cmd: `--rpc-block-receipts-blocksPerRequest`
+env: `RPC_BLOCKRECEIPTS_BLOCKSPERREQUEST`
+yaml:
+```yaml
+rpc:
+  blockReceipts:
+    blocksPerRequest: 100
+```
+
+#### RPC Block Receipts Batch Delay
+Milliseconds to wait between batches of block receipts when fetching from the RPC. Default is 0.
+
+cmd: `--rpc-block-receipts-batchDelay`
+env: `RPC_BLOCKRECEIPTS_BATCHDELAY`
+yaml:
+```yaml
+rpc:
+  blockReceipts:
+    batchDelay: 100
+```
+
 #### RPC Traces Enabled
 Whether to enable fetching traces from the RPC. Default is `true`, but it will try to detect if the RPC supports traces automatically.
 

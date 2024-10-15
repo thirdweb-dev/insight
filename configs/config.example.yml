@@ -5,6 +5,10 @@ rpc:
   logs:
     blocksPerRequest: 400
     batchDelay: 100
+  blockReceipts:
+    enabled: true
+    blocksPerRequest: 500
+    batchDelay: 100
   traces:
     enabled: true
     blocksPerRequest: 200
@@ -28,6 +32,11 @@ failureRecoverer:
   enabled: true
   interval: 10000
   blocksPerRun: 100
+
+reorgHandler:
+  enabled: true
+  interval: 1000
+  blocksPerScan: 50
 
 storage:
   main:

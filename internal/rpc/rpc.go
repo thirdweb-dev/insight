@@ -27,9 +27,10 @@ type GetBlocksResult struct {
 }
 
 type BlocksPerRequestConfig struct {
-	Blocks int
-	Logs   int
-	Traces int
+	Blocks   int
+	Logs     int
+	Traces   int
+	Receipts int
 }
 
 type IRPCClient interface {
@@ -44,13 +45,14 @@ type IRPCClient interface {
 }
 
 type Client struct {
-	RPCClient          *gethRpc.Client
-	EthClient          *ethclient.Client
-	supportsTraceBlock bool
-	isWebsocket        bool
-	url                string
-	chainID            *big.Int
-	blocksPerRequest   BlocksPerRequestConfig
+	RPCClient             *gethRpc.Client
+	EthClient             *ethclient.Client
+	supportsTraceBlock    bool
+	supportsBlockReceipts bool
+	isWebsocket           bool
+	url                   string
+	chainID               *big.Int
+	blocksPerRequest      BlocksPerRequestConfig
 }
 
 func Initialize() (IRPCClient, error) {
@@ -111,28 +113,75 @@ func (rpc *Client) Close() {
 }
 
 func (rpc *Client) checkSupportedMethods() error {
+	if err := rpc.checkGetBlockByNumberSupport(); err != nil {
+		return err
+	}
+	if err := rpc.checkGetBlockReceiptsSupport(); err != nil {
+		return err
+	}
+	if err := rpc.checkGetLogsSupport(); err != nil {
+		return err
+	}
+	if err := rpc.checkTraceBlockSupport(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (rpc *Client) checkGetBlockByNumberSupport() error {
 	var blockByNumberResult interface{}
 	err := rpc.RPCClient.Call(&blockByNumberResult, "eth_getBlockByNumber", "latest", true)
 	if err != nil {
 		return fmt.Errorf("eth_getBlockByNumber method not supported: %v", err)
 	}
 	log.Debug().Msg("eth_getBlockByNumber method supported")
+	return nil
+}
 
+func (rpc *Client) checkGetBlockReceiptsSupport() error {
+	if config.Cfg.RPC.BlockReceipts.Enabled {
+		var getBlockReceiptsResult interface{}
+		receiptsErr := rpc.RPCClient.Call(&getBlockReceiptsResult, "eth_getBlockReceipts", "latest")
+		if receiptsErr != nil {
+			log.Warn().Err(receiptsErr).Msg("eth_getBlockReceipts method not supported")
+			return fmt.Errorf("eth_getBlockReceipts method not supported: %v", receiptsErr)
+		} else {
+			rpc.supportsBlockReceipts = true
+			log.Debug().Msg("eth_getBlockReceipts method supported")
+		}
+	} else {
+		rpc.supportsBlockReceipts = false
+		log.Debug().Msg("eth_getBlockReceipts method disabled")
+	}
+	return nil
+}
+
+func (rpc *Client) checkGetLogsSupport() error {
+	if rpc.supportsBlockReceipts {
+		return nil
+	}
 	var getLogsResult interface{}
 	logsErr := rpc.RPCClient.Call(&getLogsResult, "eth_getLogs", map[string]string{"fromBlock": "0x0", "toBlock": "0x0"})
 	if logsErr != nil {
 		return fmt.Errorf("eth_getLogs method not supported: %v", logsErr)
 	}
 	log.Debug().Msg("eth_getLogs method supported")
+	return nil
+}
 
-	var traceBlockResult interface{}
+func (rpc *Client) checkTraceBlockSupport() error {
 	if config.Cfg.RPC.Traces.Enabled {
+		var traceBlockResult interface{}
 		if traceBlockErr := rpc.RPCClient.Call(&traceBlockResult, "trace_block", "latest"); traceBlockErr != nil {
 			log.Warn().Err(traceBlockErr).Msg("Optional method trace_block not supported")
+		} else {
+			rpc.supportsTraceBlock = true
+			log.Debug().Msg("trace_block method supported")
 		}
+	} else {
+		rpc.supportsTraceBlock = false
+		log.Debug().Msg("trace_block method disabled")
 	}
-	rpc.supportsTraceBlock = traceBlockResult != nil
-	log.Debug().Msgf("trace_block method supported: %v", rpc.supportsTraceBlock)
 	return nil
 }
 
@@ -147,33 +196,44 @@ func (rpc *Client) setChainID() error {
 
 func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 	var wg sync.WaitGroup
-	var blocks []RPCFetchBatchResult[common.RawBlock]
-	var logs []RPCFetchBatchResult[common.RawLogs]
-	var traces []RPCFetchBatchResult[common.RawTraces]
-
+	var blocks *[]RPCFetchBatchResult[common.RawBlock]
+	var logs *[]RPCFetchBatchResult[common.RawLogs]
+	var traces *[]RPCFetchBatchResult[common.RawTraces]
+	var receipts *[]RPCFetchBatchResult[common.RawReceipts]
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		blocks = RPCFetchBatch[common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithTransactionsParams)
+		result := RPCFetchBatch[common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithTransactionsParams)
+		blocks = &result
 	}()
 
-	go func() {
-		defer wg.Done()
-		logs = RPCFetchInBatches[common.RawLogs](rpc, blockNumbers, rpc.blocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
-	}()
+	if rpc.supportsBlockReceipts {
+		go func() {
+			defer wg.Done()
+			result := RPCFetchInBatches[common.RawReceipts](rpc, blockNumbers, rpc.blocksPerRequest.Receipts, config.Cfg.RPC.BlockReceipts.BatchDelay, "eth_getBlockReceipts", GetBlockReceiptsParams)
+			receipts = &result
+		}()
+	} else {
+		go func() {
+			defer wg.Done()
+			result := RPCFetchInBatches[common.RawLogs](rpc, blockNumbers, rpc.blocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
+			logs = &result
+		}()
+	}
 
 	if rpc.supportsTraceBlock {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			traces = RPCFetchInBatches[common.RawTraces](rpc, blockNumbers, rpc.blocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
+			result := RPCFetchInBatches[common.RawTraces](rpc, blockNumbers, rpc.blocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
+			traces = &result
 		}()
 	}
 
 	wg.Wait()
 
-	return SerializeFullBlocks(rpc.chainID, blocks, logs, traces)
+	return SerializeFullBlocks(rpc.chainID, blocks, logs, traces, receipts)
 }
 
 func (rpc *Client) GetBlocks(blockNumbers []*big.Int) []GetBlocksResult {
