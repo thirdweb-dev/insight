@@ -43,17 +43,17 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	}
 	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
 	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
-	lastPolledBlock, err := storage.StagingStorage.GetLastStagedBlockNumber(rpc.GetChainID(), untilBlock)
-	if err != nil || lastPolledBlock == nil || lastPolledBlock.Sign() <= 0 {
-		lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
-		log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
+	lastPolledBlock := new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
+	if config.Cfg.Poller.ForceFromBlock {
+		log.Debug().Msgf("ForceFromBlock is enabled, setting last polled block to %s", lastPolledBlock.String())
 	} else {
-		// In the case where the start block in staging introduces a gap with main storage,
-		// This hack allows us to re-poll from the start block without having to delete the staging data
-		if config.Cfg.Poller.ForceFromBlock {
-			lastPolledBlock = new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
+		highestBlockFromStaging, err := storage.StagingStorage.GetLastStagedBlockNumber(rpc.GetChainID(), pollFromBlock, untilBlock)
+		if err != nil || highestBlockFromStaging == nil || highestBlockFromStaging.Sign() <= 0 {
+			log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
+		} else {
+			lastPolledBlock = highestBlockFromStaging
+			log.Debug().Msgf("Last polled block found in staging: %s", lastPolledBlock.String())
 		}
-		log.Info().Msgf("Last polled block found: %s", lastPolledBlock.String())
 	}
 	return &Poller{
 		rpc:               rpc,

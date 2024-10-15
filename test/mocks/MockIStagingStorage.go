@@ -72,9 +72,9 @@ func (_c *MockIStagingStorage_DeleteStagingData_Call) RunAndReturn(run func(*[]c
 	return _c
 }
 
-// GetLastStagedBlockNumber provides a mock function with given fields: chainId, rangeEnd
-func (_m *MockIStagingStorage) GetLastStagedBlockNumber(chainId *big.Int, rangeEnd *big.Int) (*big.Int, error) {
-	ret := _m.Called(chainId, rangeEnd)
+// GetLastStagedBlockNumber provides a mock function with given fields: chainId, rangeStart, rangeEnd
+func (_m *MockIStagingStorage) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
+	ret := _m.Called(chainId, rangeStart, rangeEnd)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLastStagedBlockNumber")
@@ -82,19 +82,19 @@ func (_m *MockIStagingStorage) GetLastStagedBlockNumber(chainId *big.Int, rangeE
 
 	var r0 *big.Int
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) (*big.Int, error)); ok {
-		return rf(chainId, rangeEnd)
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) (*big.Int, error)); ok {
+		return rf(chainId, rangeStart, rangeEnd)
 	}
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) *big.Int); ok {
-		r0 = rf(chainId, rangeEnd)
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) *big.Int); ok {
+		r0 = rf(chainId, rangeStart, rangeEnd)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*big.Int)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int) error); ok {
-		r1 = rf(chainId, rangeEnd)
+	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int, *big.Int) error); ok {
+		r1 = rf(chainId, rangeStart, rangeEnd)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -109,14 +109,15 @@ type MockIStagingStorage_GetLastStagedBlockNumber_Call struct {
 
 // GetLastStagedBlockNumber is a helper method to define mock.On call
 //   - chainId *big.Int
+//   - rangeStart *big.Int
 //   - rangeEnd *big.Int
-func (_e *MockIStagingStorage_Expecter) GetLastStagedBlockNumber(chainId interface{}, rangeEnd interface{}) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
-	return &MockIStagingStorage_GetLastStagedBlockNumber_Call{Call: _e.mock.On("GetLastStagedBlockNumber", chainId, rangeEnd)}
+func (_e *MockIStagingStorage_Expecter) GetLastStagedBlockNumber(chainId interface{}, rangeStart interface{}, rangeEnd interface{}) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
+	return &MockIStagingStorage_GetLastStagedBlockNumber_Call{Call: _e.mock.On("GetLastStagedBlockNumber", chainId, rangeStart, rangeEnd)}
 }
 
-func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) Run(run func(chainId *big.Int, rangeEnd *big.Int)) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
+func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) Run(run func(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int)) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*big.Int), args[1].(*big.Int))
+		run(args[0].(*big.Int), args[1].(*big.Int), args[2].(*big.Int))
 	})
 	return _c
 }
@@ -126,7 +127,7 @@ func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) Return(maxBlockNumb
 	return _c
 }
 
-func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) RunAndReturn(run func(*big.Int, *big.Int) (*big.Int, error)) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
+func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) RunAndReturn(run func(*big.Int, *big.Int, *big.Int) (*big.Int, error)) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
 	_c.Call.Return(run)
 	return _c
 }
