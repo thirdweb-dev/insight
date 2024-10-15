@@ -21,3 +21,7 @@ func GetLogsParams(blockNum *big.Int) []interface{} {
 func TraceBlockParams(blockNum *big.Int) []interface{} {
 	return []interface{}{hexutil.EncodeBig(blockNum)}
 }
+
+func GetBlockReceiptsParams(blockNum *big.Int) []interface{} {
+	return []interface{}{hexutil.EncodeBig(blockNum)}
+}

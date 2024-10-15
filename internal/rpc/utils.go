@@ -6,9 +6,10 @@ import (
 
 // TODO: we should detect this automatically
 const (
-	DEFAULT_BLOCKS_PER_REQUEST = 1000
-	DEFAULT_LOGS_PER_REQUEST   = 100
-	DEFAULT_TRACES_PER_REQUEST = 100
+	DEFAULT_BLOCKS_PER_REQUEST   = 1000
+	DEFAULT_LOGS_PER_REQUEST     = 100
+	DEFAULT_TRACES_PER_REQUEST   = 100
+	DEFAULT_RECEIPTS_PER_REQUEST = 250
 )
 
 func GetBlockPerRequestConfig() BlocksPerRequestConfig {
@@ -24,10 +25,14 @@ func GetBlockPerRequestConfig() BlocksPerRequestConfig {
 	if tracesBlocksPerRequest == 0 {
 		tracesBlocksPerRequest = DEFAULT_TRACES_PER_REQUEST
 	}
-
+	blockReceiptsBlocksPerRequest := config.Cfg.RPC.BlockReceipts.BlocksPerRequest
+	if blockReceiptsBlocksPerRequest == 0 {
+		blockReceiptsBlocksPerRequest = DEFAULT_RECEIPTS_PER_REQUEST
+	}
 	return BlocksPerRequestConfig{
-		Blocks: blocksPerRequest,
-		Logs:   logsBlocksPerRequest,
-		Traces: tracesBlocksPerRequest,
+		Blocks:   blocksPerRequest,
+		Logs:     logsBlocksPerRequest,
+		Traces:   tracesBlocksPerRequest,
+		Receipts: blockReceiptsBlocksPerRequest,
 	}
 }

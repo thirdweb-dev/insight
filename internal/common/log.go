@@ -18,3 +18,5 @@ type Log struct {
 }
 
 type RawLogs = []map[string]interface{}
+type RawReceipts = []RawReceipt
+type RawReceipt = map[string]interface{}

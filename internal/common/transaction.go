@@ -25,5 +25,13 @@ type Transaction struct {
 	R                    *big.Int `json:"r"`
 	S                    *big.Int `json:"s"`
 	V                    *big.Int `json:"v"`
-	AccessListJson       string   `json:"access_list_json"`
+	AccessListJson       *string  `json:"access_list_json"`
+	ContractAddress      *string  `json:"contract_address"`
+	GasUsed              *uint64  `json:"gas_used"`
+	CumulativeGasUsed    *uint64  `json:"cumulative_gas_used"`
+	EffectiveGasPrice    *big.Int `json:"effective_gas_price"`
+	BlobGasUsed          *uint64  `json:"blob_gas_used"`
+	BlobGasPrice         *big.Int `json:"blob_gas_price"`
+	LogsBloom            *string  `json:"logs_bloom"`
+	Status               *uint64  `json:"status"`
 }
