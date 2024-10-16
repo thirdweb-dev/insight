@@ -39,7 +39,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
-		pollFromBlock:     big.NewInt(int64(config.Cfg.Poller.FromBlock)),
+		pollFromBlock:     big.NewInt(int64(config.Cfg.Committer.FromBlock)),
 		rpc:               rpc,
 	}
 }

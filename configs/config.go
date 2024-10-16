@@ -26,6 +26,7 @@ type CommitterConfig struct {
 	Enabled         bool `mapstructure:"enabled"`
 	Interval        int  `mapstructure:"interval"`
 	BlocksPerCommit int  `mapstructure:"blocksPerCommit"`
+	FromBlock       int  `mapstructure:"fromBlock"`
 }
 
 type ReorgHandlerConfig struct {

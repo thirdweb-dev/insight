@@ -331,6 +331,17 @@ committer:
   blocksPerCommit: 1000
 ```
 
+#### Committer From Block
+From which block to start committing. Default is `0`.
+
+cmd: `--committer-from-block`
+env: `COMMITTER_FROMBLOCK`
+yaml:
+```yaml
+committer:
+  fromBlock: 20000000
+```
+
 #### Reorg Handler
 Whether to enable the reorg handler. Default is `true`.
 
