@@ -5,9 +5,6 @@ on:
     types: [published]
   workflow_dispatch:
 
-env:
-  DOCKER_IMAGE: thirdweb/indexer
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -28,7 +25,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ vars.DOCKER_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
