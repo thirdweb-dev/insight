@@ -342,9 +342,19 @@ func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (QueryResult[commo
 	return executeQuery[common.Transaction](c, "transactions", columns, qf, scanTransaction)
 }
 
-func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], error) {
-	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
-	return executeQuery[common.Log](c, "logs", columns, qf, scanLog)
+func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult[map[string]interface{}], error) {
+	var columns string
+
+	if len(qf.GroupBy) > 0 || len(qf.Aggregates) > 0 {
+		// Build columns for SELECT when grouping or aggregating
+		selectColumns := append(qf.GroupBy, qf.Aggregates...)
+		columns = strings.Join(selectColumns, ", ")
+	} else {
+		// Default columns when not grouping
+		columns = "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
+	}
+
+	return executeQuery[map[string]interface{}](c, "logs", columns, qf, scanRowToMap)
 }
 
 func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf QueryFilter, scanFunc func(driver.Rows) (T, error)) (QueryResult[T], error) {
@@ -397,7 +407,13 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 		query = addFilterParams(key, strings.ToLower(value), query)
 	}
 
-	// Add sort by clause
+	// Add GROUP BY clause if specified
+	if len(qf.GroupBy) > 0 {
+		groupByColumns := strings.Join(qf.GroupBy, ", ")
+		query += fmt.Sprintf(" GROUP BY %s", groupByColumns)
+	}
+
+	// Add ORDER BY clause
 	if qf.SortBy != "" {
 		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
 	}
@@ -554,6 +570,27 @@ func scanLog(rows driver.Rows) (common.Log, error) {
 		}
 	}
 	return log, nil
+}
+
+func scanRowToMap(rows driver.Rows) (map[string]interface{}, error) {
+	columns := rows.Columns()
+	values := make([]interface{}, len(columns))
+	valuePtrs := make([]interface{}, len(columns))
+
+	for i := range columns {
+		valuePtrs[i] = &values[i]
+	}
+
+	if err := rows.Scan(valuePtrs...); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]interface{})
+	for i, col := range columns {
+		result[col] = values[i]
+	}
+
+	return result, nil
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {

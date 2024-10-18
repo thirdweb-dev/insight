@@ -135,7 +135,7 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
 
 	logs, err := mainStorage.GetLogs(storage.QueryFilter{
 		FilterParams:    queryParams.FilterParams,
-		GroupBy:         []string{queryParams.GroupBy},
+		GroupBy:         queryParams.GroupBy,
 		SortBy:          queryParams.SortBy,
 		SortOrder:       queryParams.SortOrder,
 		Page:            queryParams.Page,
