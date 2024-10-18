@@ -54,7 +54,7 @@ type IMainStorage interface {
 
 	GetBlocks(qf QueryFilter) (blocks []common.Block, err error)
 	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
-	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
+	GetLogs(qf QueryFilter) (logs QueryResult[map[string]interface{}], err error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	/**
