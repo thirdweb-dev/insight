@@ -30,7 +30,7 @@ type QueryParams struct {
 	// @Description Map of filter parameters
 	FilterParams map[string]string `schema:"-"`
 	// @Description Field to group results by
-	GroupBy string `schema:"group_by"`
+	GroupBy []string `schema:"group_by"`
 	// @Description Field to sort results by
 	SortBy string `schema:"sort_by"`
 	// @Description Sort order (asc or desc)
