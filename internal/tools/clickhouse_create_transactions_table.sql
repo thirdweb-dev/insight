@@ -37,4 +37,6 @@ CREATE TABLE transactions (
     INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
     INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
-ORDER BY (chain_id, block_number, hash) SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+ORDER BY (chain_id, block_number, hash)
+PARTITION BY chain_id
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

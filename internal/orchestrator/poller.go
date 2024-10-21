@@ -25,6 +25,7 @@ type Poller struct {
 	storage           storage.IStorage
 	lastPolledBlock   *big.Int
 	pollUntilBlock    *big.Int
+	parallelPollers   int
 }
 
 type BlockNumberWithError struct {
@@ -62,6 +63,7 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 		storage:           storage,
 		lastPolledBlock:   lastPolledBlock,
 		pollUntilBlock:    untilBlock,
+		parallelPollers:   config.Cfg.Poller.ParallelPollers,
 	}
 }
 
@@ -69,12 +71,10 @@ func (p *Poller) Start() {
 	interval := time.Duration(p.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
 
-	// TODO: make this configurable?
-	const numWorkers = 5
-	tasks := make(chan struct{}, numWorkers)
+	tasks := make(chan struct{}, p.parallelPollers)
 	var blockRangeMutex sync.Mutex
 
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < p.parallelPollers; i++ {
 		go func() {
 			for range tasks {
 				blockRangeMutex.Lock()
@@ -155,7 +155,7 @@ func (p *Poller) getEndBlockForRange(startBlock *big.Int, latestBlock *big.Int) 
 		endBlock = latestBlock
 	}
 	if p.reachedPollLimit(endBlock) {
-		log.Debug().Msgf("End block %s is greater than poll until block %s, setting to poll until block", endBlock, p.pollUntilBlock)
+		log.Debug().Msgf("End block %s is greater than or equal to poll until block %s, setting range end to poll until block", endBlock, p.pollUntilBlock)
 		endBlock = p.pollUntilBlock
 	}
 	return endBlock
