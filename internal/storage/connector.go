@@ -18,16 +18,17 @@ type QueryFilter struct {
 	Page            int
 	Limit           int
 	Offset          int
-	Aggregates      []string
+	Aggregates      []string // e.g., ["COUNT(*) AS count", "SUM(amount) AS total_amount"]
 	FromAddress     string
 	ContractAddress string
 	Signature       string
 }
 type QueryResult[T any] struct {
 	// TODO: findout how to only allow Log/transaction arrays or split the result
-	Data       []T               `json:"data"`
-	Aggregates map[string]string `json:"aggregates"`
+	Data       []T                      `json:"data"`
+	Aggregates []map[string]interface{} `json:"aggregates"`
 }
+
 type IStorage struct {
 	OrchestratorStorage IOrchestratorStorage
 	MainStorage         IMainStorage
@@ -54,7 +55,8 @@ type IMainStorage interface {
 
 	GetBlocks(qf QueryFilter) (blocks []common.Block, err error)
 	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
-	GetLogs(qf QueryFilter) (logs QueryResult[map[string]interface{}], err error)
+	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
+	GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error)
 	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	/**

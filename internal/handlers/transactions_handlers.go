@@ -163,7 +163,7 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 			TotalPages:      0, // TODO: Implement total pages count
 		},
 		Data:         result.Data,
-		Aggregations: result.Aggregates,
+		Aggregations: nil,
 	}
 
 	c.JSON(http.StatusOK, response)
