@@ -73,6 +73,63 @@ func (_c *MockIMainStorage_DeleteBlockData_Call) RunAndReturn(run func(*big.Int,
 	return _c
 }
 
+// GetAggregations provides a mock function with given fields: table, qf
+func (_m *MockIMainStorage) GetAggregations(table string, qf storage.QueryFilter) (storage.QueryResult[interface{}], error) {
+	ret := _m.Called(table, qf)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAggregations")
+	}
+
+	var r0 storage.QueryResult[interface{}]
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, storage.QueryFilter) (storage.QueryResult[interface{}], error)); ok {
+		return rf(table, qf)
+	}
+	if rf, ok := ret.Get(0).(func(string, storage.QueryFilter) storage.QueryResult[interface{}]); ok {
+		r0 = rf(table, qf)
+	} else {
+		r0 = ret.Get(0).(storage.QueryResult[interface{}])
+	}
+
+	if rf, ok := ret.Get(1).(func(string, storage.QueryFilter) error); ok {
+		r1 = rf(table, qf)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_GetAggregations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAggregations'
+type MockIMainStorage_GetAggregations_Call struct {
+	*mock.Call
+}
+
+// GetAggregations is a helper method to define mock.On call
+//   - table string
+//   - qf storage.QueryFilter
+func (_e *MockIMainStorage_Expecter) GetAggregations(table interface{}, qf interface{}) *MockIMainStorage_GetAggregations_Call {
+	return &MockIMainStorage_GetAggregations_Call{Call: _e.mock.On("GetAggregations", table, qf)}
+}
+
+func (_c *MockIMainStorage_GetAggregations_Call) Run(run func(table string, qf storage.QueryFilter)) *MockIMainStorage_GetAggregations_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(storage.QueryFilter))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_GetAggregations_Call) Return(_a0 storage.QueryResult[interface{}], _a1 error) *MockIMainStorage_GetAggregations_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIMainStorage_GetAggregations_Call) RunAndReturn(run func(string, storage.QueryFilter) (storage.QueryResult[interface{}], error)) *MockIMainStorage_GetAggregations_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBlocks provides a mock function with given fields: qf
 func (_m *MockIMainStorage) GetBlocks(qf storage.QueryFilter) ([]common.Block, error) {
 	ret := _m.Called(qf)
@@ -132,22 +189,22 @@ func (_c *MockIMainStorage_GetBlocks_Call) RunAndReturn(run func(storage.QueryFi
 }
 
 // GetLogs provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetLogs(qf storage.QueryFilter) (storage.QueryResult[map[string]interface{}], error) {
+func (_m *MockIMainStorage) GetLogs(qf storage.QueryFilter) (storage.QueryResult[common.Log], error) {
 	ret := _m.Called(qf)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLogs")
 	}
 
-	var r0 storage.QueryResult[map[string]interface{}]
+	var r0 storage.QueryResult[common.Log]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[map[string]interface{}], error)); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Log], error)); ok {
 		return rf(qf)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[map[string]interface{}]); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Log]); ok {
 		r0 = rf(qf)
 	} else {
-		r0 = ret.Get(0).(storage.QueryResult[map[string]interface{}])
+		r0 = ret.Get(0).(storage.QueryResult[common.Log])
 	}
 
 	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
@@ -177,12 +234,12 @@ func (_c *MockIMainStorage_GetLogs_Call) Run(run func(qf storage.QueryFilter)) *
 	return _c
 }
 
-func (_c *MockIMainStorage_GetLogs_Call) Return(logs storage.QueryResult[map[string]interface{}], err error) *MockIMainStorage_GetLogs_Call {
+func (_c *MockIMainStorage_GetLogs_Call) Return(logs storage.QueryResult[common.Log], err error) *MockIMainStorage_GetLogs_Call {
 	_c.Call.Return(logs, err)
 	return _c
 }
 
-func (_c *MockIMainStorage_GetLogs_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[map[string]interface{}], error)) *MockIMainStorage_GetLogs_Call {
+func (_c *MockIMainStorage_GetLogs_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Log], error)) *MockIMainStorage_GetLogs_Call {
 	_c.Call.Return(run)
 	return _c
 }

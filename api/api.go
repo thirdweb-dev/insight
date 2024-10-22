@@ -70,7 +70,7 @@ type QueryResponse struct {
 	// @Description Query result data
 	Data interface{} `json:"data,omitempty"`
 	// @Description Aggregation results
-	Aggregations map[string]string `json:"aggregations,omitempty"`
+	Aggregations []map[string]interface{} `json:"aggregations,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {
