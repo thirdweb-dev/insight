@@ -27,4 +27,5 @@ CREATE TABLE blocks (
     INDEX idx_hash hash TYPE bloom_filter GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, number)
+PARTITION BY chain_id
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

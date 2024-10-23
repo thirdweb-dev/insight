@@ -30,4 +30,5 @@ CREATE TABLE traces (
     INDEX idx_type type TYPE bloom_filter GRANULARITY 1,
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number, transaction_hash, trace_address)
+PARTITION BY chain_id
 SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;

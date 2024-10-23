@@ -14,12 +14,13 @@ type LogConfig struct {
 }
 
 type PollerConfig struct {
-	Enabled        bool `mapstructure:"enabled"`
-	Interval       int  `mapstructure:"interval"`
-	BlocksPerPoll  int  `mapstructure:"blocksPerPoll"`
-	FromBlock      int  `mapstructure:"fromBlock"`
-	ForceFromBlock bool `mapstructure:"forceFromBlock"`
-	UntilBlock     int  `mapstructure:"untilBlock"`
+	Enabled         bool `mapstructure:"enabled"`
+	Interval        int  `mapstructure:"interval"`
+	BlocksPerPoll   int  `mapstructure:"blocksPerPoll"`
+	FromBlock       int  `mapstructure:"fromBlock"`
+	ForceFromBlock  bool `mapstructure:"forceFromBlock"`
+	UntilBlock      int  `mapstructure:"untilBlock"`
+	ParallelPollers int  `mapstructure:"parallelPollers"`
 }
 
 type CommitterConfig struct {
@@ -63,12 +64,14 @@ type StorageConnectionConfig struct {
 }
 
 type ClickhouseConfig struct {
-	Host       string `mapstructure:"host"`
-	Port       int    `mapstructure:"port"`
-	Username   string `mapstructure:"username"`
-	Password   string `mapstructure:"password"`
-	Database   string `mapstructure:"database"`
-	DisableTLS bool   `mapstructure:"disableTLS"`
+	Host             string `mapstructure:"host"`
+	Port             int    `mapstructure:"port"`
+	Username         string `mapstructure:"username"`
+	Password         string `mapstructure:"password"`
+	Database         string `mapstructure:"database"`
+	DisableTLS       bool   `mapstructure:"disableTLS"`
+	AsyncInsert      bool   `mapstructure:"asyncInsert"`
+	MaxRowsPerInsert int    `mapstructure:"maxRowsPerInsert"`
 }
 
 type MemoryConfig struct {
