@@ -154,14 +154,14 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
 			TotalItems:      0,
-			TotalPages:      0, // Implement total pages count if needed
+			TotalPages:      0, // TODO: Implement total pages count
 		},
 		Data:         nil,
 		Aggregations: nil,
 	}
 
-	// If aggregates are specified, retrieve them
-	if len(queryParams.Aggregates) > 0 ||  len(queryParams.GroupBy) > 0 {
+	// If aggregates or groupings are specified, retrieve them
+	if len(queryParams.Aggregates) > 0 || len(queryParams.GroupBy) > 0 {
 		qf.Aggregates = queryParams.Aggregates
 		qf.GroupBy = queryParams.GroupBy
 

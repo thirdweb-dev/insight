@@ -134,37 +134,57 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 		return
 	}
 
-	result, err := mainStorage.GetTransactions(storage.QueryFilter{
+	// Prepare the QueryFilter
+	qf := storage.QueryFilter{
 		FilterParams:    queryParams.FilterParams,
-		GroupBy:         queryParams.GroupBy,
+		ContractAddress: contractAddress,
+		Signature:       signatureHash,
+		ChainId:         chainId,
 		SortBy:          queryParams.SortBy,
 		SortOrder:       queryParams.SortOrder,
 		Page:            queryParams.Page,
 		Limit:           queryParams.Limit,
-		Aggregates:      queryParams.Aggregates,
-		ContractAddress: contractAddress,
-		Signature:       signatureHash,
-		ChainId:         chainId,
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("Error querying transactions")
-		api.InternalErrorHandler(c)
-		return
 	}
 
-	response := api.QueryResponse{
+	// Initialize the QueryResult
+	queryResult := api.QueryResponse{
 		Meta: api.Meta{
 			ChainId:         chainId.Uint64(),
 			ContractAddress: contractAddress,
-			Signature:       signature,
+			Signature:       signatureHash,
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
-			TotalItems:      0, // TODO: Implement total items count
+			TotalItems:      0,
 			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data:         result.Data,
+		Data:         nil,
 		Aggregations: nil,
 	}
 
-	c.JSON(http.StatusOK, response)
+	// If aggregates or groupings are specified, retrieve them
+	if len(queryParams.Aggregates) > 0 || len(queryParams.GroupBy) > 0 {
+		qf.Aggregates = queryParams.Aggregates
+		qf.GroupBy = queryParams.GroupBy
+
+		aggregatesResult, err := mainStorage.GetAggregations("transactions", qf)
+		if err != nil {
+			log.Error().Err(err).Msg("Error querying aggregates")
+			api.InternalErrorHandler(c)
+			return
+		}
+		queryResult.Aggregations = aggregatesResult.Aggregates
+		queryResult.Meta.TotalItems = len(aggregatesResult.Aggregates)
+	} else {
+		// Retrieve logs data
+		transactionsResult, err := mainStorage.GetTransactions(qf)
+		if err != nil {
+			log.Error().Err(err).Msg("Error querying tran")
+			api.InternalErrorHandler(c)
+			return
+		}
+		queryResult.Data = transactionsResult.Data
+		queryResult.Meta.TotalItems = len(transactionsResult.Data)
+	}
+
+	c.JSON(http.StatusOK, queryResult)
 }
