@@ -161,7 +161,7 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
 	}
 
 	// If aggregates are specified, retrieve them
-	if len(queryParams.Aggregates) > 0 {
+	if len(queryParams.Aggregates) > 0 ||  len(queryParams.GroupBy) > 0 {
 		qf.Aggregates = queryParams.Aggregates
 		qf.GroupBy = queryParams.GroupBy
 
