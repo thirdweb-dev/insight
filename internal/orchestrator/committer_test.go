@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	mocks "github.com/thirdweb-dev/indexer/test/mocks"
 )
@@ -173,36 +174,25 @@ func TestHandleGap(t *testing.T) {
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
 
-	chainID := big.NewInt(1)
-	mockRPC.EXPECT().GetChainID().Return(chainID)
-
 	expectedStartBlockNumber := big.NewInt(100)
 	actualFirstBlock := common.Block{Number: big.NewInt(105)}
 
-	mockOrchestratorStorage.EXPECT().GetBlockFailures(storage.QueryFilter{
-		ChainId:      chainID,
-		BlockNumbers: []*big.Int{big.NewInt(100), big.NewInt(101), big.NewInt(102), big.NewInt(103), big.NewInt(104)},
-	}).Return([]common.BlockFailure{}, nil)
-	mockOrchestratorStorage.On("StoreBlockFailures", mock.MatchedBy(func(failures []common.BlockFailure) bool {
-		return len(failures) == 5 && failures[0].ChainId == chainID && failures[0].BlockNumber.Cmp(big.NewInt(100)) == 0 &&
-			failures[0].FailureCount == 1 && failures[0].FailureReason == "Gap detected for this block" &&
-			failures[1].ChainId == chainID && failures[1].BlockNumber.Cmp(big.NewInt(101)) == 0 &&
-			failures[1].FailureCount == 1 && failures[1].FailureReason == "Gap detected for this block" &&
-			failures[2].ChainId == chainID && failures[2].BlockNumber.Cmp(big.NewInt(102)) == 0 &&
-			failures[2].FailureCount == 1 && failures[2].FailureReason == "Gap detected for this block" &&
-			failures[3].ChainId == chainID && failures[3].BlockNumber.Cmp(big.NewInt(103)) == 0 &&
-			failures[3].FailureCount == 1 && failures[3].FailureReason == "Gap detected for this block" &&
-			failures[4].ChainId == chainID && failures[4].BlockNumber.Cmp(big.NewInt(104)) == 0 &&
-			failures[4].FailureCount == 1 && failures[4].FailureReason == "Gap detected for this block"
-	})).Return(nil)
+	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{
+		Blocks: 5,
+	})
+	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(100), big.NewInt(101), big.NewInt(102), big.NewInt(103), big.NewInt(104)}).Return([]rpc.GetFullBlockResult{
+		{BlockNumber: big.NewInt(100), Data: common.BlockData{Block: common.Block{Number: big.NewInt(100)}}},
+		{BlockNumber: big.NewInt(101), Data: common.BlockData{Block: common.Block{Number: big.NewInt(101)}}},
+		{BlockNumber: big.NewInt(102), Data: common.BlockData{Block: common.Block{Number: big.NewInt(102)}}},
+		{BlockNumber: big.NewInt(103), Data: common.BlockData{Block: common.Block{Number: big.NewInt(103)}}},
+		{BlockNumber: big.NewInt(104), Data: common.BlockData{Block: common.Block{Number: big.NewInt(104)}}},
+	})
+	mockStagingStorage.EXPECT().InsertStagingData(mock.Anything).Return(nil)
 
 	err := committer.handleGap(expectedStartBlockNumber, actualFirstBlock)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "first block number (105) in commit batch does not match expected (100)")
-
-	mockRPC.AssertExpectations(t)
-	mockOrchestratorStorage.AssertExpectations(t)
 }
 
 func TestStartCommitter(t *testing.T) {
