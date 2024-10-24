@@ -563,7 +563,6 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 		}
 		return nil, err
 	}
-	zLog.Debug().Msgf("Max block number in main storage is: %s", maxBlockNumber.String())
 	return maxBlockNumber, nil
 }
 
