@@ -500,3 +500,75 @@ func TestHandleReorgWithManyBlocks(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(109), mostRecentBlockChecked)
 }
+
+func TestHandleReorgWithDuplicateBlocks(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.ReorgHandler.BlocksPerScan = 10
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(6268164), nil)
+
+	mockMainStorage.EXPECT().LookbackBlockHeaders(big.NewInt(1), 10, big.NewInt(6268172)).Return([]common.BlockHeader{
+		{Number: big.NewInt(6268172), Hash: "0x69d2044d27d2879c309fd885eb0c7d915c9aeed9b28df460d3b52cb4ccf888d8", ParentHash: "0xbf44d12afe40ef30effa32ed45c8d26d854ffba1c8ad781117117e7d18ca157f"},
+		{Number: big.NewInt(6268172), Hash: "0x69d2044d27d2879c309fd885eb0c7d915c9aeed9b28df460d3b52cb4ccf888d8", ParentHash: "0xbf44d12afe40ef30effa32ed45c8d26d854ffba1c8ad781117117e7d18ca157f"},
+		{Number: big.NewInt(6268171), Hash: "0xbf44d12afe40ef30effa32ed45c8d26d854ffba1c8ad781117117e7d18ca157f", ParentHash: "0x54d0a7822d69b73e097684fd6311c57f05f79430c188292e73b2c31b1db8170a"},
+		{Number: big.NewInt(6268170), Hash: "0x54d0a7822d69b73e097684fd6311c57f05f79430c188292e73b2c31b1db8170a", ParentHash: "0x0f265b8f03a1ac837626411d0827bd1bf344ad447032141ae4e1eebd241db8bf"},
+		{Number: big.NewInt(6268169), Hash: "0x0f265b8f03a1ac837626411d0827bd1bf344ad447032141ae4e1eebd241db8bf", ParentHash: "0xc39c3263522577a77add820c259c39402462d222ad145cbe2aead910a06fcbf8"},
+		{Number: big.NewInt(6268168), Hash: "0xc39c3263522577a77add820c259c39402462d222ad145cbe2aead910a06fcbf8", ParentHash: "0xa3fb3ca0a7823d048752781b56202d2b777236e4b5d9b880070f2f8390212fb4"},
+		{Number: big.NewInt(6268167), Hash: "0xa3fb3ca0a7823d048752781b56202d2b777236e4b5d9b880070f2f8390212fb4", ParentHash: "0xe29e2d5a6d55248456c6642cfb7888bb796972c77d522acda54c2213d7ad4091"},
+		{Number: big.NewInt(6268167), Hash: "0xa3fb3ca0a7823d048752781b56202d2b777236e4b5d9b880070f2f8390212fb4", ParentHash: "0xe29e2d5a6d55248456c6642cfb7888bb796972c77d522acda54c2213d7ad4091"},
+		{Number: big.NewInt(6268166), Hash: "0xe29e2d5a6d55248456c6642cfb7888bb796972c77d522acda54c2213d7ad4091", ParentHash: "0x39704dfd56a8ed3aaf0845f38edd0f911b4b53c9e0bcaeee2646d0045af13934"},
+		{Number: big.NewInt(6268165), Hash: "0x39704dfd56a8ed3aaf0845f38edd0f911b4b53c9e0bcaeee2646d0045af13934", ParentHash: "0xe58ec77634cd09cc3ae8991f4e36be6b84fe9d23e8716b4cca1fb69e91e8b8a1"},
+	}, nil)
+
+	handler := NewReorgHandler(mockRPC, mockStorage)
+	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(6268172))
+
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(6268172), mostRecentBlockChecked)
+}
+
+func TestNothingIsDoneForCorrectBlocks(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.ReorgHandler.BlocksPerScan = 10
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(6268164), nil)
+
+	mockMainStorage.EXPECT().LookbackBlockHeaders(big.NewInt(1), 10, big.NewInt(6268173)).Return([]common.BlockHeader{
+		{Number: big.NewInt(6268173), Hash: "0xa281ed679e6f7d0ede5fffdd3528348f303bc456d8d83e6bbe7ad0708f8f9b10", ParentHash: "0x69d2044d27d2879c309fd885eb0c7d915c9aeed9b28df460d3b52cb4ccf888d8"},
+		{Number: big.NewInt(6268172), Hash: "0x69d2044d27d2879c309fd885eb0c7d915c9aeed9b28df460d3b52cb4ccf888d8", ParentHash: "0xbf44d12afe40ef30effa32ed45c8d26d854ffba1c8ad781117117e7d18ca157f"},
+		{Number: big.NewInt(6268171), Hash: "0xbf44d12afe40ef30effa32ed45c8d26d854ffba1c8ad781117117e7d18ca157f", ParentHash: "0x54d0a7822d69b73e097684fd6311c57f05f79430c188292e73b2c31b1db8170a"},
+		{Number: big.NewInt(6268170), Hash: "0x54d0a7822d69b73e097684fd6311c57f05f79430c188292e73b2c31b1db8170a", ParentHash: "0x0f265b8f03a1ac837626411d0827bd1bf344ad447032141ae4e1eebd241db8bf"},
+		{Number: big.NewInt(6268169), Hash: "0x0f265b8f03a1ac837626411d0827bd1bf344ad447032141ae4e1eebd241db8bf", ParentHash: "0xc39c3263522577a77add820c259c39402462d222ad145cbe2aead910a06fcbf8"},
+		{Number: big.NewInt(6268168), Hash: "0xc39c3263522577a77add820c259c39402462d222ad145cbe2aead910a06fcbf8", ParentHash: "0xa3fb3ca0a7823d048752781b56202d2b777236e4b5d9b880070f2f8390212fb4"},
+		{Number: big.NewInt(6268167), Hash: "0xa3fb3ca0a7823d048752781b56202d2b777236e4b5d9b880070f2f8390212fb4", ParentHash: "0xe29e2d5a6d55248456c6642cfb7888bb796972c77d522acda54c2213d7ad4091"},
+		{Number: big.NewInt(6268166), Hash: "0xe29e2d5a6d55248456c6642cfb7888bb796972c77d522acda54c2213d7ad4091", ParentHash: "0x39704dfd56a8ed3aaf0845f38edd0f911b4b53c9e0bcaeee2646d0045af13934"},
+		{Number: big.NewInt(6268165), Hash: "0x39704dfd56a8ed3aaf0845f38edd0f911b4b53c9e0bcaeee2646d0045af13934", ParentHash: "0xe58ec77634cd09cc3ae8991f4e36be6b84fe9d23e8716b4cca1fb69e91e8b8a1"},
+		{Number: big.NewInt(6268164), Hash: "0xe58ec77634cd09cc3ae8991f4e36be6b84fe9d23e8716b4cca1fb69e91e8b8a1", ParentHash: "0xd4be1054851a009a2c50407a8679dc2e20b4116386a212ec63900cb31b01e4e5"},
+	}, nil)
+
+	handler := NewReorgHandler(mockRPC, mockStorage)
+	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(6268173))
+
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(6268173), mostRecentBlockChecked)
+}

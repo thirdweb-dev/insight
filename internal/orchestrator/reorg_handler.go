@@ -125,6 +125,9 @@ func findReorgEndIndex(reversedBlockHeaders []common.BlockHeader) (index int) {
 		currentBlock := reversedBlockHeaders[i]
 		previousBlock := reversedBlockHeaders[i+1]
 
+		if currentBlock.Number.Cmp(previousBlock.Number) == 0 { // unmerged block
+			continue
+		}
 		if currentBlock.ParentHash != previousBlock.Hash {
 			log.Debug().
 				Str("currentBlockNumber", currentBlock.Number.String()).
