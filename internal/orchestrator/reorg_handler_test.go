@@ -287,7 +287,7 @@ func TestHandleReorg(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestStart(t *testing.T) {
+func TestStartReorgHandler(t *testing.T) {
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)
 	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
