@@ -109,6 +109,7 @@ func (c *Committer) getSequentialBlockDataToCommit() (*[]common.BlockData, error
 	}
 	if blocksData == nil || len(*blocksData) == 0 {
 		log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blocksToCommit[0].Int64(), blocksToCommit[len(blocksToCommit)-1].Int64())
+		c.handleMissingStagingData(blocksToCommit)
 		return nil, nil
 	}
 
@@ -188,4 +189,26 @@ func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBloc
 	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
 	poller.Poll(missingBlockNumbers)
 	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
+}
+
+func (c *Committer) handleMissingStagingData(blocksToCommit []*big.Int) {
+	// Checks if there are any blocks in staging after the current range end
+	lastStagedBlockNumber, err := c.storage.StagingStorage.GetLastStagedBlockNumber(c.rpc.GetChainID(), blocksToCommit[len(blocksToCommit)-1], big.NewInt(0))
+	if err != nil {
+		log.Error().Err(err).Msg("Error checking staged data for missing range")
+		return
+	}
+	if lastStagedBlockNumber == nil || lastStagedBlockNumber.Sign() <= 0 {
+		log.Debug().Msgf("Committer is caught up with staging. No need to poll for missing blocks.")
+		return
+	}
+	log.Debug().Msgf("Detected missing blocks in staging data starting from %s.", blocksToCommit[0].String())
+
+	poller := NewBoundlessPoller(c.rpc, c.storage)
+	blocksToPoll := blocksToCommit
+	if len(blocksToCommit) > int(poller.blocksPerPoll) {
+		blocksToPoll = blocksToCommit[:int(poller.blocksPerPoll)]
+	}
+	poller.Poll(blocksToPoll)
+	log.Debug().Msgf("Polled %d blocks due to committer detecting them as missing. Range: %s - %s", len(blocksToPoll), blocksToPoll[0].String(), blocksToPoll[len(blocksToPoll)-1].String())
 }
