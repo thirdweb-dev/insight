@@ -126,6 +126,10 @@ func (c *Committer) getSequentialBlockDataToCommit() (*[]common.BlockData, error
 	expectedBlockNumber := new(big.Int).Add((*blocksData)[0].Block.Number, big.NewInt(1))
 
 	for i := 1; i < len(*blocksData); i++ {
+		if (*blocksData)[i].Block.Number.Cmp((*blocksData)[i-1].Block.Number) == 0 {
+			// Duplicate block, skip -- might happen if block has been polled multiple times
+			continue
+		}
 		if (*blocksData)[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
 			// Note: Gap detected, stop here
 			log.Warn().Msgf("Gap detected at block %s, committing until %s", expectedBlockNumber.String(), (*blocksData)[i-1].Block.Number.String())
