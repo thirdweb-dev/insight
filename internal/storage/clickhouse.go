@@ -456,10 +456,16 @@ func addContractAddress(table, query string, contractAddress string) string {
 }
 
 func getTopicValueFormat(topic string) string {
-	toAddressHex := ethereum.HexToAddress(topic)
-	toAddressPadded := ethereum.LeftPadBytes(toAddressHex.Bytes(), 32)
-	toAddressTopic := ethereum.BytesToHash(toAddressPadded).Hex()
-	return toAddressTopic
+	if topic == "" {
+		// if there is no indexed topic, indexer stores an empty string
+		// we shouldn't pad and hexify such an argument then
+		return ""
+	}
+	asBytes := ethereum.FromHex(topic)
+	// ensure the byte slice is exactly 32 bytes by left-padding with zeros
+	asPadded := ethereum.LeftPadBytes(asBytes, 32)
+	result := ethereum.BytesToHash(asPadded).Hex()
+	return result
 }
 
 func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter) (map[string]string, error) {
