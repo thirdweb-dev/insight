@@ -24,6 +24,7 @@ type Poller struct {
 	triggerIntervalMs int64
 	storage           storage.IStorage
 	lastPolledBlock   *big.Int
+	pollFromBlock     *big.Int
 	pollUntilBlock    *big.Int
 	parallelPollers   int
 }
@@ -33,7 +34,7 @@ type BlockNumberWithError struct {
 	Error       error
 }
 
-func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
+func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	blocksPerPoll := config.Cfg.Poller.BlocksPerPoll
 	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -42,6 +43,17 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
+	return &Poller{
+		rpc:               rpc,
+		triggerIntervalMs: int64(triggerInterval),
+		blocksPerPoll:     int64(blocksPerPoll),
+		storage:           storage,
+		parallelPollers:   config.Cfg.Poller.ParallelPollers,
+	}
+}
+
+func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
+	poller := NewBoundlessPoller(rpc, storage)
 	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
 	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
 	lastPolledBlock := new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
@@ -56,15 +68,10 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 			log.Debug().Msgf("Last polled block found in staging: %s", lastPolledBlock.String())
 		}
 	}
-	return &Poller{
-		rpc:               rpc,
-		triggerIntervalMs: int64(triggerInterval),
-		blocksPerPoll:     int64(blocksPerPoll),
-		storage:           storage,
-		lastPolledBlock:   lastPolledBlock,
-		pollUntilBlock:    untilBlock,
-		parallelPollers:   config.Cfg.Poller.ParallelPollers,
-	}
+	poller.lastPolledBlock = lastPolledBlock
+	poller.pollFromBlock = pollFromBlock
+	poller.pollUntilBlock = untilBlock
+	return poller
 }
 
 func (p *Poller) Start() {
@@ -78,30 +85,16 @@ func (p *Poller) Start() {
 		go func() {
 			for range tasks {
 				blockRangeMutex.Lock()
-				blockNumbers, err := p.getBlockRange()
+				blockNumbers, err := p.getNextBlockRange()
 				blockRangeMutex.Unlock()
 
 				if err != nil {
 					log.Error().Err(err).Msg("Error getting block range")
 					continue
 				}
-				if len(blockNumbers) < 1 {
-					log.Debug().Msg("No blocks to poll, skipping")
-					continue
-				}
-				endBlock := blockNumbers[len(blockNumbers)-1]
-				if endBlock != nil {
-					p.lastPolledBlock = endBlock
-				}
-				log.Debug().Msgf("Polling %d blocks starting from %s to %s", len(blockNumbers), blockNumbers[0], endBlock)
 
-				endBlockNumberFloat, _ := endBlock.Float64()
-				metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
-
-				worker := worker.NewWorker(p.rpc)
-				results := worker.Run(blockNumbers)
-				p.handleWorkerResults(results)
-				if p.reachedPollLimit(endBlock) {
+				lastPolledBlock := p.Poll(blockNumbers)
+				if p.reachedPollLimit(lastPolledBlock) {
 					log.Debug().Msg("Reached poll limit, exiting poller")
 					ticker.Stop()
 					return
@@ -118,11 +111,31 @@ func (p *Poller) Start() {
 	select {}
 }
 
+func (p *Poller) Poll(blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
+	if len(blockNumbers) < 1 {
+		log.Debug().Msg("No blocks to poll, skipping")
+		return
+	}
+	endBlock := blockNumbers[len(blockNumbers)-1]
+	if endBlock != nil {
+		p.lastPolledBlock = endBlock
+	}
+	log.Debug().Msgf("Polling %d blocks starting from %s to %s", len(blockNumbers), blockNumbers[0], endBlock)
+
+	endBlockNumberFloat, _ := endBlock.Float64()
+	metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
+
+	worker := worker.NewWorker(p.rpc)
+	results := worker.Run(blockNumbers)
+	p.handleWorkerResults(results)
+	return endBlock
+}
+
 func (p *Poller) reachedPollLimit(blockNumber *big.Int) bool {
 	return p.pollUntilBlock.Sign() > 0 && blockNumber.Cmp(p.pollUntilBlock) >= 0
 }
 
-func (p *Poller) getBlockRange() ([]*big.Int, error) {
+func (p *Poller) getNextBlockRange() ([]*big.Int, error) {
 	latestBlock, err := p.rpc.GetLatestBlockNumber()
 	if err != nil {
 		return nil, err
@@ -140,13 +153,7 @@ func (p *Poller) getBlockRange() ([]*big.Int, error) {
 		return nil, nil
 	}
 
-	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
-	blockNumbers := make([]*big.Int, blockCount)
-	for i := int64(0); i < blockCount; i++ {
-		blockNumbers[i] = new(big.Int).Add(startBlock, big.NewInt(i))
-	}
-
-	return blockNumbers, nil
+	return p.createBlockNumbersForRange(startBlock, endBlock), nil
 }
 
 func (p *Poller) getEndBlockForRange(startBlock *big.Int, latestBlock *big.Int) *big.Int {
@@ -159,6 +166,15 @@ func (p *Poller) getEndBlockForRange(startBlock *big.Int, latestBlock *big.Int) 
 		endBlock = p.pollUntilBlock
 	}
 	return endBlock
+}
+
+func (p *Poller) createBlockNumbersForRange(startBlock *big.Int, endBlock *big.Int) []*big.Int {
+	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
+	blockNumbers := make([]*big.Int, blockCount)
+	for i := int64(0); i < blockCount; i++ {
+		blockNumbers[i] = new(big.Int).Add(startBlock, big.NewInt(i))
+	}
+	return blockNumbers
 }
 
 func (p *Poller) handleWorkerResults(results []rpc.GetFullBlockResult) {

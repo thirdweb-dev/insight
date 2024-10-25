@@ -184,33 +184,8 @@ func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBloc
 	}
 	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
 
-	existingBlockFailures, err := c.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{BlockNumbers: missingBlockNumbers, ChainId: c.rpc.GetChainID()})
-	if err != nil {
-		return fmt.Errorf("error getting block failures while handling gap: %v", err)
-	}
-
-	existingBlockFailuresMap := make(map[string]*common.BlockFailure)
-	for _, failure := range existingBlockFailures {
-		blockNumberStr := failure.BlockNumber.String()
-		existingBlockFailuresMap[blockNumberStr] = &failure
-	}
-
-	blockFailures := make([]common.BlockFailure, 0)
-	for _, blockNumber := range missingBlockNumbers {
-		blockNumberStr := blockNumber.String()
-		if _, ok := existingBlockFailuresMap[blockNumberStr]; !ok {
-			blockFailures = append(blockFailures, common.BlockFailure{
-				BlockNumber:   blockNumber,
-				ChainId:       c.rpc.GetChainID(),
-				FailureTime:   time.Now(),
-				FailureCount:  1,
-				FailureReason: "Gap detected for this block",
-			})
-		}
-	}
-	log.Debug().Msgf("Storing %d block failures while handling gap", len(blockFailures))
-	if err := c.storage.OrchestratorStorage.StoreBlockFailures(blockFailures); err != nil {
-		return fmt.Errorf("error storing block failures while handling gap: %v", err)
-	}
+	poller := NewBoundlessPoller(c.rpc, c.storage)
+	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
+	poller.Poll(missingBlockNumbers)
 	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
 }
