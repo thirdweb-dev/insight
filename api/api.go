@@ -30,7 +30,7 @@ type QueryParams struct {
 	// @Description Map of filter parameters
 	FilterParams map[string]string `schema:"-"`
 	// @Description Field to group results by
-	GroupBy string `schema:"group_by"`
+	GroupBy []string `schema:"group_by"`
 	// @Description Field to sort results by
 	SortBy string `schema:"sort_by"`
 	// @Description Sort order (asc or desc)
@@ -70,7 +70,7 @@ type QueryResponse struct {
 	// @Description Query result data
 	Data interface{} `json:"data,omitempty"`
 	// @Description Aggregation results
-	Aggregations map[string]string `json:"aggregations,omitempty"`
+	Aggregations []map[string]interface{} `json:"aggregations,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {

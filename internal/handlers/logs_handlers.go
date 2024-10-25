@@ -133,39 +133,59 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
 		return
 	}
 
-	logs, err := mainStorage.GetLogs(storage.QueryFilter{
+	// Prepare the QueryFilter
+	qf := storage.QueryFilter{
 		FilterParams:    queryParams.FilterParams,
-		GroupBy:         []string{queryParams.GroupBy},
+		ContractAddress: contractAddress,
+		Signature:       signatureHash,
+		ChainId:         chainId,
 		SortBy:          queryParams.SortBy,
 		SortOrder:       queryParams.SortOrder,
 		Page:            queryParams.Page,
 		Limit:           queryParams.Limit,
-		Aggregates:      queryParams.Aggregates,
-		ContractAddress: contractAddress,
-		Signature:       signatureHash,
-		ChainId:         chainId,
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("Error querying logs")
-		api.InternalErrorHandler(c)
-		return
 	}
 
-	response := api.QueryResponse{
+	// Initialize the QueryResult
+	queryResult := api.QueryResponse{
 		Meta: api.Meta{
 			ChainId:         chainId.Uint64(),
 			ContractAddress: contractAddress,
 			Signature:       signatureHash,
 			Page:            queryParams.Page,
 			Limit:           queryParams.Limit,
-			TotalItems:      len(logs.Data),
+			TotalItems:      0,
 			TotalPages:      0, // TODO: Implement total pages count
 		},
-		Data:         logs.Data,
-		Aggregations: logs.Aggregates,
+		Data:         nil,
+		Aggregations: nil,
 	}
 
-	sendJSONResponse(c, response)
+	// If aggregates or groupings are specified, retrieve them
+	if len(queryParams.Aggregates) > 0 || len(queryParams.GroupBy) > 0 {
+		qf.Aggregates = queryParams.Aggregates
+		qf.GroupBy = queryParams.GroupBy
+
+		aggregatesResult, err := mainStorage.GetAggregations("logs", qf)
+		if err != nil {
+			log.Error().Err(err).Msg("Error querying aggregates")
+			api.InternalErrorHandler(c)
+			return
+		}
+		queryResult.Aggregations = aggregatesResult.Aggregates
+		queryResult.Meta.TotalItems = len(aggregatesResult.Aggregates)
+	} else {
+		// Retrieve logs data
+		logsResult, err := mainStorage.GetLogs(qf)
+		if err != nil {
+			log.Error().Err(err).Msg("Error querying logs")
+			api.InternalErrorHandler(c)
+			return
+		}
+		queryResult.Data = logsResult.Data
+		queryResult.Meta.TotalItems = len(logsResult.Data)
+	}
+
+	sendJSONResponse(c, queryResult)
 }
 
 func getMainStorage() (storage.IMainStorage, error) {

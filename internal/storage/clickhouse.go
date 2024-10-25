@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -347,6 +348,76 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], 
 	return executeQuery[common.Log](c, "logs", columns, qf, scanLog)
 }
 
+func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error) {
+	// Build the SELECT clause with aggregates
+	selectColumns := strings.Join(append(qf.GroupBy, qf.Aggregates...), ", ")
+	query := fmt.Sprintf("SELECT %s FROM %s.%s WHERE is_deleted = 0", selectColumns, c.cfg.Database, table)
+
+	// Apply filters
+	if qf.ChainId != nil && qf.ChainId.Sign() > 0 {
+		query = addFilterParams("chain_id", qf.ChainId.String(), query)
+	}
+	query = addContractAddress(table, query, qf.ContractAddress)
+	if qf.Signature != "" {
+		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
+	}
+	for key, value := range qf.FilterParams {
+		query = addFilterParams(key, strings.ToLower(value), query)
+	}
+	if len(qf.GroupBy) > 0 {
+		groupByColumns := strings.Join(qf.GroupBy, ", ")
+		query += fmt.Sprintf(" GROUP BY %s", groupByColumns)
+	}
+
+	// Execute the query
+	rows, err := c.conn.Query(context.Background(), query)
+	if err != nil {
+		return QueryResult[interface{}]{}, err
+	}
+	defer rows.Close()
+
+	columnNames := rows.Columns()
+	columnTypes := rows.ColumnTypes()
+
+	// Collect results
+	var aggregates []map[string]interface{}
+	for rows.Next() {
+		values := make([]interface{}, len(columnNames))
+
+		// Assign Go types based on ClickHouse types
+		for i, colType := range columnTypes {
+			dbType := colType.DatabaseTypeName()
+			values[i] = mapClickHouseTypeToGoType(dbType)
+		}
+
+		if err := rows.Scan(values...); err != nil {
+			return QueryResult[interface{}]{}, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		// Prepare the result map for the current row
+		result := make(map[string]interface{})
+		for i, colName := range columnNames {
+			valuePtr := values[i]
+			value := getUnderlyingValue(valuePtr)
+
+			// Convert *big.Int to string
+			if bigIntValue, ok := value.(big.Int); ok {
+				result[colName] = BigInt{Int: bigIntValue}
+			} else {
+				result[colName] = value
+			}
+		}
+
+		aggregates = append(aggregates, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		return QueryResult[interface{}]{}, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return QueryResult[interface{}]{Data: nil, Aggregates: aggregates}, nil
+}
+
 func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf QueryFilter, scanFunc func(driver.Rows) (T, error)) (QueryResult[T], error) {
 	query := c.buildQuery(table, columns, qf)
 
@@ -357,8 +428,7 @@ func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf Query
 	defer rows.Close()
 
 	queryResult := QueryResult[T]{
-		Data:       []T{},
-		Aggregates: map[string]string{},
+		Data: []T{},
 	}
 
 	for rows.Next() {
@@ -369,21 +439,13 @@ func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf Query
 		queryResult.Data = append(queryResult.Data, item)
 	}
 
-	if len(qf.Aggregates) > 0 {
-		aggregates, err := c.executeAggregateQuery(table, qf)
-		if err != nil {
-			return queryResult, err
-		}
-		queryResult.Aggregates = aggregates
-	}
-
 	return queryResult, nil
 }
 
 func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) string {
 	query := fmt.Sprintf("SELECT %s FROM %s.%s WHERE is_deleted = 0", columns, c.cfg.Database, table)
 
-	if qf.ChainId.Sign() > 0 {
+	if qf.ChainId != nil && qf.ChainId.Sign() > 0 {
 		query = addFilterParams("chain_id", qf.ChainId.String(), query)
 	}
 	query = addContractAddress(table, query, qf.ContractAddress)
@@ -397,7 +459,7 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 		query = addFilterParams(key, strings.ToLower(value), query)
 	}
 
-	// Add sort by clause
+	// Add ORDER BY clause
 	if qf.SortBy != "" {
 		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
 	}
@@ -406,9 +468,8 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 	if qf.Page > 0 && qf.Limit > 0 {
 		offset := (qf.Page - 1) * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
-	} else {
-		// Add limit clause
-		query += getLimitClause(int(qf.Limit))
+	} else if qf.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
 	}
 
 	return query
@@ -466,35 +527,6 @@ func getTopicValueFormat(topic string) string {
 	asPadded := ethereum.LeftPadBytes(asBytes, 32)
 	result := ethereum.BytesToHash(asPadded).Hex()
 	return result
-}
-
-func (c *ClickHouseConnector) executeAggregateQuery(table string, qf QueryFilter) (map[string]string, error) {
-	aggregateQuery := "SELECT " + strings.Join(qf.Aggregates, ", ") +
-		fmt.Sprintf(" FROM %s.%s WHERE is_deleted = 0", c.cfg.Database, table)
-
-	if qf.ContractAddress != "" {
-		aggregateQuery += fmt.Sprintf(" AND address = '%s'", qf.ContractAddress)
-	}
-	if qf.Signature != "" {
-		aggregateQuery += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
-	}
-	for key, value := range qf.FilterParams {
-		aggregateQuery += fmt.Sprintf(" AND %s = '%s'", key, value)
-	}
-
-	row := c.conn.QueryRow(context.Background(), aggregateQuery)
-	aggregateResultsJSON, err := json.Marshal(row)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling aggregate results to JSON: %w", err)
-	}
-
-	var aggregateResultsMap map[string]string
-	err = json.Unmarshal(aggregateResultsJSON, &aggregateResultsMap)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling aggregate results JSON to map: %w", err)
-	}
-
-	return aggregateResultsMap, nil
 }
 
 func scanTransaction(rows driver.Rows) (common.Transaction, error) {
@@ -1036,4 +1068,166 @@ func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
 		return saveErr
 	}
 	return nil
+}
+
+func mapClickHouseTypeToGoType(dbType string) interface{} {
+	// Handle LowCardinality types
+	if strings.HasPrefix(dbType, "LowCardinality(") {
+		dbType = dbType[len("LowCardinality(") : len(dbType)-1]
+	}
+
+	// Handle Nullable types
+	isNullable := false
+	if strings.HasPrefix(dbType, "Nullable(") {
+		isNullable = true
+		dbType = dbType[len("Nullable(") : len(dbType)-1]
+	}
+
+	// Handle Array types
+	if strings.HasPrefix(dbType, "Array(") {
+		elementType := dbType[len("Array(") : len(dbType)-1]
+		// For arrays, we'll use slices of pointers to the element type
+		switch elementType {
+		case "String", "FixedString":
+			return new([]*string)
+		case "Int8", "Int16", "Int32", "Int64":
+			return new([]*int64)
+		case "UInt8", "UInt16", "UInt32", "UInt64":
+			return new([]*uint64)
+		case "Float32", "Float64":
+			return new([]*float64)
+		case "Decimal", "Decimal32", "Decimal64", "Decimal128", "Decimal256":
+			return new([]*big.Float)
+		// Add more cases as needed
+		default:
+			return new([]interface{})
+		}
+	}
+
+	// Handle parameterized types by extracting the base type
+	baseType := dbType
+	if idx := strings.Index(dbType, "("); idx != -1 {
+		baseType = dbType[:idx]
+	}
+
+	// Map basic data types
+	switch baseType {
+	// Signed integers
+	case "Int8":
+		if isNullable {
+			return new(*int8)
+		}
+		return new(int8)
+	case "Int16":
+		if isNullable {
+			return new(*int16)
+		}
+		return new(int16)
+	case "Int32":
+		if isNullable {
+			return new(*int32)
+		}
+		return new(int32)
+	case "Int64":
+		if isNullable {
+			return new(*int64)
+		}
+		return new(int64)
+	// Unsigned integers
+	case "UInt8":
+		if isNullable {
+			return new(*uint8)
+		}
+		return new(uint8)
+	case "UInt16":
+		if isNullable {
+			return new(*uint16)
+		}
+		return new(uint16)
+	case "UInt32":
+		if isNullable {
+			return new(*uint32)
+		}
+		return new(uint32)
+	case "UInt64":
+		if isNullable {
+			return new(*uint64)
+		}
+		return new(uint64)
+	// Floating-point numbers
+	case "Float32":
+		if isNullable {
+			return new(*float32)
+		}
+		return new(float32)
+	case "Float64":
+		if isNullable {
+			return new(*float64)
+		}
+		return new(float64)
+	// Decimal types
+	case "Decimal", "Decimal32", "Decimal64", "Decimal128", "Decimal256":
+		if isNullable {
+			return new(*big.Float)
+		}
+		return new(big.Float)
+	// String types
+	case "String", "FixedString", "UUID", "IPv4", "IPv6":
+		if isNullable {
+			return new(*string)
+		}
+		return new(string)
+	// Enums
+	case "Enum8", "Enum16":
+		if isNullable {
+			return new(*string)
+		}
+		return new(string)
+	// Date and time types
+	case "Date", "Date32", "DateTime", "DateTime64":
+		if isNullable {
+			return new(*time.Time)
+		}
+		return new(time.Time)
+	// Big integers
+	case "Int128", "UInt128", "Int256", "UInt256":
+		if isNullable {
+			return new(*big.Int)
+		}
+		return new(big.Int)
+	default:
+		// For unknown types, use interface{}
+		return new(interface{})
+	}
+}
+
+type BigInt struct {
+	big.Int
+}
+
+func (b BigInt) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + b.String() + `"`), nil
+}
+
+func getUnderlyingValue(valuePtr interface{}) interface{} {
+	v := reflect.ValueOf(valuePtr)
+
+	// Handle nil values
+	if !v.IsValid() {
+		return nil
+	}
+
+	// Handle pointers and interfaces
+	for {
+		if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+			if v.IsNil() {
+				return nil
+			}
+			v = v.Elem()
+			continue
+		}
+		break
+	}
+
+	return v.Interface()
 }
