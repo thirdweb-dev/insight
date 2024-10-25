@@ -27,7 +27,7 @@ jobs:
         with:
           images: ${{ vars.DOCKER_IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{github.event_name == 'workflow_dispatch'}}
+            type=raw,value=latest
             type=semver,pattern={{version}}
 
       - name: Build and push Docker image
