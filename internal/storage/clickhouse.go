@@ -339,7 +339,7 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 }
 
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Transaction], error) {
-	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, data, max_fee_per_gas, max_priority_fee_per_gas, transaction_type, r, s, v, access_list"
+	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, data, function_selector, max_fee_per_gas, max_priority_fee_per_gas, transaction_type, r, s, v, access_list"
 	return executeQuery[common.Transaction](c, "transactions", columns, qf, scanTransaction)
 }
 
@@ -359,7 +359,7 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	}
 	query = addContractAddress(table, query, qf.ContractAddress)
 	if qf.Signature != "" {
-		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
+		query = addSignatureClause(table, query, qf.Signature)
 	}
 	for key, value := range qf.FilterParams {
 		query = addFilterParams(key, strings.ToLower(value), query)
@@ -452,7 +452,7 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 
 	// Add signature clause
 	if qf.Signature != "" {
-		query += fmt.Sprintf(" AND topic_0 = '%s'", qf.Signature)
+		query = addSignatureClause(table, query, qf.Signature)
 	}
 	// Add filter params
 	for key, value := range qf.FilterParams {
@@ -516,6 +516,15 @@ func addContractAddress(table, query string, contractAddress string) string {
 	return query
 }
 
+func addSignatureClause(table, query, signature string) string {
+	if table == "logs" {
+		query += fmt.Sprintf(" AND topic_0 = '%s'", signature)
+	} else if table == "transactions" {
+		query += fmt.Sprintf(" AND function_selector = '%s'", signature)
+	}
+	return query
+}
+
 func getTopicValueFormat(topic string) string {
 	if topic == "" {
 		// if there is no indexed topic, indexer stores an empty string
@@ -545,6 +554,7 @@ func scanTransaction(rows driver.Rows) (common.Transaction, error) {
 		&tx.Gas,
 		&tx.GasPrice,
 		&tx.Data,
+		&tx.FunctionSelector,
 		&tx.MaxFeePerGas,
 		&tx.MaxPriorityFeePerGas,
 		&tx.TransactionType,
