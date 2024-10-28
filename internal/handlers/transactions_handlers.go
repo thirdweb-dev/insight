@@ -3,9 +3,11 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
+	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
@@ -104,8 +106,8 @@ func GetTransactionsByContract(c *gin.Context) {
 // @Router /{chainId}/transactions/{to}/{signature} [get]
 func GetTransactionsByContractAndSignature(c *gin.Context) {
 	to := c.Param("to")
-	// TODO: Implement signature lookup before activating this
-	handleTransactionsRequest(c, to, "")
+	signature := c.Param("signature")
+	handleTransactionsRequest(c, to, signature)
 }
 
 func handleTransactionsRequest(c *gin.Context, contractAddress, signature string) {
@@ -122,10 +124,9 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 	}
 
 	signatureHash := ""
-	// TODO: implement signature lookup
-	// if signature != "" {
-	// 	signatureHash = crypto.Keccak256Hash([]byte(signature)).Hex()
-	// }
+	if signature != "" {
+		signatureHash = rpc.ExtractFunctionSelector(crypto.Keccak256Hash([]byte(signature)).Hex())
+	}
 
 	mainStorage, err := getMainStorage()
 	if err != nil {
