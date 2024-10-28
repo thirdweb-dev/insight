@@ -103,8 +103,14 @@ type RPCConfig struct {
 	Traces        ToggleableRPCBatchRequestConfig `mapstructure:"traces"`
 }
 
+type BasicAuthConfig struct {
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+}
+
 type APIConfig struct {
-	Host string `mapstructure:"host"`
+	Host      string          `mapstructure:"host"`
+	BasicAuth BasicAuthConfig `mapstructure:"basicAuth"`
 }
 
 type Config struct {
