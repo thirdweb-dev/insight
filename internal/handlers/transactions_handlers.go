@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
@@ -107,7 +108,8 @@ func GetTransactionsByContract(c *gin.Context) {
 func GetTransactionsByContractAndSignature(c *gin.Context) {
 	to := c.Param("to")
 	signature := c.Param("signature")
-	handleTransactionsRequest(c, to, signature)
+	strippedSignature := common.StripPayload(signature)
+	handleTransactionsRequest(c, to, strippedSignature)
 }
 
 func handleTransactionsRequest(c *gin.Context, contractAddress, signature string) {

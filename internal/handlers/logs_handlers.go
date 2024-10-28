@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
 	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
@@ -105,7 +106,8 @@ func GetLogsByContract(c *gin.Context) {
 func GetLogsByContractAndSignature(c *gin.Context) {
 	contractAddress := c.Param("contract")
 	eventSignature := c.Param("signature")
-	handleLogsRequest(c, contractAddress, eventSignature)
+	strippedSignature := common.StripPayload(eventSignature)
+	handleLogsRequest(c, contractAddress, strippedSignature)
 }
 
 func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
