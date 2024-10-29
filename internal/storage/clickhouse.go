@@ -301,6 +301,9 @@ func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, 
 
 	query += getLimitClause(int(qf.Limit))
 
+	if err := common.ValidateQuery(query); err != nil {
+		return nil, err
+	}
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
 		return nil, err
@@ -369,6 +372,9 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 		query += fmt.Sprintf(" GROUP BY %s", groupByColumns)
 	}
 
+	if err := common.ValidateQuery(query); err != nil {
+		return QueryResult[interface{}]{}, err
+	}
 	// Execute the query
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
@@ -421,6 +427,9 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf QueryFilter, scanFunc func(driver.Rows) (T, error)) (QueryResult[T], error) {
 	query := c.buildQuery(table, columns, qf)
 
+	if err := common.ValidateQuery(query); err != nil {
+		return QueryResult[T]{}, err
+	}
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
 		return QueryResult[T]{}, err
@@ -856,6 +865,9 @@ func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, 
 
 	query += getLimitClause(int(qf.Limit))
 
+	if err := common.ValidateQuery(query); err != nil {
+		return nil, err
+	}
 	rows, err := c.conn.Query(context.Background(), query)
 	if err != nil {
 		return nil, err
