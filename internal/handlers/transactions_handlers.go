@@ -172,6 +172,7 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 		aggregatesResult, err := mainStorage.GetAggregations("transactions", qf)
 		if err != nil {
 			log.Error().Err(err).Msg("Error querying aggregates")
+			// TODO: might want to choose BadRequestError if it's due to not-allowed functions
 			api.InternalErrorHandler(c)
 			return
 		}
@@ -181,7 +182,8 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 		// Retrieve logs data
 		transactionsResult, err := mainStorage.GetTransactions(qf)
 		if err != nil {
-			log.Error().Err(err).Msg("Error querying tran")
+			log.Error().Err(err).Msg("Error querying transactions")
+			// TODO: might want to choose BadRequestError if it's due to not-allowed functions
 			api.InternalErrorHandler(c)
 			return
 		}

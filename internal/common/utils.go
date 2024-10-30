@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -168,4 +169,52 @@ func isType(word string) bool {
 	}
 
 	return types[word]
+}
+
+var allowedFunctions = map[string]struct{}{
+	"sum":                  {},
+	"count":                {},
+	"reinterpretAsUInt256": {},
+	"reverse":              {},
+	"unhex":                {},
+	"substring":            {},
+	"length":               {},
+	"toUInt256":            {},
+	"if":                   {},
+}
+
+var disallowedPatterns = []string{
+	`(?i)\b(UNION|INSERT|DELETE|UPDATE|DROP|CREATE|ALTER|TRUNCATE|EXEC|;|--)`,
+}
+
+// validateQuery checks the query for disallowed patterns and ensures only allowed functions are used.
+func ValidateQuery(query string) error {
+	// Check for disallowed patterns
+	for _, pattern := range disallowedPatterns {
+		matched, err := regexp.MatchString(pattern, query)
+		if err != nil {
+			return fmt.Errorf("error checking disallowed patterns: %v", err)
+		}
+		if matched {
+			return fmt.Errorf("query contains disallowed keywords or patterns")
+		}
+	}
+
+	// Ensure the query is a SELECT statement
+	trimmedQuery := strings.TrimSpace(strings.ToUpper(query))
+	if !strings.HasPrefix(trimmedQuery, "SELECT") {
+		return fmt.Errorf("only SELECT queries are allowed")
+	}
+
+	// Extract function names and validate them
+	functionPattern := regexp.MustCompile(`(?i)(\b\w+\b)\s*\(`)
+	matches := functionPattern.FindAllStringSubmatch(query, -1)
+	for _, match := range matches {
+		funcName := match[1]
+		if _, ok := allowedFunctions[funcName]; !ok {
+			return fmt.Errorf("function '%s' is not allowed", funcName)
+		}
+	}
+
+	return nil
 }
