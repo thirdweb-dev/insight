@@ -177,15 +177,20 @@ func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBloc
 	// record the first missed block number in prometheus
 	metrics.MissedBlockNumbers.Set(float64(expectedStartBlockNumber.Int64()))
 
+	poller := NewBoundlessPoller(c.rpc, c.storage)
+
 	missingBlockCount := new(big.Int).Sub(actualFirstBlock.Number, expectedStartBlockNumber).Int64()
+	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
+	if missingBlockCount > poller.blocksPerPoll {
+		log.Debug().Msgf("Limiting polling missing blocks to %d blocks due to config", poller.blocksPerPoll)
+		missingBlockCount = poller.blocksPerPoll
+	}
 	missingBlockNumbers := make([]*big.Int, missingBlockCount)
 	for i := int64(0); i < missingBlockCount; i++ {
 		missingBlockNumber := new(big.Int).Add(expectedStartBlockNumber, big.NewInt(i))
 		missingBlockNumbers[i] = missingBlockNumber
 	}
-	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
 
-	poller := NewBoundlessPoller(c.rpc, c.storage)
 	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
 	poller.Poll(missingBlockNumbers)
 	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
