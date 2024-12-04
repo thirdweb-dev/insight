@@ -143,21 +143,10 @@ func cleanType(param string) string {
 
 // isType checks if a word is a Solidity type
 func isType(word string) bool {
+	if strings.HasPrefix(word, "uint") || strings.HasPrefix(word, "int") {
+		return true
+	}
 	types := map[string]bool{
-		"uint":     true,
-		"int":      true,
-		"uint8":    true,
-		"int8":     true,
-		"uint16":   true,
-		"int16":    true,
-		"uint32":   true,
-		"int32":    true,
-		"uint64":   true,
-		"int64":    true,
-		"uint128":  true,
-		"int128":   true,
-		"uint256":  true,
-		"int256":   true,
 		"address":  true,
 		"bool":     true,
 		"string":   true,
