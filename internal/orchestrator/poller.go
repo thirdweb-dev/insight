@@ -52,6 +52,8 @@ func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	}
 }
 
+var ErrNoNewBlocks = fmt.Errorf("no new blocks to poll")
+
 func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	poller := NewBoundlessPoller(rpc, storage)
 	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
@@ -89,7 +91,9 @@ func (p *Poller) Start() {
 				blockRangeMutex.Unlock()
 
 				if err != nil {
-					log.Error().Err(err).Msg("Error getting block range")
+					if err != ErrNoNewBlocks {
+						log.Error().Err(err).Msg("Failed to get block range to poll")
+					}
 					continue
 				}
 
@@ -132,7 +136,7 @@ func (p *Poller) Poll(blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
 }
 
 func (p *Poller) reachedPollLimit(blockNumber *big.Int) bool {
-	return p.pollUntilBlock.Sign() > 0 && blockNumber.Cmp(p.pollUntilBlock) >= 0
+	return blockNumber == nil || (p.pollUntilBlock.Sign() > 0 && blockNumber.Cmp(p.pollUntilBlock) >= 0)
 }
 
 func (p *Poller) getNextBlockRange() ([]*big.Int, error) {
@@ -145,7 +149,7 @@ func (p *Poller) getNextBlockRange() ([]*big.Int, error) {
 	startBlock := new(big.Int).Add(p.lastPolledBlock, big.NewInt(1))
 	if startBlock.Cmp(latestBlock) > 0 {
 		log.Debug().Msgf("Start block %s is greater than latest block %s, skipping", startBlock, latestBlock)
-		return nil, nil
+		return nil, ErrNoNewBlocks
 	}
 	endBlock := p.getEndBlockForRange(startBlock, latestBlock)
 	if startBlock.Cmp(endBlock) > 0 {
