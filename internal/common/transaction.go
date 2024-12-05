@@ -1,7 +1,12 @@
 package common
 
 import (
+	"encoding/hex"
 	"math/big"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/rs/zerolog/log"
 )
 
 type Transaction struct {
@@ -34,4 +39,41 @@ type Transaction struct {
 	BlobGasPrice         *big.Int `json:"blob_gas_price"`
 	LogsBloom            *string  `json:"logs_bloom"`
 	Status               *uint64  `json:"status"`
+}
+
+type DecodedTransactionData struct {
+	Name      string                 `json:"name"`
+	Signature string                 `json:"signature"`
+	Inputs    map[string]interface{} `json:"inputs"`
+}
+
+type DecodedTransaction struct {
+	Transaction
+	Decoded DecodedTransactionData `json:"decodedData"`
+}
+
+func (t *Transaction) Decode(functionABI *abi.Method) *DecodedTransaction {
+	decodedData, err := hex.DecodeString(strings.TrimPrefix(t.Data, "0x"))
+	if err != nil {
+		log.Debug().Msgf("failed to decode transaction data: %v", err)
+		return &DecodedTransaction{Transaction: *t}
+	}
+
+	if len(decodedData) < 4 {
+		log.Debug().Msg("Data too short to contain function selector")
+		return &DecodedTransaction{Transaction: *t}
+	}
+	inputData := decodedData[4:]
+	decodedInputs := make(map[string]interface{})
+	err = functionABI.Inputs.UnpackIntoMap(decodedInputs, inputData)
+	if err != nil {
+		log.Warn().Msgf("failed to decode function parameters: %v, signature: %s", err, functionABI.Sig)
+	}
+	return &DecodedTransaction{
+		Transaction: *t,
+		Decoded: DecodedTransactionData{
+			Name:      functionABI.RawName,
+			Signature: functionABI.Sig,
+			Inputs:    decodedInputs,
+		}}
 }
