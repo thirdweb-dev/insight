@@ -77,6 +77,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 5,
                         "description": "Number of items per page",
                         "name": "limit",
                         "in": "query"
@@ -200,6 +201,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 5,
                         "description": "Number of items per page",
                         "name": "limit",
                         "in": "query"
@@ -265,7 +267,7 @@ const docTemplate = `{
                         "BasicAuth": []
                     }
                 ],
-                "description": "Retrieve logs for a specific contract and event signature",
+                "description": "Retrieve logs for a specific contract and event signature. When a valid event signature is provided, the response includes decoded log data with both indexed and non-indexed parameters.",
                 "consumes": [
                     "application/json"
                 ],
@@ -293,7 +295,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Event signature",
+                        "description": "Event signature (e.g., 'Transfer(address,address,uint256)')",
                         "name": "signature",
                         "in": "path",
                         "required": true
@@ -330,6 +332,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 5,
                         "description": "Number of items per page",
                         "name": "limit",
                         "in": "query"
@@ -359,7 +362,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/handlers.LogModel"
+                                                "$ref": "#/definitions/handlers.DecodedLogModel"
                                             }
                                         }
                                     }
@@ -446,6 +449,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 5,
                         "description": "Number of items per page",
                         "name": "limit",
                         "in": "query"
@@ -569,6 +573,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 5,
                         "description": "Number of items per page",
                         "name": "limit",
                         "in": "query"
@@ -634,7 +639,7 @@ const docTemplate = `{
                         "BasicAuth": []
                     }
                 ],
-                "description": "Retrieve transactions for a specific contract and signature (Not implemented yet)",
+                "description": "Retrieve transactions for a specific contract and signature. When a valid function signature is provided, the response includes decoded transaction data with function inputs.",
                 "consumes": [
                     "application/json"
                 ],
@@ -662,7 +667,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Function signature",
+                        "description": "Function signature (e.g., 'transfer(address,uint256)')",
                         "name": "signature",
                         "in": "path",
                         "required": true
@@ -699,6 +704,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 5,
                         "description": "Number of items per page",
                         "name": "limit",
                         "in": "query"
@@ -728,7 +734,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/handlers.TransactionModel"
+                                                "$ref": "#/definitions/handlers.DecodedTransactionModel"
                                             }
                                         }
                                     }
@@ -817,9 +823,10 @@ const docTemplate = `{
             "properties": {
                 "aggregations": {
                     "description": "@Description Aggregation results",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true
                     }
                 },
                 "data": {
@@ -832,6 +839,169 @@ const docTemplate = `{
                             "$ref": "#/definitions/api.Meta"
                         }
                     ]
+                }
+            }
+        },
+        "handlers.DecodedLogDataModel": {
+            "type": "object",
+            "properties": {
+                "inputs": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DecodedLogModel": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "block_hash": {
+                    "type": "string"
+                },
+                "block_number": {
+                    "type": "string"
+                },
+                "block_timestamp": {
+                    "type": "integer"
+                },
+                "chain_id": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "string"
+                },
+                "decoded": {
+                    "$ref": "#/definitions/handlers.DecodedLogDataModel"
+                },
+                "log_index": {
+                    "type": "integer"
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "transaction_hash": {
+                    "type": "string"
+                },
+                "transaction_index": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.DecodedTransactionDataModel": {
+            "type": "object",
+            "properties": {
+                "inputs": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DecodedTransactionModel": {
+            "type": "object",
+            "properties": {
+                "access_list_json": {
+                    "type": "string"
+                },
+                "blob_gas_price": {
+                    "type": "string"
+                },
+                "blob_gas_used": {
+                    "type": "integer"
+                },
+                "block_hash": {
+                    "type": "string"
+                },
+                "block_number": {
+                    "type": "string"
+                },
+                "block_timestamp": {
+                    "type": "integer"
+                },
+                "chain_id": {
+                    "type": "string"
+                },
+                "contract_address": {
+                    "type": "string"
+                },
+                "cumulative_gas_used": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "string"
+                },
+                "decoded": {
+                    "$ref": "#/definitions/handlers.DecodedTransactionDataModel"
+                },
+                "effective_gas_price": {
+                    "type": "string"
+                },
+                "from_address": {
+                    "type": "string"
+                },
+                "gas": {
+                    "type": "integer"
+                },
+                "gas_price": {
+                    "type": "string"
+                },
+                "gas_used": {
+                    "type": "integer"
+                },
+                "hash": {
+                    "type": "string"
+                },
+                "logs_bloom": {
+                    "type": "string"
+                },
+                "max_fee_per_gas": {
+                    "type": "string"
+                },
+                "max_priority_fee_per_gas": {
+                    "type": "string"
+                },
+                "nonce": {
+                    "type": "integer"
+                },
+                "r": {
+                    "type": "string"
+                },
+                "s": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "to_address": {
+                    "type": "string"
+                },
+                "transaction_index": {
+                    "type": "integer"
+                },
+                "transaction_type": {
+                    "type": "integer"
+                },
+                "v": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
                 }
             }
         },
@@ -879,6 +1049,12 @@ const docTemplate = `{
                 "access_list_json": {
                     "type": "string"
                 },
+                "blob_gas_price": {
+                    "type": "string"
+                },
+                "blob_gas_used": {
+                    "type": "integer"
+                },
                 "block_hash": {
                     "type": "string"
                 },
@@ -891,7 +1067,16 @@ const docTemplate = `{
                 "chain_id": {
                     "type": "string"
                 },
+                "contract_address": {
+                    "type": "string"
+                },
+                "cumulative_gas_used": {
+                    "type": "integer"
+                },
                 "data": {
+                    "type": "string"
+                },
+                "effective_gas_price": {
                     "type": "string"
                 },
                 "from_address": {
@@ -903,7 +1088,13 @@ const docTemplate = `{
                 "gas_price": {
                     "type": "string"
                 },
+                "gas_used": {
+                    "type": "integer"
+                },
                 "hash": {
+                    "type": "string"
+                },
+                "logs_bloom": {
                     "type": "string"
                 },
                 "max_fee_per_gas": {
@@ -920,6 +1111,9 @@ const docTemplate = `{
                 },
                 "s": {
                     "type": "string"
+                },
+                "status": {
+                    "type": "integer"
                 },
                 "to_address": {
                     "type": "string"
