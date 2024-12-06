@@ -123,6 +123,9 @@ func ParseQueryParams(r *http.Request) (QueryParams, error) {
 		log.Error().Err(err).Msg("Error parsing query params")
 		return QueryParams{}, err
 	}
+	if params.Limit == 0 {
+		params.Limit = 5
+	}
 	return params, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -34,6 +35,17 @@ type LogModel struct {
 	Topics           []string `json:"topics"`
 }
 
+type DecodedLogDataModel struct {
+	Name      string                 `json:"name"`
+	Signature string                 `json:"signature"`
+	Inputs    map[string]interface{} `json:"inputs"`
+}
+
+type DecodedLogModel struct {
+	LogModel
+	Decoded DecodedLogDataModel `json:"decoded"`
+}
+
 // @Summary Get all logs
 // @Description Retrieve all logs across all contracts
 // @Tags events
@@ -46,7 +58,7 @@ type LogModel struct {
 // @Param sort_by query string false "Field to sort results by"
 // @Param sort_order query string false "Sort order (asc or desc)"
 // @Param page query int false "Page number for pagination"
-// @Param limit query int false "Number of items per page"
+// @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Success 200 {object} api.QueryResponse{data=[]LogModel}
 // @Failure 400 {object} api.Error
@@ -54,7 +66,7 @@ type LogModel struct {
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/events [get]
 func GetLogs(c *gin.Context) {
-	handleLogsRequest(c, "", "")
+	handleLogsRequest(c, "", "", nil)
 }
 
 // @Summary Get logs by contract
@@ -70,7 +82,7 @@ func GetLogs(c *gin.Context) {
 // @Param sort_by query string false "Field to sort results by"
 // @Param sort_order query string false "Sort order (asc or desc)"
 // @Param page query int false "Page number for pagination"
-// @Param limit query int false "Number of items per page"
+// @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Success 200 {object} api.QueryResponse{data=[]LogModel}
 // @Failure 400 {object} api.Error
@@ -79,26 +91,26 @@ func GetLogs(c *gin.Context) {
 // @Router /{chainId}/events/{contract} [get]
 func GetLogsByContract(c *gin.Context) {
 	contractAddress := c.Param("contract")
-	handleLogsRequest(c, contractAddress, "")
+	handleLogsRequest(c, contractAddress, "", nil)
 }
 
 // @Summary Get logs by contract and event signature
-// @Description Retrieve logs for a specific contract and event signature
+// @Description Retrieve logs for a specific contract and event signature. When a valid event signature is provided, the response includes decoded log data with both indexed and non-indexed parameters.
 // @Tags events
 // @Accept json
 // @Produce json
 // @Security BasicAuth
 // @Param chainId path string true "Chain ID"
 // @Param contract path string true "Contract address"
-// @Param signature path string true "Event signature"
+// @Param signature path string true "Event signature (e.g., 'Transfer(address,address,uint256)')"
 // @Param filter query string false "Filter parameters"
 // @Param group_by query string false "Field to group results by"
 // @Param sort_by query string false "Field to sort results by"
 // @Param sort_order query string false "Sort order (asc or desc)"
 // @Param page query int false "Page number for pagination"
-// @Param limit query int false "Number of items per page"
+// @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
-// @Success 200 {object} api.QueryResponse{data=[]LogModel}
+// @Success 200 {object} api.QueryResponse{data=[]DecodedLogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -107,10 +119,14 @@ func GetLogsByContractAndSignature(c *gin.Context) {
 	contractAddress := c.Param("contract")
 	eventSignature := c.Param("signature")
 	strippedSignature := common.StripPayload(eventSignature)
-	handleLogsRequest(c, contractAddress, strippedSignature)
+	eventABI, err := common.ConstructEventABI(eventSignature)
+	if err != nil {
+		log.Debug().Err(err).Msgf("Unable to construct event ABI for %s", eventSignature)
+	}
+	handleLogsRequest(c, contractAddress, strippedSignature, eventABI)
 }
 
-func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
+func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventABI *abi.Event) {
 	chainId, err := api.GetChainId(c)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
@@ -185,7 +201,16 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string) {
 			api.InternalErrorHandler(c)
 			return
 		}
-		queryResult.Data = logsResult.Data
+		if eventABI != nil {
+			decodedLogs := []*common.DecodedLog{}
+			for _, log := range logsResult.Data {
+				decodedLog := log.Decode(eventABI)
+				decodedLogs = append(decodedLogs, decodedLog)
+			}
+			queryResult.Data = decodedLogs
+		} else {
+			queryResult.Data = logsResult.Data
+		}
 		queryResult.Meta.TotalItems = len(logsResult.Data)
 	}
 

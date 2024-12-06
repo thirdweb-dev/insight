@@ -8,11 +8,32 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
-func ConstructFunctionABI(signature string) (*abi.Method, error) {
+func ConstructEventABI(signature string) (*abi.Event, error) {
+	// Regex to extract the event name and parameters
 	regex := regexp.MustCompile(`^(\w+)\((.*)\)$`)
 	matches := regex.FindStringSubmatch(strings.TrimSpace(signature))
 	if len(matches) != 3 {
 		return nil, fmt.Errorf("invalid event signature format")
+	}
+
+	eventName := matches[1]
+	parameters := matches[2]
+
+	inputs, err := parseParamsToAbiArguments(parameters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse params to abi arguments '%s': %v", parameters, err)
+	}
+
+	event := abi.NewEvent(eventName, eventName, false, inputs)
+
+	return &event, nil
+}
+
+func ConstructFunctionABI(signature string) (*abi.Method, error) {
+	regex := regexp.MustCompile(`^(\w+)\((.*)\)$`)
+	matches := regex.FindStringSubmatch(strings.TrimSpace(signature))
+	if len(matches) != 3 {
+		return nil, fmt.Errorf("invalid function signature format")
 	}
 
 	functionName := matches[1]
@@ -70,7 +91,7 @@ func splitParams(params string) []string {
 }
 
 func parseParamToAbiArgument(param string, fallbackName string) (*abi.Argument, error) {
-	argName, paramType, err := getArgNameAndType(param, fallbackName)
+	argName, paramType, indexed, err := getArgNameAndType(param, fallbackName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get arg name and type '%s': %v", param, err)
 	}
@@ -80,8 +101,9 @@ func parseParamToAbiArgument(param string, fallbackName string) (*abi.Argument, 
 			return nil, fmt.Errorf("failed to marshal tuple: %v", err)
 		}
 		return &abi.Argument{
-			Name: argName,
-			Type: argType,
+			Name:    argName,
+			Type:    argType,
+			Indexed: indexed,
 		}, nil
 	} else {
 		argType, err := abi.NewType(paramType, paramType, nil)
@@ -89,33 +111,49 @@ func parseParamToAbiArgument(param string, fallbackName string) (*abi.Argument, 
 			return nil, fmt.Errorf("failed to parse type '%s': %v", paramType, err)
 		}
 		return &abi.Argument{
-			Name: argName,
-			Type: argType,
+			Name:    argName,
+			Type:    argType,
+			Indexed: indexed,
 		}, nil
 	}
 }
 
-func getArgNameAndType(param string, fallbackName string) (name string, paramType string, err error) {
+func getArgNameAndType(param string, fallbackName string) (name string, paramType string, indexed bool, err error) {
+	param, indexed = checkIfParamIsIndexed(param)
 	if isTuple(param) {
 		lastParenIndex := strings.LastIndex(param, ")")
 		if lastParenIndex == -1 {
-			return "", "", fmt.Errorf("invalid tuple format")
+			return "", "", false, fmt.Errorf("invalid tuple format")
 		}
 		if len(param)-1 == lastParenIndex {
-			return fallbackName, param, nil
+			return fallbackName, param, indexed, nil
 		}
 		paramsEndIdx := lastParenIndex + 1
 		if strings.HasPrefix(param[paramsEndIdx:], "[]") {
 			paramsEndIdx = lastParenIndex + 3
 		}
-		return strings.TrimSpace(param[paramsEndIdx:]), param[:paramsEndIdx], nil
+		return strings.TrimSpace(param[paramsEndIdx:]), param[:paramsEndIdx], indexed, nil
 	} else {
 		tokens := strings.Fields(param)
 		if len(tokens) == 1 {
-			return fallbackName, strings.TrimSpace(tokens[0]), nil
+			return fallbackName, strings.TrimSpace(tokens[0]), indexed, nil
 		}
-		return strings.TrimSpace(tokens[len(tokens)-1]), strings.Join(tokens[:len(tokens)-1], " "), nil
+		return strings.TrimSpace(tokens[len(tokens)-1]), strings.Join(tokens[:len(tokens)-1], " "), indexed, nil
 	}
+}
+
+func checkIfParamIsIndexed(param string) (string, bool) {
+	tokens := strings.Fields(param)
+	indexed := false
+	for i, token := range tokens {
+		if token == "indexed" || strings.HasPrefix(token, "index_topic_") {
+			tokens = append(tokens[:i], tokens[i+1:]...)
+			indexed = true
+			break
+		}
+	}
+	param = strings.Join(tokens, " ")
+	return param, indexed
 }
 
 func isTuple(param string) bool {
@@ -142,7 +180,7 @@ func marshalParamArguments(param string) ([]abi.ArgumentMarshaling, error) {
 	paramList := splitParams(param)
 	components := []abi.ArgumentMarshaling{}
 	for idx, param := range paramList {
-		argName, paramType, err := getArgNameAndType(param, fmt.Sprintf("field%d", idx))
+		argName, paramType, indexed, err := getArgNameAndType(param, fmt.Sprintf("field%d", idx))
 		if err != nil {
 			return nil, fmt.Errorf("failed to get arg name and type '%s': %v", param, err)
 		}
@@ -155,11 +193,13 @@ func marshalParamArguments(param string) ([]abi.ArgumentMarshaling, error) {
 				Type:       "tuple",
 				Name:       argName,
 				Components: subComponents,
+				Indexed:    indexed,
 			})
 		} else {
 			components = append(components, abi.ArgumentMarshaling{
-				Type: paramType,
-				Name: argName,
+				Type:    paramType,
+				Name:    argName,
+				Indexed: indexed,
 			})
 		}
 	}

@@ -10,33 +10,33 @@ import (
 )
 
 type Transaction struct {
-	ChainId              *big.Int `json:"chain_id"`
+	ChainId              *big.Int `json:"chain_id" swaggertype:"string"`
 	Hash                 string   `json:"hash"`
 	Nonce                uint64   `json:"nonce"`
 	BlockHash            string   `json:"block_hash"`
-	BlockNumber          *big.Int `json:"block_number"`
+	BlockNumber          *big.Int `json:"block_number" swaggertype:"string"`
 	BlockTimestamp       uint64   `json:"block_timestamp"`
 	TransactionIndex     uint64   `json:"transaction_index"`
 	FromAddress          string   `json:"from_address"`
 	ToAddress            string   `json:"to_address"`
-	Value                *big.Int `json:"value"`
+	Value                *big.Int `json:"value" swaggertype:"string"`
 	Gas                  uint64   `json:"gas"`
-	GasPrice             *big.Int `json:"gas_price"`
+	GasPrice             *big.Int `json:"gas_price" swaggertype:"string"`
 	Data                 string   `json:"data"`
 	FunctionSelector     string   `json:"function_selector"`
-	MaxFeePerGas         *big.Int `json:"max_fee_per_gas"`
-	MaxPriorityFeePerGas *big.Int `json:"max_priority_fee_per_gas"`
+	MaxFeePerGas         *big.Int `json:"max_fee_per_gas" swaggertype:"string"`
+	MaxPriorityFeePerGas *big.Int `json:"max_priority_fee_per_gas" swaggertype:"string"`
 	TransactionType      uint8    `json:"transaction_type"`
-	R                    *big.Int `json:"r"`
-	S                    *big.Int `json:"s"`
-	V                    *big.Int `json:"v"`
+	R                    *big.Int `json:"r" swaggertype:"string"`
+	S                    *big.Int `json:"s" swaggertype:"string"`
+	V                    *big.Int `json:"v" swaggertype:"string"`
 	AccessListJson       *string  `json:"access_list_json"`
 	ContractAddress      *string  `json:"contract_address"`
 	GasUsed              *uint64  `json:"gas_used"`
 	CumulativeGasUsed    *uint64  `json:"cumulative_gas_used"`
-	EffectiveGasPrice    *big.Int `json:"effective_gas_price"`
+	EffectiveGasPrice    *big.Int `json:"effective_gas_price" swaggertype:"string"`
 	BlobGasUsed          *uint64  `json:"blob_gas_used"`
-	BlobGasPrice         *big.Int `json:"blob_gas_price"`
+	BlobGasPrice         *big.Int `json:"blob_gas_price" swaggertype:"string"`
 	LogsBloom            *string  `json:"logs_bloom"`
 	Status               *uint64  `json:"status"`
 }

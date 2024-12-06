@@ -15,26 +15,45 @@ import (
 
 // TransactionModel represents a simplified Transaction structure for Swagger documentation
 type TransactionModel struct {
-	ChainId              string `json:"chain_id"`
-	Hash                 string `json:"hash"`
-	Nonce                uint64 `json:"nonce"`
-	BlockHash            string `json:"block_hash"`
-	BlockNumber          string `json:"block_number"`
-	BlockTimestamp       uint64 `json:"block_timestamp"`
-	TransactionIndex     uint64 `json:"transaction_index"`
-	FromAddress          string `json:"from_address"`
-	ToAddress            string `json:"to_address"`
-	Value                string `json:"value"`
-	Gas                  uint64 `json:"gas"`
-	GasPrice             string `json:"gas_price"`
-	Data                 string `json:"data"`
-	MaxFeePerGas         string `json:"max_fee_per_gas"`
-	MaxPriorityFeePerGas string `json:"max_priority_fee_per_gas"`
-	TransactionType      uint8  `json:"transaction_type"`
-	R                    string `json:"r"`
-	S                    string `json:"s"`
-	V                    string `json:"v"`
-	AccessListJson       string `json:"access_list_json"`
+	ChainId              string  `json:"chain_id"`
+	Hash                 string  `json:"hash"`
+	Nonce                uint64  `json:"nonce"`
+	BlockHash            string  `json:"block_hash"`
+	BlockNumber          string  `json:"block_number"`
+	BlockTimestamp       uint64  `json:"block_timestamp"`
+	TransactionIndex     uint64  `json:"transaction_index"`
+	FromAddress          string  `json:"from_address"`
+	ToAddress            string  `json:"to_address"`
+	Value                string  `json:"value"`
+	Gas                  uint64  `json:"gas"`
+	GasPrice             string  `json:"gas_price"`
+	Data                 string  `json:"data"`
+	MaxFeePerGas         string  `json:"max_fee_per_gas"`
+	MaxPriorityFeePerGas string  `json:"max_priority_fee_per_gas"`
+	TransactionType      uint8   `json:"transaction_type"`
+	R                    string  `json:"r"`
+	S                    string  `json:"s"`
+	V                    string  `json:"v"`
+	AccessListJson       *string `json:"access_list_json"`
+	ContractAddress      *string `json:"contract_address"`
+	GasUsed              *uint64 `json:"gas_used"`
+	CumulativeGasUsed    *uint64 `json:"cumulative_gas_used"`
+	EffectiveGasPrice    *string `json:"effective_gas_price"`
+	BlobGasUsed          *uint64 `json:"blob_gas_used"`
+	BlobGasPrice         *string `json:"blob_gas_price"`
+	LogsBloom            *string `json:"logs_bloom"`
+	Status               *uint64 `json:"status"`
+}
+
+type DecodedTransactionDataModel struct {
+	Name      string                 `json:"name"`
+	Signature string                 `json:"signature"`
+	Inputs    map[string]interface{} `json:"inputs"`
+}
+
+type DecodedTransactionModel struct {
+	TransactionModel
+	Decoded DecodedTransactionDataModel `json:"decoded"`
 }
 
 // @Summary Get all transactions
@@ -49,7 +68,7 @@ type TransactionModel struct {
 // @Param sort_by query string false "Field to sort results by"
 // @Param sort_order query string false "Sort order (asc or desc)"
 // @Param page query int false "Page number for pagination"
-// @Param limit query int false "Number of items per page"
+// @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
 // @Failure 400 {object} api.Error
@@ -73,7 +92,7 @@ func GetTransactions(c *gin.Context) {
 // @Param sort_by query string false "Field to sort results by"
 // @Param sort_order query string false "Sort order (asc or desc)"
 // @Param page query int false "Page number for pagination"
-// @Param limit query int false "Number of items per page"
+// @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
 // @Failure 400 {object} api.Error
@@ -86,22 +105,22 @@ func GetTransactionsByContract(c *gin.Context) {
 }
 
 // @Summary Get transactions by contract and signature
-// @Description Retrieve transactions for a specific contract and signature (Not implemented yet)
+// @Description Retrieve transactions for a specific contract and signature. When a valid function signature is provided, the response includes decoded transaction data with function inputs.
 // @Tags transactions
 // @Accept json
 // @Produce json
 // @Security BasicAuth
 // @Param chainId path string true "Chain ID"
 // @Param to path string true "Contract address"
-// @Param signature path string true "Function signature"
+// @Param signature path string true "Function signature (e.g., 'transfer(address,uint256)')"
 // @Param filter query string false "Filter parameters"
 // @Param group_by query string false "Field to group results by"
 // @Param sort_by query string false "Field to sort results by"
 // @Param sort_order query string false "Sort order (asc or desc)"
 // @Param page query int false "Page number for pagination"
-// @Param limit query int false "Number of items per page"
+// @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
-// @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
+// @Success 200 {object} api.QueryResponse{data=[]DecodedTransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
