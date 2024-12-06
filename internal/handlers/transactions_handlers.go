@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -56,7 +57,7 @@ type TransactionModel struct {
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/transactions [get]
 func GetTransactions(c *gin.Context) {
-	handleTransactionsRequest(c, "", "")
+	handleTransactionsRequest(c, "", "", nil)
 }
 
 // @Summary Get transactions by contract
@@ -81,7 +82,7 @@ func GetTransactions(c *gin.Context) {
 // @Router /{chainId}/transactions/{to} [get]
 func GetTransactionsByContract(c *gin.Context) {
 	to := c.Param("to")
-	handleTransactionsRequest(c, to, "")
+	handleTransactionsRequest(c, to, "", nil)
 }
 
 // @Summary Get transactions by contract and signature
@@ -109,10 +110,14 @@ func GetTransactionsByContractAndSignature(c *gin.Context) {
 	to := c.Param("to")
 	signature := c.Param("signature")
 	strippedSignature := common.StripPayload(signature)
-	handleTransactionsRequest(c, to, strippedSignature)
+	functionABI, err := common.ConstructFunctionABI(signature)
+	if err != nil {
+		log.Debug().Err(err).Msgf("Unable to construct function ABI for %s", signature)
+	}
+	handleTransactionsRequest(c, to, strippedSignature, functionABI)
 }
 
-func handleTransactionsRequest(c *gin.Context, contractAddress, signature string) {
+func handleTransactionsRequest(c *gin.Context, contractAddress, signature string, functionABI *abi.Method) {
 	chainId, err := api.GetChainId(c)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
@@ -187,7 +192,16 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 			api.InternalErrorHandler(c)
 			return
 		}
-		queryResult.Data = transactionsResult.Data
+		if functionABI != nil {
+			decodedTransactions := []*common.DecodedTransaction{}
+			for _, transaction := range transactionsResult.Data {
+				decodedTransaction := transaction.Decode(functionABI)
+				decodedTransactions = append(decodedTransactions, decodedTransaction)
+			}
+			queryResult.Data = decodedTransactions
+		} else {
+			queryResult.Data = transactionsResult.Data
+		}
 		queryResult.Meta.TotalItems = len(transactionsResult.Data)
 	}
 
