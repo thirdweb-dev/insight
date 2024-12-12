@@ -932,7 +932,8 @@ func (c *ClickHouseConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, b
 }
 
 func (c *ClickHouseConnector) LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) (blockHeaders []common.BlockHeader, err error) {
-	query := fmt.Sprintf("SELECT number, hash, parent_hash FROM %s.blocks WHERE chain_id = %s AND number <= %s AND is_deleted = 0 ORDER BY number DESC", c.cfg.Database, chainId.String(), lookbackStart.String())
+	lookbackEnd := new(big.Int).Sub(lookbackStart, big.NewInt(int64(limit)))
+	query := fmt.Sprintf("SELECT number, hash, parent_hash FROM %s.blocks WHERE chain_id = %s AND number <= %s AND number > %s AND is_deleted = 0 ORDER BY number DESC", c.cfg.Database, chainId.String(), lookbackStart.String(), lookbackEnd.String())
 	query += getLimitClause(limit)
 
 	rows, err := c.conn.Query(context.Background(), query)

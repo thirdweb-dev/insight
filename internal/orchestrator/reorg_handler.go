@@ -102,7 +102,12 @@ func (rh *ReorgHandler) RunFromBlock(lookbackFrom *big.Int) (lastCheckedBlock *b
 		return nil, nil
 	}
 	mostRecentBlockHeader := blockHeaders[0]
-	log.Debug().Msgf("Checking for reorgs from block %s to %s", mostRecentBlockHeader.Number.String(), blockHeaders[len(blockHeaders)-1].Number.String())
+	lastBlockHeader := blockHeaders[len(blockHeaders)-1]
+	if mostRecentBlockHeader.Number.Cmp(lastBlockHeader.Number) == 0 {
+		log.Debug().Msgf("Most recent (%s) and last checked (%s) block numbers are equal, skipping reorg check", mostRecentBlockHeader.Number.String(), lastBlockHeader.Number.String())
+		return nil, nil
+	}
+	log.Debug().Msgf("Checking for reorgs from block %s to %s", mostRecentBlockHeader.Number.String(), lastBlockHeader.Number.String())
 	reorgEndIndex := findReorgEndIndex(blockHeaders)
 	if reorgEndIndex == -1 {
 		return mostRecentBlockHeader.Number, nil
