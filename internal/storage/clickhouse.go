@@ -1004,14 +1004,14 @@ func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*
 }
 
 func (c *ClickHouseConnector) deleteBatch(chainId *big.Int, blockNumbers []*big.Int, table string, blockNumberColumn string) error {
-	query := fmt.Sprintf("DELETE FROM %s.%s WHERE chain_id = ? AND %s IN (?)", c.cfg.Database, table, blockNumberColumn)
+	query := fmt.Sprintf("DELETE FROM %s.%s WHERE _partition_id = ? AND chain_id = ? AND %s IN (?)", c.cfg.Database, table, blockNumberColumn)
 
 	blockNumbersStr := make([]string, len(blockNumbers))
 	for i, bn := range blockNumbers {
 		blockNumbersStr[i] = bn.String()
 	}
 
-	err := c.conn.Exec(context.Background(), query, chainId, blockNumbersStr)
+	err := c.conn.Exec(context.Background(), query, chainId, chainId, blockNumbersStr)
 	if err != nil {
 		return fmt.Errorf("error deleting from %s: %w", table, err)
 	}
