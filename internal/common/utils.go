@@ -176,7 +176,7 @@ var disallowedPatterns = []string{
 	`(?i)\b(UNION|INSERT|DELETE|UPDATE|DROP|CREATE|ALTER|TRUNCATE|EXEC|;|--)`,
 }
 
-// validateQuery checks the query for disallowed patterns and ensures only allowed functions are used.
+// ValidateQuery checks the query for disallowed patterns and ensures only allowed functions are used.
 func ValidateQuery(query string) error {
 	// Check for disallowed patterns
 	for _, pattern := range disallowedPatterns {

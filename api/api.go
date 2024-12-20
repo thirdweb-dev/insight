@@ -130,7 +130,7 @@ func ParseQueryParams(r *http.Request) (QueryParams, error) {
 }
 
 func GetChainId(c *gin.Context) (*big.Int, error) {
-	// TODO: check chainId agains the chain-service to ensure it's valid
+	// TODO: check chainId against the chain-service to ensure it's valid
 	chainId := c.Param("chainId")
 	chainIdInt, err := strconv.ParseUint(chainId, 10, 64)
 	if err != nil {
