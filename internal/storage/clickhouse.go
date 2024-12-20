@@ -493,9 +493,9 @@ func addFilterParams(key, value, query string) string {
 	suffix := key[len(key)-3:]
 	switch suffix {
 	case "gte":
-		query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-3], value)
+		query += fmt.Sprintf(" AND %s >= '%s'", key[:len(key)-4], value)
 	case "lte":
-		query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-3], value)
+		query += fmt.Sprintf(" AND %s <= '%s'", key[:len(key)-4], value)
 	case "_lt":
 		query += fmt.Sprintf(" AND %s < '%s'", key[:len(key)-3], value)
 	case "_gt":
