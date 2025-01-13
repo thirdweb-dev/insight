@@ -11,15 +11,15 @@ import (
 )
 
 type Log struct {
-	ChainId          *big.Int `json:"chain_id" swaggertype:"string"`
-	BlockNumber      *big.Int `json:"block_number" swaggertype:"string"`
-	BlockHash        string   `json:"block_hash"`
-	BlockTimestamp   uint64   `json:"block_timestamp"`
-	TransactionHash  string   `json:"transaction_hash"`
-	TransactionIndex uint64   `json:"transaction_index"`
-	LogIndex         uint64   `json:"log_index"`
-	Address          string   `json:"address"`
-	Data             string   `json:"data"`
+	ChainId          *big.Int `json:"chain_id" ch:"chain_id" swaggertype:"string"`
+	BlockNumber      *big.Int `json:"block_number" ch:"block_number" swaggertype:"string"`
+	BlockHash        string   `json:"block_hash" ch:"block_hash"`
+	BlockTimestamp   uint64   `json:"block_timestamp" ch:"block_timestamp"`
+	TransactionHash  string   `json:"transaction_hash" ch:"transaction_hash"`
+	TransactionIndex uint64   `json:"transaction_index" ch:"transaction_index"`
+	LogIndex         uint64   `json:"log_index" ch:"log_index"`
+	Address          string   `json:"address" ch:"address"`
+	Data             string   `json:"data" ch:"data"`
 	Topics           []string `json:"topics"`
 }
 
