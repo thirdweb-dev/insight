@@ -1,0 +1,142 @@
+-- create blocks table
+CREATE TABLE IF NOT EXISTS blocks (
+    `chain_id` UInt256,
+    `number` UInt256,
+    `timestamp` UInt64 CODEC(Delta, ZSTD),
+    `hash` FixedString(66),
+    `parent_hash` FixedString(66),
+    `sha3_uncles` FixedString(66),
+    `nonce` FixedString(18),
+    `mix_hash` FixedString(66),
+    `miner` FixedString(42),
+    `state_root` FixedString(66),
+    `transactions_root` FixedString(66),
+    `receipts_root` FixedString(66),
+    `logs_bloom` String,
+    `size` UInt64,
+    `extra_data` String,
+    `difficulty` UInt256,
+    `total_difficulty` UInt256,
+    `transaction_count` UInt64,
+    `gas_limit` UInt256,
+    `gas_used` UInt256,
+    `withdrawals_root` Nullable(FixedString(66)),
+    `base_fee_per_gas` Nullable(UInt64),
+    `insert_timestamp` DateTime DEFAULT now(),
+    `is_deleted` UInt8 DEFAULT 0,
+    INDEX idx_timestamp timestamp TYPE minmax GRANULARITY 1,
+    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 1,
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (chain_id, number)
+PARTITION BY chain_id
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+
+-- create logs table
+CREATE TABLE IF NOT EXISTS logs (
+    `chain_id` UInt256,
+    `block_number` UInt256,
+    `block_hash` FixedString(66),
+    `block_timestamp` UInt64 CODEC(Delta, ZSTD),
+    `transaction_hash` FixedString(66),
+    `transaction_index` UInt64,
+    `log_index` UInt64,
+    `address` FixedString(42),
+    `data` String,
+    `topic_0` String,
+    `topic_1` Nullable(String),
+    `topic_2` Nullable(String),
+    `topic_3` Nullable(String),
+    `insert_timestamp` DateTime DEFAULT now(),
+    `is_deleted` UInt8 DEFAULT 0,
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
+    INDEX idx_transaction_hash transaction_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_address address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_topic0 topic_0 TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_topic1 topic_1 TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_topic2 topic_2 TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_topic3 topic_3 TYPE bloom_filter GRANULARITY 1,
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (chain_id, block_number, transaction_hash, log_index)
+PARTITION BY chain_id
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+
+-- create transactions table
+CREATE TABLE IF NOT EXISTS transactions (
+    `chain_id` UInt256,
+    `hash` FixedString(66),
+    `nonce` UInt64,
+    `block_hash` FixedString(66),
+    `block_number` UInt256,
+    `block_timestamp` UInt64 CODEC(Delta, ZSTD),
+    `transaction_index` UInt64,
+    `from_address` FixedString(42),
+    `to_address` FixedString(42),
+    `value` UInt256,
+    `gas` UInt64,
+    `gas_price` UInt256,
+    `data` String,
+    `function_selector` FixedString(10),
+    `max_fee_per_gas` UInt128,
+    `max_priority_fee_per_gas` UInt128,
+    `transaction_type` UInt8,
+    `r` UInt256,
+    `s` UInt256,
+    `v` UInt256,
+    `access_list` Nullable(String),
+    `contract_address` Nullable(FixedString(42)),
+    `gas_used` Nullable(UInt64),
+    `cumulative_gas_used` Nullable(UInt64),
+    `effective_gas_price` Nullable(UInt256),
+    `blob_gas_used` Nullable(UInt64),
+    `blob_gas_price` Nullable(UInt256),
+    `logs_bloom` Nullable(String),
+    `status` Nullable(UInt64),
+    `is_deleted` UInt8 DEFAULT 0,
+    `insert_timestamp` DateTime DEFAULT now(),
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
+    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 1,
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (chain_id, block_number, hash)
+PARTITION BY chain_id
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+
+-- create traces table
+CREATE TABLE IF NOT EXISTS traces (
+    `chain_id` UInt256,
+    `block_number` UInt256,
+    `block_hash` FixedString(66),
+    `block_timestamp` UInt64 CODEC(Delta, ZSTD),
+    `transaction_hash` FixedString(66),
+    `transaction_index` UInt64,
+    `subtraces` Int64,
+    `trace_address` Array(Int64),
+    `type` LowCardinality(String),
+    `call_type` LowCardinality(String),
+    `error` Nullable(String),
+    `from_address` FixedString(42),
+    `to_address` FixedString(42),
+    `gas` UInt64,
+    `gas_used` UInt64,
+    `input` String,
+    `output` Nullable(String),
+    `value` UInt256,
+    `author` Nullable(FixedString(42)),
+    `reward_type` LowCardinality(Nullable(String)),
+    `refund_address` Nullable(FixedString(42)),
+    `is_deleted` UInt8 DEFAULT 0,
+    `insert_timestamp` DateTime DEFAULT now(),
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
+    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_transaction_hash transaction_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_type type TYPE bloom_filter GRANULARITY 1,
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+ORDER BY (chain_id, block_number, transaction_hash, trace_address)
+PARTITION BY chain_id
+SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
