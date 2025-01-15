@@ -172,6 +172,7 @@ var allowedFunctions = map[string]struct{}{
 	"if":                   {},
 	"toStartOfDay":         {},
 	"toDate":               {},
+	"concat":               {},
 }
 
 var disallowedPatterns = []string{
