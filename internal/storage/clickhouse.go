@@ -64,8 +64,9 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 		Settings: func() clickhouse.Settings {
 			if cfg.AsyncInsert {
 				return clickhouse.Settings{
-					"async_insert":          "1",
-					"wait_for_async_insert": "1",
+					"async_insert":             "1",
+					"wait_for_async_insert":    "1",
+					"lightweight_deletes_sync": "0",
 				}
 			}
 			return clickhouse.Settings{}
@@ -954,68 +955,183 @@ func (c *ClickHouseConnector) LookbackBlockHeaders(chainId *big.Int, limit int, 
 }
 
 func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error {
-	var saveErr error
-	var saveErrMutex sync.Mutex
+	var deleteErr error
+	var deleteErrMutex sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(4)
 
 	go func() {
 		defer wg.Done()
-		if err := c.deleteBatch(chainId, blockNumbers, "blocks", "number"); err != nil {
-			saveErrMutex.Lock()
-			saveErr = fmt.Errorf("error deleting blocks: %v", err)
-			saveErrMutex.Unlock()
+		if err := c.deleteBlocksByNumbers(chainId, blockNumbers); err != nil {
+			deleteErrMutex.Lock()
+			deleteErr = fmt.Errorf("error deleting blocks: %v", err)
+			deleteErrMutex.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if err := c.deleteBatch(chainId, blockNumbers, "logs", "block_number"); err != nil {
-			saveErrMutex.Lock()
-			saveErr = fmt.Errorf("error deleting logs: %v", err)
-			saveErrMutex.Unlock()
+		if err := c.deleteLogsByNumbers(chainId, blockNumbers); err != nil {
+			deleteErrMutex.Lock()
+			deleteErr = fmt.Errorf("error deleting logs: %v", err)
+			deleteErrMutex.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if err := c.deleteBatch(chainId, blockNumbers, "transactions", "block_number"); err != nil {
-			saveErrMutex.Lock()
-			saveErr = fmt.Errorf("error deleting transactions: %v", err)
-			saveErrMutex.Unlock()
+		if err := c.deleteTransactionsByNumbers(chainId, blockNumbers); err != nil {
+			deleteErrMutex.Lock()
+			deleteErr = fmt.Errorf("error deleting transactions: %v", err)
+			deleteErrMutex.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if err := c.deleteBatch(chainId, blockNumbers, "traces", "block_number"); err != nil {
-			saveErrMutex.Lock()
-			saveErr = fmt.Errorf("error deleting traces: %v", err)
-			saveErrMutex.Unlock()
+		if err := c.deleteTracesByNumbers(chainId, blockNumbers); err != nil {
+			deleteErrMutex.Lock()
+			deleteErr = fmt.Errorf("error deleting traces: %v", err)
+			deleteErrMutex.Unlock()
 		}
 	}()
 
 	wg.Wait()
 
-	if saveErr != nil {
-		return saveErr
+	if deleteErr != nil {
+		return deleteErr
 	}
 	return nil
 }
 
-func (c *ClickHouseConnector) deleteBatch(chainId *big.Int, blockNumbers []*big.Int, table string, blockNumberColumn string) error {
-	query := fmt.Sprintf("DELETE FROM %s.%s WHERE chain_id = ? AND %s IN (?)", c.cfg.Database, table, blockNumberColumn)
+func (c *ClickHouseConnector) deleteBlocksByNumbers(chainId *big.Int, blockNumbers []*big.Int) error {
+	query := fmt.Sprintf("DELETE FROM %s.blocks WHERE _partition_value.1 = ? AND chain_id = ? AND number IN (?)", c.cfg.Database)
 
 	blockNumbersStr := make([]string, len(blockNumbers))
 	for i, bn := range blockNumbers {
 		blockNumbersStr[i] = bn.String()
 	}
-
-	err := c.conn.Exec(context.Background(), query, chainId, blockNumbersStr)
+	err := c.conn.Exec(context.Background(), query, chainId, chainId, blockNumbersStr)
 	if err != nil {
-		return fmt.Errorf("error deleting from %s: %w", table, err)
+		return fmt.Errorf("error deleting blocks: %w", err)
+	}
+	return nil
+}
+
+func (c *ClickHouseConnector) deleteLogsByNumbers(chainId *big.Int, blockNumbers []*big.Int) error {
+	blockNumbersStr := make([]string, len(blockNumbers))
+	for i, bn := range blockNumbers {
+		blockNumbersStr[i] = bn.String()
+	}
+	getQuery := fmt.Sprintf("SELECT block_number, transaction_hash, log_index FROM %s.logs WHERE chain_id = %s AND block_number IN (?) AND is_deleted = 0", c.cfg.Database, chainId.String())
+
+	rows, getErr := c.conn.Query(context.Background(), getQuery, blockNumbersStr)
+	if getErr != nil {
+		return getErr
+	}
+	defer rows.Close()
+
+	blockNumbersToDelete := common.NewSet[string]()
+	txHashesToDelete := common.NewSet[string]()
+	logIndexesToDelete := common.NewSet[uint64]()
+	for rows.Next() {
+		var logToDelete common.Log
+		err := rows.ScanStruct(&logToDelete)
+		if err != nil {
+			return err
+		}
+		blockNumbersToDelete.Add(logToDelete.BlockNumber.String())
+		txHashesToDelete.Add(logToDelete.TransactionHash)
+		logIndexesToDelete.Add(logToDelete.LogIndex)
 	}
 
+	if txHashesToDelete.Size() == 0 {
+		return nil // No logs to delete
+	}
+
+	deleteQuery := fmt.Sprintf("DELETE FROM %s.logs WHERE _partition_value.1 = ? AND chain_id = ? AND block_number IN (?) AND transaction_hash IN (?) AND log_index IN (?)", c.cfg.Database)
+
+	err := c.conn.Exec(context.Background(), deleteQuery, chainId, chainId, blockNumbersToDelete.List(), txHashesToDelete.List(), logIndexesToDelete.List())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *ClickHouseConnector) deleteTransactionsByNumbers(chainId *big.Int, blockNumbers []*big.Int) error {
+	blockNumbersStr := make([]string, len(blockNumbers))
+	for i, bn := range blockNumbers {
+		blockNumbersStr[i] = bn.String()
+	}
+	getQuery := fmt.Sprintf("SELECT block_number, hash FROM %s.transactions WHERE chain_id = %s AND block_number IN (?) AND is_deleted = 0", c.cfg.Database, chainId.String())
+
+	rows, getErr := c.conn.Query(context.Background(), getQuery, blockNumbersStr)
+	if getErr != nil {
+		return getErr
+	}
+	defer rows.Close()
+
+	blockNumbersToDelete := common.NewSet[string]()
+	hashesToDelete := common.NewSet[string]()
+
+	for rows.Next() {
+		var txToDelete common.Transaction
+		err := rows.ScanStruct(&txToDelete)
+		if err != nil {
+			return err
+		}
+		blockNumbersToDelete.Add(txToDelete.BlockNumber.String())
+		hashesToDelete.Add(txToDelete.Hash)
+	}
+
+	if hashesToDelete.Size() == 0 {
+		return nil // No transactions to delete
+	}
+
+	deleteQuery := fmt.Sprintf("DELETE FROM %s.transactions WHERE _partition_value.1 = ? AND chain_id = ? AND block_number IN (?) AND hash IN (?)", c.cfg.Database)
+
+	err := c.conn.Exec(context.Background(), deleteQuery, chainId, chainId, blockNumbersToDelete.List(), hashesToDelete.List())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *ClickHouseConnector) deleteTracesByNumbers(chainId *big.Int, blockNumbers []*big.Int) error {
+	blockNumbersStr := make([]string, len(blockNumbers))
+	for i, bn := range blockNumbers {
+		blockNumbersStr[i] = bn.String()
+	}
+	getQuery := fmt.Sprintf("SELECT block_number, transaction_hash FROM %s.traces WHERE chain_id = %s AND block_number IN (?) AND is_deleted = 0", c.cfg.Database, chainId.String())
+
+	rows, getErr := c.conn.Query(context.Background(), getQuery, blockNumbersStr)
+	if getErr != nil {
+		return getErr
+	}
+	defer rows.Close()
+
+	blockNumbersToDelete := common.NewSet[string]()
+	txHashesToDelete := common.NewSet[string]()
+	for rows.Next() {
+		var traceToDelete common.Trace
+		err := rows.ScanStruct(&traceToDelete)
+		if err != nil {
+			return err
+		}
+		blockNumbersToDelete.Add(traceToDelete.BlockNumber.String())
+		txHashesToDelete.Add(traceToDelete.TransactionHash)
+	}
+
+	if txHashesToDelete.Size() == 0 {
+		return nil // No traces to delete
+	}
+
+	deleteQuery := fmt.Sprintf("DELETE FROM %s.traces WHERE _partition_value.1 = ? AND chain_id = ? AND block_number IN (?) AND transaction_hash IN (?)", c.cfg.Database)
+
+	err := c.conn.Exec(context.Background(), deleteQuery, chainId, chainId, blockNumbersToDelete.List(), txHashesToDelete.List())
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
