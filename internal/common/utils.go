@@ -173,6 +173,8 @@ var allowedFunctions = map[string]struct{}{
 	"toStartOfDay":         {},
 	"toDate":               {},
 	"concat":               {},
+	"in":                   {},
+	"IN":                   {},
 }
 
 var disallowedPatterns = []string{

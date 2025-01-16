@@ -85,7 +85,7 @@ func (m *MemoryConnector) insertBlocks(blocks *[]common.Block) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetBlocks(qf QueryFilter) ([]common.Block, error) {
+func (m *MemoryConnector) GetBlocks(qf QueryFilter) (QueryResult[common.Block], error) {
 	blocks := []common.Block{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
@@ -100,13 +100,13 @@ func (m *MemoryConnector) GetBlocks(qf QueryFilter) ([]common.Block, error) {
 				block := common.Block{}
 				err := json.Unmarshal([]byte(value), &block)
 				if err != nil {
-					return nil, err
+					return QueryResult[common.Block]{}, err
 				}
 				blocks = append(blocks, block)
 			}
 		}
 	}
-	return blocks, nil
+	return QueryResult[common.Block]{Data: blocks}, nil
 }
 
 func (m *MemoryConnector) insertTransactions(txs *[]common.Transaction) error {
@@ -120,7 +120,7 @@ func (m *MemoryConnector) insertTransactions(txs *[]common.Transaction) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction, error) {
+func (m *MemoryConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Transaction], error) {
 	txs := []common.Transaction{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
@@ -134,13 +134,13 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) ([]common.Transaction,
 				tx := common.Transaction{}
 				err := json.Unmarshal([]byte(value), &tx)
 				if err != nil {
-					return nil, err
+					return QueryResult[common.Transaction]{}, err
 				}
 				txs = append(txs, tx)
 			}
 		}
 	}
-	return txs, nil
+	return QueryResult[common.Transaction]{Data: txs}, nil
 }
 
 func (m *MemoryConnector) insertLogs(logs *[]common.Log) error {
@@ -154,7 +154,7 @@ func (m *MemoryConnector) insertLogs(logs *[]common.Log) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
+func (m *MemoryConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], error) {
 	logs := []common.Log{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
@@ -168,13 +168,13 @@ func (m *MemoryConnector) GetLogs(qf QueryFilter) ([]common.Log, error) {
 				log := common.Log{}
 				err := json.Unmarshal([]byte(value), &log)
 				if err != nil {
-					return nil, err
+					return QueryResult[common.Log]{}, err
 				}
 				logs = append(logs, log)
 			}
 		}
 	}
-	return logs, nil
+	return QueryResult[common.Log]{Data: logs}, nil
 }
 
 func (m *MemoryConnector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) {
@@ -314,7 +314,7 @@ func (m *MemoryConnector) insertTraces(traces *[]common.Trace) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetTraces(qf QueryFilter) ([]common.Trace, error) {
+func (m *MemoryConnector) GetTraces(qf QueryFilter) (QueryResult[common.Trace], error) {
 	traces := []common.Trace{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
@@ -328,13 +328,13 @@ func (m *MemoryConnector) GetTraces(qf QueryFilter) ([]common.Trace, error) {
 				trace := common.Trace{}
 				err := json.Unmarshal([]byte(value), &trace)
 				if err != nil {
-					return nil, err
+					return QueryResult[common.Trace]{}, err
 				}
 				traces = append(traces, trace)
 			}
 		}
 	}
-	return traces, nil
+	return QueryResult[common.Trace]{Data: traces}, nil
 }
 
 func traceAddressToString(traceAddress []uint64) string {
@@ -399,7 +399,7 @@ func (m *MemoryConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.
 	return nil
 }
 
-func (m *MemoryConnector) LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) ([]common.BlockHeader, error) {
+func (m *MemoryConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) ([]common.BlockHeader, error) {
 	blockHeaders := []common.BlockHeader{}
 	for _, key := range m.cache.Keys() {
 		if strings.HasPrefix(key, fmt.Sprintf("block:%s:", chainId.String())) {
@@ -408,7 +408,7 @@ func (m *MemoryConnector) LookbackBlockHeaders(chainId *big.Int, limit int, look
 			if !ok {
 				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
 			}
-			if blockNumber.Cmp(lookbackStart) <= 0 {
+			if blockNumber.Cmp(from) >= 0 && blockNumber.Cmp(to) <= 0 {
 				value, _ := m.cache.Get(key)
 				block := common.Block{}
 				err := json.Unmarshal([]byte(value), &block)
