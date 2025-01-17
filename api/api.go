@@ -144,3 +144,14 @@ func GetChainId(c *gin.Context) (*big.Int, error) {
 	}
 	return big.NewInt(int64(chainIdInt)), nil
 }
+
+func ParseIntQueryParam(value string, defaultValue int) int {
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}

@@ -1369,3 +1369,50 @@ func (c *ClickHouseConnector) getTableName(chainId *big.Int, defaultTable string
 
 	return defaultTable
 }
+
+func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter) (QueryResult[common.TokenBalance], error) {
+	columns := "chain_id, token_type, address, owner, token_id, balance"
+	balanceCondition := ">="
+	if qf.ZeroBalance {
+		balanceCondition = ">"
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s.token_balances FINAL WHERE chain_id = ? AND token_type = ? AND owner = ? AND balance %s 0", columns, c.cfg.Database, balanceCondition)
+
+	if qf.TokenAddress != "" {
+		query += fmt.Sprintf(" AND address = '%s'", qf.TokenAddress)
+	}
+
+	// Add ORDER BY clause
+	if qf.SortBy != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+	}
+
+	// Add limit clause
+	if qf.Page > 0 && qf.Limit > 0 {
+		offset := (qf.Page - 1) * qf.Limit
+		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
+	} else if qf.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
+	}
+
+	rows, err := c.conn.Query(context.Background(), query, qf.ChainId, qf.TokenType, qf.Owner)
+	if err != nil {
+		return QueryResult[common.TokenBalance]{}, err
+	}
+	defer rows.Close()
+
+	queryResult := QueryResult[common.TokenBalance]{
+		Data: []common.TokenBalance{},
+	}
+
+	for rows.Next() {
+		var tb common.TokenBalance
+		err := rows.ScanStruct(&tb)
+		if err != nil {
+			return QueryResult[common.TokenBalance]{}, err
+		}
+		queryResult.Data = append(queryResult.Data, tb)
+	}
+
+	return queryResult, nil
+}
