@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS block_failures;
+DROP TABLE IF EXISTS cursors;

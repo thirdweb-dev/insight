@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/thirdweb-dev/indexer/db"
 	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 )
@@ -26,6 +27,11 @@ func RunOrchestrator(cmd *cobra.Command, args []string) {
 	rpc, err := rpc.Initialize()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize RPC")
+	}
+
+	err = db.RunMigrations()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to run migrations")
 	}
 
 	orchestrator, err := orchestrator.NewOrchestrator(rpc)
