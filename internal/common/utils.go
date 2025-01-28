@@ -170,7 +170,10 @@ var allowedFunctions = map[string]struct{}{
 	"length":               {},
 	"toUInt256":            {},
 	"if":                   {},
+	"toStartOfMonth":       {},
 	"toStartOfDay":         {},
+	"toStartOfHour":        {},
+	"toStartOfMinute":      {},
 	"toDate":               {},
 	"concat":               {},
 }
