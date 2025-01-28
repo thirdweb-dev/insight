@@ -373,6 +373,11 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 		query += fmt.Sprintf(" GROUP BY %s", groupByColumns)
 	}
 
+	// Add ORDER BY clause
+	if qf.SortBy != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+	}
+
 	if err := common.ValidateQuery(query); err != nil {
 		return QueryResult[interface{}]{}, err
 	}
