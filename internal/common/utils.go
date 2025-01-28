@@ -175,6 +175,7 @@ var allowedFunctions = map[string]struct{}{
 	"toStartOfHour":        {},
 	"toStartOfMinute":      {},
 	"toDate":               {},
+	"toDateTime":           {},
 	"concat":               {},
 }
 
