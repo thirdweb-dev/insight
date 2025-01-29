@@ -2,11 +2,29 @@ package common
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
+
+var contractApi string = "https://contract.thirdweb.com"
+
+func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
+	url := fmt.Sprintf("%s/abi/%s/%s", contractApi, chainId, contract)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contract abi: %v", err)
+	}
+
+	abi, err := abi.JSON(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load contract abi: %v", err)
+	}
+	return &abi, nil
+}
 
 func ConstructEventABI(signature string) (*abi.Event, error) {
 	// Regex to extract the event name and parameters

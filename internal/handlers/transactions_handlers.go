@@ -219,7 +219,8 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 			}
 			queryResult.Data = decodedTransactions
 		} else {
-			queryResult.Data = transactionsResult.Data
+			decodedTransactions := common.DecodeTransactions(chainId.String(), transactionsResult.Data)
+			queryResult.Data = decodedTransactions
 		}
 		queryResult.Meta.TotalItems = len(transactionsResult.Data)
 	}

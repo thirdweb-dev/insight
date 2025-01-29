@@ -52,6 +52,55 @@ type DecodedTransaction struct {
 	Decoded DecodedTransactionData `json:"decodedData"`
 }
 
+func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction {
+	decodedTxs := []*DecodedTransaction{}
+	abis := make(map[string]*abi.ABI)
+
+	decodeTxFunc := func(transaction *Transaction) *DecodedTransaction {
+		decodedTransaction := DecodedTransaction{Transaction: *transaction}
+		abi, ok := abis[transaction.ToAddress]
+		// ABI not found yet
+		if !ok {
+			abiResult, err := GetABIForContract(chainId, transaction.ToAddress)
+			if err != nil {
+				abis[transaction.ToAddress] = nil
+				return &decodedTransaction
+			} else {
+				abis[transaction.ToAddress] = abiResult
+			}
+		}
+
+		if abi == nil {
+			return &decodedTransaction
+		}
+
+		decodedData, err := hex.DecodeString(strings.TrimPrefix(transaction.Data, "0x"))
+		if err != nil {
+			return &decodedTransaction
+		}
+
+		if len(decodedData) < 4 {
+			return &decodedTransaction
+		}
+		methodID := decodedData[:4]
+		method, err := abi.MethodById(methodID)
+		if err != nil {
+			log.Debug().Msgf("failed to get method by id: %v", err)
+			return &decodedTransaction
+		}
+		if method == nil {
+			return &decodedTransaction
+		}
+		return transaction.Decode(method)
+	}
+
+	for _, transaction := range txs {
+		decodedTx := decodeTxFunc(&transaction)
+		decodedTxs = append(decodedTxs, decodedTx)
+	}
+	return decodedTxs
+}
+
 func (t *Transaction) Decode(functionABI *abi.Method) *DecodedTransaction {
 	decodedData, err := hex.DecodeString(strings.TrimPrefix(t.Data, "0x"))
 	if err != nil {
