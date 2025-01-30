@@ -92,8 +92,15 @@ func (rh *ReorgHandler) Start() {
 	select {}
 }
 
-func (rh *ReorgHandler) RunFromBlock(fromBlock *big.Int) (lastCheckedBlock *big.Int, err error) {
-	toBlock := new(big.Int).Add(fromBlock, big.NewInt(int64(rh.blocksPerScan)))
+func (rh *ReorgHandler) RunFromBlock(latestCheckedBlock *big.Int) (lastCheckedBlock *big.Int, err error) {
+	fromBlock, toBlock, err := rh.getReorgCheckRange(latestCheckedBlock)
+	if err != nil {
+		return nil, err
+	}
+	if toBlock.Cmp(latestCheckedBlock) == 0 {
+		log.Debug().Msgf("Most recent (%s) and last checked (%s) block numbers are equal, skipping reorg check", toBlock.String(), latestCheckedBlock.String())
+		return nil, nil
+	}
 	log.Debug().Msgf("Checking for reorgs from block %s to %s", fromBlock.String(), toBlock.String())
 	blockHeaders, err := rh.storage.MainStorage.GetBlockHeadersDescending(rh.rpc.GetChainID(), fromBlock, toBlock)
 	if err != nil {
@@ -104,11 +111,6 @@ func (rh *ReorgHandler) RunFromBlock(fromBlock *big.Int) (lastCheckedBlock *big.
 		return nil, nil
 	}
 	mostRecentBlockHeader := blockHeaders[0]
-	lastBlockHeader := blockHeaders[len(blockHeaders)-1]
-	if mostRecentBlockHeader.Number.Cmp(lastBlockHeader.Number) == 0 {
-		log.Debug().Msgf("Most recent (%s) and last checked (%s) block numbers are equal, skipping reorg check", mostRecentBlockHeader.Number.String(), lastBlockHeader.Number.String())
-		return nil, nil
-	}
 
 	firstMismatchIndex, err := findIndexOfFirstHashMismatch(blockHeaders)
 	if err != nil {
@@ -136,6 +138,27 @@ func (rh *ReorgHandler) RunFromBlock(fromBlock *big.Int) (lastCheckedBlock *big.
 		return nil, fmt.Errorf("error while handling reorg: %w", err)
 	}
 	return mostRecentBlockHeader.Number, nil
+}
+
+func (rh *ReorgHandler) getReorgCheckRange(latestCheckedBlock *big.Int) (*big.Int, *big.Int, error) {
+	latestCommittedBlock, err := rh.storage.MainStorage.GetMaxBlockNumber(rh.rpc.GetChainID())
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting latest committed block: %w", err)
+	}
+	if new(big.Int).Sub(latestCommittedBlock, latestCheckedBlock).Cmp(big.NewInt(int64(rh.blocksPerScan))) < 0 {
+		// diff between latest committed and latest checked is less than blocksPerScan, so we will look back from the latest committed block
+		fromBlock := new(big.Int).Sub(latestCommittedBlock, big.NewInt(int64(rh.blocksPerScan)))
+		if fromBlock.Cmp(big.NewInt(0)) < 0 {
+			fromBlock = big.NewInt(0)
+		}
+		toBlock := new(big.Int).Set(latestCommittedBlock)
+		return fromBlock, toBlock, nil
+	} else {
+		// diff between latest committed and latest checked is greater or equal to blocksPerScan, so we will look forward from the latest checked block
+		fromBlock := new(big.Int).Set(latestCheckedBlock)
+		toBlock := new(big.Int).Add(fromBlock, big.NewInt(int64(rh.blocksPerScan)))
+		return fromBlock, toBlock, nil
+	}
 }
 
 func findIndexOfFirstHashMismatch(blockHeadersDescending []common.BlockHeader) (int, error) {
