@@ -937,12 +937,10 @@ func (c *ClickHouseConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, b
 	return err
 }
 
-func (c *ClickHouseConnector) LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) (blockHeaders []common.BlockHeader, err error) {
-	lookbackEnd := new(big.Int).Sub(lookbackStart, big.NewInt(int64(limit)))
-	query := fmt.Sprintf("SELECT number, hash, parent_hash FROM %s.blocks WHERE chain_id = %s AND number <= %s AND number > %s AND is_deleted = 0 ORDER BY number DESC", c.cfg.Database, chainId.String(), lookbackStart.String(), lookbackEnd.String())
-	query += getLimitClause(limit)
+func (c *ClickHouseConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error) {
+	query := fmt.Sprintf("SELECT number, hash, parent_hash FROM %s.blocks FINAL WHERE chain_id = ? AND number >= ? AND number <= ? ORDER BY number DESC", c.cfg.Database)
 
-	rows, err := c.conn.Query(context.Background(), query)
+	rows, err := c.conn.Query(context.Background(), query, chainId, from, to)
 	if err != nil {
 		return nil, err
 	}
