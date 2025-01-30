@@ -71,9 +71,7 @@ func (rh *ReorgHandler) Start() {
 	log.Debug().Msgf("Reorg handler running")
 	go func() {
 		for range ticker.C {
-			// need to include lastCheckedBlock to check if next block's parent matches
-			lookbackFrom := new(big.Int).Add(rh.lastCheckedBlock, big.NewInt(int64(rh.blocksPerScan-1)))
-			mostRecentBlockChecked, err := rh.RunFromBlock(lookbackFrom)
+			mostRecentBlockChecked, err := rh.RunFromBlock(rh.lastCheckedBlock)
 			if err != nil {
 				log.Error().Err(err).Msg("Error during reorg handling")
 				continue
@@ -92,8 +90,10 @@ func (rh *ReorgHandler) Start() {
 	select {}
 }
 
-func (rh *ReorgHandler) RunFromBlock(lookbackFrom *big.Int) (lastCheckedBlock *big.Int, err error) {
-	blockHeaders, err := rh.storage.MainStorage.LookbackBlockHeaders(rh.rpc.GetChainID(), rh.blocksPerScan, lookbackFrom)
+func (rh *ReorgHandler) RunFromBlock(fromBlock *big.Int) (lastCheckedBlock *big.Int, err error) {
+	toBlock := new(big.Int).Add(fromBlock, big.NewInt(int64(rh.blocksPerScan)))
+	log.Debug().Msgf("Checking for reorgs from block %s to %s", fromBlock.String(), toBlock.String())
+	blockHeaders, err := rh.storage.MainStorage.GetBlockHeadersDescending(rh.rpc.GetChainID(), fromBlock, toBlock)
 	if err != nil {
 		return nil, fmt.Errorf("error getting recent block headers: %w", err)
 	}
@@ -107,17 +107,16 @@ func (rh *ReorgHandler) RunFromBlock(lookbackFrom *big.Int) (lastCheckedBlock *b
 		log.Debug().Msgf("Most recent (%s) and last checked (%s) block numbers are equal, skipping reorg check", mostRecentBlockHeader.Number.String(), lastBlockHeader.Number.String())
 		return nil, nil
 	}
-	log.Debug().Msgf("Checking for reorgs from block %s to %s", mostRecentBlockHeader.Number.String(), lastBlockHeader.Number.String())
 	reorgEndIndex := findReorgEndIndex(blockHeaders)
 	if reorgEndIndex == -1 {
 		return mostRecentBlockHeader.Number, nil
 	}
-	reorgEndBlock := blockHeaders[reorgEndIndex].Number
 	metrics.ReorgCounter.Inc()
 	forkPoint, err := rh.findFirstForkedBlockNumber(blockHeaders[reorgEndIndex:])
 	if err != nil {
 		return nil, fmt.Errorf("error while finding fork point: %w", err)
 	}
+	reorgEndBlock := blockHeaders[reorgEndIndex].Number
 	err = rh.handleReorg(forkPoint, reorgEndBlock)
 	if err != nil {
 		return nil, fmt.Errorf("error while handling reorg: %w", err)
@@ -125,23 +124,23 @@ func (rh *ReorgHandler) RunFromBlock(lookbackFrom *big.Int) (lastCheckedBlock *b
 	return mostRecentBlockHeader.Number, nil
 }
 
-func findReorgEndIndex(reversedBlockHeaders []common.BlockHeader) (index int) {
-	for i := 0; i < len(reversedBlockHeaders)-1; i++ {
-		currentBlock := reversedBlockHeaders[i]
-		previousBlock := reversedBlockHeaders[i+1]
+func findReorgEndIndex(blockHeadersDescending []common.BlockHeader) (index int) {
+	for i := 0; i < len(blockHeadersDescending)-1; i++ {
+		currentBlock := blockHeadersDescending[i]
+		previousBlockInChain := blockHeadersDescending[i+1]
 
-		if currentBlock.Number.Cmp(previousBlock.Number) == 0 { // unmerged block
+		if currentBlock.Number.Cmp(previousBlockInChain.Number) == 0 { // unmerged block
 			continue
 		}
-		if currentBlock.ParentHash != previousBlock.Hash {
+		if currentBlock.ParentHash != previousBlockInChain.Hash {
 			log.Debug().
 				Str("currentBlockNumber", currentBlock.Number.String()).
 				Str("currentBlockHash", currentBlock.Hash).
 				Str("currentBlockParentHash", currentBlock.ParentHash).
-				Str("previousBlockNumber", previousBlock.Number.String()).
-				Str("previousBlockHash", previousBlock.Hash).
+				Str("previousBlockNumber", previousBlockInChain.Number.String()).
+				Str("previousBlockHash", previousBlockInChain.Hash).
 				Msg("Reorg detected: parent hash mismatch")
-			return i
+			return i + 1
 		}
 	}
 	return -1
@@ -153,20 +152,23 @@ func (rh *ReorgHandler) findFirstForkedBlockNumber(reversedBlockHeaders []common
 		return nil, err
 	}
 
-	// skip first because that is the reorg end block
-	for i := 1; i < len(reversedBlockHeaders); i++ {
+	for i := 0; i < len(reversedBlockHeaders); i++ {
 		blockHeader := reversedBlockHeaders[i]
 		block, ok := (*newBlocksByNumber)[blockHeader.Number.String()]
 		if !ok {
 			return nil, fmt.Errorf("block not found: %s", blockHeader.Number.String())
 		}
 		if blockHeader.ParentHash == block.ParentHash && blockHeader.Hash == block.Hash {
+			if i == 0 {
+				return nil, fmt.Errorf("unable to find reorg fork point due to block %s being first in the array", blockHeader.Number.String())
+			}
 			previousBlock := reversedBlockHeaders[i-1]
 			return previousBlock.Number, nil
 		}
 	}
-	lookbackFrom := reversedBlockHeaders[len(reversedBlockHeaders)-1].Number
-	nextHeadersBatch, err := rh.storage.MainStorage.LookbackBlockHeaders(rh.rpc.GetChainID(), rh.blocksPerScan, lookbackFrom)
+	fetchUntilBlock := reversedBlockHeaders[len(reversedBlockHeaders)-1].Number
+	fetchFromBlock := new(big.Int).Sub(fetchUntilBlock, big.NewInt(int64(rh.blocksPerScan)))
+	nextHeadersBatch, err := rh.storage.MainStorage.GetBlockHeadersDescending(rh.rpc.GetChainID(), fetchFromBlock, fetchUntilBlock)
 	if err != nil {
 		return nil, fmt.Errorf("error getting next headers batch: %w", err)
 	}

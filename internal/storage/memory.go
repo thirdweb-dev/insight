@@ -399,7 +399,7 @@ func (m *MemoryConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.
 	return nil
 }
 
-func (m *MemoryConnector) LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) ([]common.BlockHeader, error) {
+func (m *MemoryConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) ([]common.BlockHeader, error) {
 	blockHeaders := []common.BlockHeader{}
 	for _, key := range m.cache.Keys() {
 		if strings.HasPrefix(key, fmt.Sprintf("block:%s:", chainId.String())) {
@@ -408,7 +408,7 @@ func (m *MemoryConnector) LookbackBlockHeaders(chainId *big.Int, limit int, look
 			if !ok {
 				return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
 			}
-			if blockNumber.Cmp(lookbackStart) <= 0 {
+			if blockNumber.Cmp(from) >= 0 && blockNumber.Cmp(to) <= 0 {
 				value, _ := m.cache.Get(key)
 				block := common.Block{}
 				err := json.Unmarshal([]byte(value), &block)

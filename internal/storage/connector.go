@@ -62,7 +62,7 @@ type IMainStorage interface {
 	/**
 	 * Get block headers ordered from latest to oldest.
 	 */
-	LookbackBlockHeaders(chainId *big.Int, limit int, lookbackStart *big.Int) (blockHeaders []common.BlockHeader, err error)
+	GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error)
 	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error
 }
 
