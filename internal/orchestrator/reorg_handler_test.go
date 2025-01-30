@@ -79,6 +79,77 @@ func TestNewReorgHandlerStartsFromConfiguredBlock(t *testing.T) {
 	assert.Equal(t, big.NewInt(1000), handler.lastCheckedBlock)
 }
 
+func TestReorgHandlerRangeIsForwardLookingWhenItIsCatchingUp(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.ReorgHandler.BlocksPerScan = 50
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(0), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(1000), nil)
+	handler := NewReorgHandler(mockRPC, mockStorage)
+
+	fromBlock, toBlock, err := handler.getReorgCheckRange(big.NewInt(100))
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(100), fromBlock)
+	assert.Equal(t, big.NewInt(150), toBlock)
+}
+func TestReorgHandlerRangeIsBackwardLookingWhenItIsCaughtUp(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.ReorgHandler.BlocksPerScan = 50
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(0), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(1000), nil)
+	handler := NewReorgHandler(mockRPC, mockStorage)
+
+	fromBlock, toBlock, err := handler.getReorgCheckRange(big.NewInt(990))
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(950), fromBlock)
+	assert.Equal(t, big.NewInt(1000), toBlock)
+}
+
+func TestReorgHandlerRangeStartIs0WhenRangeIsLargerThanProcessedBlocks(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.ReorgHandler.BlocksPerScan = 50
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(0), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(10), nil)
+	handler := NewReorgHandler(mockRPC, mockStorage)
+
+	fromBlock, toBlock, err := handler.getReorgCheckRange(big.NewInt(10))
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), fromBlock)
+	assert.Equal(t, big.NewInt(10), toBlock)
+}
+
 func TestFindReorgEndIndex(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -451,8 +522,9 @@ func TestStartReorgHandler(t *testing.T) {
 		OrchestratorStorage: mockOrchestratorStorage,
 	}
 
-	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1)).Times(5)
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1)).Times(7)
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(2000), nil).Times(1)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(100000), nil)
 	handler := NewReorgHandler(mockRPC, mockStorage)
 	handler.triggerInterval = 100 // Set a short interval for testing
 
@@ -468,6 +540,30 @@ func TestStartReorgHandler(t *testing.T) {
 
 	// Allow some time for the goroutine to run
 	time.Sleep(250 * time.Millisecond)
+}
+
+func TestReorgHandlingIsSkippedIfMostRecentAndLastCheckedBlockAreSame(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.ReorgHandler.BlocksPerScan = 10
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+
+	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(100), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(100), nil)
+
+	handler := NewReorgHandler(mockRPC, mockStorage)
+	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(100))
+
+	assert.NoError(t, err)
+	assert.Nil(t, mostRecentBlockChecked)
 }
 
 func TestHandleReorgWithSingleBlockReorg(t *testing.T) {
@@ -486,6 +582,7 @@ func TestHandleReorgWithSingleBlockReorg(t *testing.T) {
 	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{Blocks: 100})
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(100), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(1000), nil)
 
 	mockMainStorage.EXPECT().GetBlockHeadersDescending(big.NewInt(1), big.NewInt(99), big.NewInt(109)).Return([]common.BlockHeader{
 		{Number: big.NewInt(109), Hash: "hash109", ParentHash: "hash108"},
@@ -543,6 +640,7 @@ func TestHandleReorgWithLatestBlockReorged(t *testing.T) {
 	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{Blocks: 100})
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(100), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(1000), nil)
 
 	mockMainStorage.EXPECT().GetBlockHeadersDescending(big.NewInt(1), big.NewInt(99), big.NewInt(109)).Return([]common.BlockHeader{
 		{Number: big.NewInt(109), Hash: "hash109", ParentHash: "hash108"}, // <-- fork starts here
@@ -610,6 +708,7 @@ func TestHandleReorgWithManyBlocks(t *testing.T) {
 	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{Blocks: 100})
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(100), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(1000), nil)
 
 	mockMainStorage.EXPECT().GetBlockHeadersDescending(big.NewInt(1), big.NewInt(99), big.NewInt(109)).Return([]common.BlockHeader{
 		{Number: big.NewInt(109), Hash: "hash109", ParentHash: "hash108"},
@@ -672,6 +771,7 @@ func TestHandleReorgWithDuplicateBlocks(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(6268164), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(10000000), nil)
 
 	mockMainStorage.EXPECT().GetBlockHeadersDescending(big.NewInt(1), big.NewInt(6268162), big.NewInt(6268172)).Return([]common.BlockHeader{
 		{Number: big.NewInt(6268172), Hash: "0x69d2044d27d2879c309fd885eb0c7d915c9aeed9b28df460d3b52cb4ccf888d8", ParentHash: "0xbf44d12afe40ef30effa32ed45c8d26d854ffba1c8ad781117117e7d18ca157f"},
@@ -708,6 +808,7 @@ func TestNothingIsDoneForCorrectBlocks(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(6268164), nil)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(10000000), nil)
 
 	mockMainStorage.EXPECT().GetBlockHeadersDescending(big.NewInt(1), big.NewInt(6268163), big.NewInt(6268173)).Return([]common.BlockHeader{
 		{Number: big.NewInt(6268173), Hash: "0xa281ed679e6f7d0ede5fffdd3528348f303bc456d8d83e6bbe7ad0708f8f9b10", ParentHash: "0x69d2044d27d2879c309fd885eb0c7d915c9aeed9b28df460d3b52cb4ccf888d8"},
