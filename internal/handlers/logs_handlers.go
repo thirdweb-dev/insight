@@ -209,7 +209,8 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 			}
 			queryResult.Data = decodedLogs
 		} else {
-			queryResult.Data = logsResult.Data
+			decodedLogs := common.DecodeLogs(chainId.String(), logsResult.Data)
+			queryResult.Data = decodedLogs
 		}
 		queryResult.Meta.TotalItems = len(logsResult.Data)
 	}

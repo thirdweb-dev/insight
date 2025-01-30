@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	gethCommon "github.com/ethereum/go-ethereum/common"
@@ -37,6 +38,52 @@ type DecodedLogData struct {
 type DecodedLog struct {
 	Log
 	Decoded DecodedLogData `json:"decodedData"`
+}
+
+func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
+	decodedLogs := make([]*DecodedLog, len(logs))
+	abis := make(map[string]*abi.ABI)
+
+	decodeLogFunc := func(eventLog *Log) *DecodedLog {
+		decodedLog := DecodedLog{Log: *eventLog}
+		abi, ok := abis[eventLog.Address]
+		if !ok {
+			abiResult, err := GetABIForContract(chainId, eventLog.Address)
+			if err != nil {
+				abis[eventLog.Address] = nil
+				return &decodedLog
+			} else {
+				abis[eventLog.Address] = abiResult
+			}
+			abi = abiResult
+		}
+
+		if abi == nil {
+			return &decodedLog
+		}
+
+		event, err := abi.EventByID(gethCommon.HexToHash(eventLog.Topics[0]))
+		if err != nil {
+			log.Debug().Msgf("failed to get method by id: %v", err)
+			return &decodedLog
+		}
+		if event == nil {
+			return &decodedLog
+		}
+		return eventLog.Decode(event)
+	}
+
+	var wg sync.WaitGroup
+	for idx, eventLog := range logs {
+		wg.Add(1)
+		go func(idx int, eventLog Log) {
+			defer wg.Done()
+			decodedLog := decodeLogFunc(&eventLog)
+			decodedLogs[idx] = decodedLog
+		}(idx, eventLog)
+	}
+	wg.Wait()
+	return decodedLogs
 }
 
 func (l *Log) Decode(eventABI *abi.Event) *DecodedLog {

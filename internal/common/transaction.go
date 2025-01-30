@@ -60,7 +60,6 @@ func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction
 	decodeTxFunc := func(transaction *Transaction) *DecodedTransaction {
 		decodedTransaction := DecodedTransaction{Transaction: *transaction}
 		abi, ok := abis[transaction.ToAddress]
-		// ABI not found yet
 		if !ok {
 			abiResult, err := GetABIForContract(chainId, transaction.ToAddress)
 			if err != nil {
