@@ -6,10 +6,10 @@ import (
 	"regexp"
 	"strings"
 
+	config "github.com/thirdweb-dev/indexer/configs"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
-
-var contractApi string = "https://contract.thirdweb.com"
 
 func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI) *abi.ABI {
 	abi, ok := abiCache[contract]
@@ -27,7 +27,7 @@ func GetABIForContractWithCache(chainId string, contract string, abiCache map[st
 }
 
 func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
-	url := fmt.Sprintf("%s/abi/%s/%s", contractApi, chainId, contract)
+	url := fmt.Sprintf("%s/abi/%s/%s", config.Cfg.API.ThirdwebContractApi, chainId, contract)
 
 	resp, err := http.Get(url)
 	if err != nil {
