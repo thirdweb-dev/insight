@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog/log"
@@ -53,7 +54,7 @@ type DecodedTransaction struct {
 }
 
 func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction {
-	decodedTxs := []*DecodedTransaction{}
+	decodedTxs := make([]*DecodedTransaction, len(txs))
 	abis := make(map[string]*abi.ABI)
 
 	decodeTxFunc := func(transaction *Transaction) *DecodedTransaction {
@@ -68,6 +69,7 @@ func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction
 			} else {
 				abis[transaction.ToAddress] = abiResult
 			}
+			abi = abiResult
 		}
 
 		if abi == nil {
@@ -94,10 +96,16 @@ func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction
 		return transaction.Decode(method)
 	}
 
-	for _, transaction := range txs {
-		decodedTx := decodeTxFunc(&transaction)
-		decodedTxs = append(decodedTxs, decodedTx)
+	var wg sync.WaitGroup
+	for idx, transaction := range txs {
+		wg.Add(1)
+		go func(idx int, transaction Transaction) {
+			defer wg.Done()
+			decodedTx := decodeTxFunc(&transaction)
+			decodedTxs[idx] = decodedTx
+		}(idx, transaction)
 	}
+	wg.Wait()
 	return decodedTxs
 }
 
