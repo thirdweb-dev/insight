@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
@@ -219,8 +220,12 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 			}
 			queryResult.Data = decodedTransactions
 		} else {
-			decodedTransactions := common.DecodeTransactions(chainId.String(), transactionsResult.Data)
-			queryResult.Data = decodedTransactions
+			if config.Cfg.API.AbiDecodingEnabled {
+				decodedTransactions := common.DecodeTransactions(chainId.String(), transactionsResult.Data)
+				queryResult.Data = decodedTransactions
+			} else {
+				queryResult.Data = transactionsResult.Data
+			}
 		}
 		queryResult.Meta.TotalItems = len(transactionsResult.Data)
 	}
