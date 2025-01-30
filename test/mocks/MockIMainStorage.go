@@ -191,24 +191,22 @@ func (_c *MockIMainStorage_GetBlockHeadersDescending_Call) RunAndReturn(run func
 }
 
 // GetBlocks provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetBlocks(qf storage.QueryFilter) ([]common.Block, error) {
+func (_m *MockIMainStorage) GetBlocks(qf storage.QueryFilter) (storage.QueryResult[common.Block], error) {
 	ret := _m.Called(qf)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBlocks")
 	}
 
-	var r0 []common.Block
+	var r0 storage.QueryResult[common.Block]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) ([]common.Block, error)); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Block], error)); ok {
 		return rf(qf)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) []common.Block); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Block]); ok {
 		r0 = rf(qf)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]common.Block)
-		}
+		r0 = ret.Get(0).(storage.QueryResult[common.Block])
 	}
 
 	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
@@ -238,12 +236,12 @@ func (_c *MockIMainStorage_GetBlocks_Call) Run(run func(qf storage.QueryFilter))
 	return _c
 }
 
-func (_c *MockIMainStorage_GetBlocks_Call) Return(blocks []common.Block, err error) *MockIMainStorage_GetBlocks_Call {
+func (_c *MockIMainStorage_GetBlocks_Call) Return(blocks storage.QueryResult[common.Block], err error) *MockIMainStorage_GetBlocks_Call {
 	_c.Call.Return(blocks, err)
 	return _c
 }
 
-func (_c *MockIMainStorage_GetBlocks_Call) RunAndReturn(run func(storage.QueryFilter) ([]common.Block, error)) *MockIMainStorage_GetBlocks_Call {
+func (_c *MockIMainStorage_GetBlocks_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Block], error)) *MockIMainStorage_GetBlocks_Call {
 	_c.Call.Return(run)
 	return _c
 }

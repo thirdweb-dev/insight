@@ -291,55 +291,9 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (blocks []common.Block, err error) {
+func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (QueryResult[common.Block], error) {
 	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, total_difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
-	query := fmt.Sprintf("SELECT %s FROM %s.blocks WHERE number IN (%s) AND is_deleted = 0",
-		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
-
-	if qf.ChainId.Sign() > 0 {
-		query += fmt.Sprintf(" AND chain_id = %s", qf.ChainId.String())
-	}
-
-	query += getLimitClause(int(qf.Limit))
-
-	if err := common.ValidateQuery(query); err != nil {
-		return nil, err
-	}
-	rows, err := c.conn.Query(context.Background(), query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var block common.Block
-		err := rows.Scan(
-			&block.ChainId,
-			&block.Number,
-			&block.Hash,
-			&block.ParentHash,
-			&block.Timestamp,
-			&block.Nonce,
-			&block.Sha3Uncles,
-			&block.LogsBloom,
-			&block.ReceiptsRoot,
-			&block.Difficulty,
-			&block.TotalDifficulty,
-			&block.Size,
-			&block.ExtraData,
-			&block.GasLimit,
-			&block.GasUsed,
-			&block.TransactionCount,
-			&block.BaseFeePerGas,
-			&block.WithdrawalsRoot,
-		)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error scanning block")
-			return nil, err
-		}
-		blocks = append(blocks, block)
-	}
-	return blocks, nil
+	return executeQuery[common.Block](c, "blocks", columns, qf, scanBlock)
 }
 
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Transaction], error) {
@@ -611,6 +565,35 @@ func scanLog(rows driver.Rows) (common.Log, error) {
 		}
 	}
 	return log, nil
+}
+
+func scanBlock(rows driver.Rows) (common.Block, error) {
+	var block common.Block
+	err := rows.Scan(
+		&block.ChainId,
+		&block.Number,
+		&block.Hash,
+		&block.ParentHash,
+		&block.Timestamp,
+		&block.Nonce,
+		&block.Sha3Uncles,
+		&block.LogsBloom,
+		&block.ReceiptsRoot,
+		&block.Difficulty,
+		&block.TotalDifficulty,
+		&block.Size,
+		&block.ExtraData,
+		&block.GasLimit,
+		&block.GasUsed,
+		&block.TransactionCount,
+		&block.BaseFeePerGas,
+		&block.WithdrawalsRoot,
+	)
+	if err != nil {
+		return common.Block{}, fmt.Errorf("error scanning block: %w", err)
+	}
+
+	return block, nil
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {

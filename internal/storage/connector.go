@@ -53,7 +53,7 @@ type IStagingStorage interface {
 type IMainStorage interface {
 	InsertBlockData(data *[]common.BlockData) error
 
-	GetBlocks(qf QueryFilter) (blocks []common.Block, err error)
+	GetBlocks(qf QueryFilter) (blocks QueryResult[common.Block], err error)
 	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
 	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
 	GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error)
