@@ -73,6 +73,9 @@ func RunApi(cmd *cobra.Command, args []string) {
 		// signature scoped queries
 		root.GET("/transactions/:to/:signature", handlers.GetTransactionsByContractAndSignature)
 		root.GET("/events/:contract/:signature", handlers.GetLogsByContractAndSignature)
+
+		// blocks table queries
+		root.GET("/blocks", handlers.GetBlocks)
 	}
 
 	r.GET("/health", func(c *gin.Context) {
