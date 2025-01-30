@@ -11,6 +11,21 @@ import (
 
 var contractApi string = "https://contract.thirdweb.com"
 
+func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI) *abi.ABI {
+	abi, ok := abiCache[contract]
+	if !ok {
+		abiResult, err := GetABIForContract(chainId, contract)
+		if err != nil {
+			abiCache[contract] = nil
+			return nil
+		} else {
+			abiCache[contract] = abiResult
+			abi = abiResult
+		}
+	}
+	return abi
+}
+
 func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 	url := fmt.Sprintf("%s/abi/%s/%s", contractApi, chainId, contract)
 

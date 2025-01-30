@@ -55,22 +55,10 @@ type DecodedTransaction struct {
 
 func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction {
 	decodedTxs := make([]*DecodedTransaction, len(txs))
-	abis := make(map[string]*abi.ABI)
-
+	abiCache := make(map[string]*abi.ABI)
 	decodeTxFunc := func(transaction *Transaction) *DecodedTransaction {
 		decodedTransaction := DecodedTransaction{Transaction: *transaction}
-		abi, ok := abis[transaction.ToAddress]
-		if !ok {
-			abiResult, err := GetABIForContract(chainId, transaction.ToAddress)
-			if err != nil {
-				abis[transaction.ToAddress] = nil
-				return &decodedTransaction
-			} else {
-				abis[transaction.ToAddress] = abiResult
-			}
-			abi = abiResult
-		}
-
+		abi := GetABIForContractWithCache(chainId, transaction.ToAddress, abiCache)
 		if abi == nil {
 			return &decodedTransaction
 		}

@@ -42,22 +42,11 @@ type DecodedLog struct {
 
 func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 	decodedLogs := make([]*DecodedLog, len(logs))
-	abis := make(map[string]*abi.ABI)
+	abiCache := make(map[string]*abi.ABI)
 
 	decodeLogFunc := func(eventLog *Log) *DecodedLog {
 		decodedLog := DecodedLog{Log: *eventLog}
-		abi, ok := abis[eventLog.Address]
-		if !ok {
-			abiResult, err := GetABIForContract(chainId, eventLog.Address)
-			if err != nil {
-				abis[eventLog.Address] = nil
-				return &decodedLog
-			} else {
-				abis[eventLog.Address] = abiResult
-			}
-			abi = abiResult
-		}
-
+		abi := GetABIForContractWithCache(chainId, eventLog.Address, abiCache)
 		if abi == nil {
 			return &decodedLog
 		}
