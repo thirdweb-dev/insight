@@ -44,9 +44,9 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 	decodedLogs := make([]*DecodedLog, len(logs))
 	abiCache := make(map[string]*abi.ABI)
 
-	decodeLogFunc := func(eventLog *Log) *DecodedLog {
+	decodeLogFunc := func(eventLog *Log, mut *sync.Mutex) *DecodedLog {
 		decodedLog := DecodedLog{Log: *eventLog}
-		abi := GetABIForContractWithCache(chainId, eventLog.Address, abiCache)
+		abi := GetABIForContractWithCache(chainId, eventLog.Address, abiCache, mut)
 		if abi == nil {
 			return &decodedLog
 		}
@@ -63,13 +63,14 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 	}
 
 	var wg sync.WaitGroup
+	var mut sync.Mutex
 	for idx, eventLog := range logs {
 		wg.Add(1)
-		go func(idx int, eventLog Log) {
+		go func(idx int, eventLog Log, mut *sync.Mutex) {
 			defer wg.Done()
-			decodedLog := decodeLogFunc(&eventLog)
+			decodedLog := decodeLogFunc(&eventLog, mut)
 			decodedLogs[idx] = decodedLog
-		}(idx, eventLog)
+		}(idx, eventLog, &mut)
 	}
 	wg.Wait()
 	return decodedLogs

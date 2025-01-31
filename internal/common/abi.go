@@ -5,21 +5,26 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 
 	config "github.com/thirdweb-dev/indexer/configs"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
-func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI) *abi.ABI {
+func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI, mut *sync.Mutex) *abi.ABI {
 	abi, ok := abiCache[contract]
 	if !ok {
 		abiResult, err := GetABIForContract(chainId, contract)
 		if err != nil {
+			mut.Lock()
 			abiCache[contract] = nil
+			mut.Unlock()
 			return nil
 		} else {
+			mut.Lock()
 			abiCache[contract] = abiResult
+			mut.Unlock()
 			abi = abiResult
 		}
 	}

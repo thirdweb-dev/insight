@@ -56,9 +56,9 @@ type DecodedTransaction struct {
 func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction {
 	decodedTxs := make([]*DecodedTransaction, len(txs))
 	abiCache := make(map[string]*abi.ABI)
-	decodeTxFunc := func(transaction *Transaction) *DecodedTransaction {
+	decodeTxFunc := func(transaction *Transaction, mut *sync.Mutex) *DecodedTransaction {
 		decodedTransaction := DecodedTransaction{Transaction: *transaction}
-		abi := GetABIForContractWithCache(chainId, transaction.ToAddress, abiCache)
+		abi := GetABIForContractWithCache(chainId, transaction.ToAddress, abiCache, mut)
 		if abi == nil {
 			return &decodedTransaction
 		}
@@ -84,13 +84,14 @@ func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction
 	}
 
 	var wg sync.WaitGroup
+	mut := &sync.Mutex{}
 	for idx, transaction := range txs {
 		wg.Add(1)
-		go func(idx int, transaction Transaction) {
+		go func(idx int, transaction Transaction, mut *sync.Mutex) {
 			defer wg.Done()
-			decodedTx := decodeTxFunc(&transaction)
+			decodedTx := decodeTxFunc(&transaction, mut)
 			decodedTxs[idx] = decodedTx
-		}(idx, transaction)
+		}(idx, transaction, mut)
 	}
 	wg.Wait()
 	return decodedTxs
