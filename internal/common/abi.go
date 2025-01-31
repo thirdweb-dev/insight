@@ -2,11 +2,44 @@ package common
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
+	config "github.com/thirdweb-dev/indexer/configs"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
+
+func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI) *abi.ABI {
+	abi, ok := abiCache[contract]
+	if !ok {
+		abiResult, err := GetABIForContract(chainId, contract)
+		if err != nil {
+			abiCache[contract] = nil
+			return nil
+		} else {
+			abiCache[contract] = abiResult
+			abi = abiResult
+		}
+	}
+	return abi
+}
+
+func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
+	url := fmt.Sprintf("%s/abi/%s/%s", config.Cfg.API.ThirdwebContractApi, chainId, contract)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contract abi: %v", err)
+	}
+
+	abi, err := abi.JSON(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load contract abi: %v", err)
+	}
+	return &abi, nil
+}
 
 func ConstructEventABI(signature string) (*abi.Event, error) {
 	// Regex to extract the event name and parameters

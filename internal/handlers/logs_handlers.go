@@ -209,7 +209,12 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 			}
 			queryResult.Data = decodedLogs
 		} else {
-			queryResult.Data = logsResult.Data
+			if config.Cfg.API.AbiDecodingEnabled {
+				decodedLogs := common.DecodeLogs(chainId.String(), logsResult.Data)
+				queryResult.Data = decodedLogs
+			} else {
+				queryResult.Data = logsResult.Data
+			}
 		}
 		queryResult.Meta.TotalItems = len(logsResult.Data)
 	}

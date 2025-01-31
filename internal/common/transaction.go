@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog/log"
@@ -50,6 +51,49 @@ type DecodedTransactionData struct {
 type DecodedTransaction struct {
 	Transaction
 	Decoded DecodedTransactionData `json:"decodedData"`
+}
+
+func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction {
+	decodedTxs := make([]*DecodedTransaction, len(txs))
+	abiCache := make(map[string]*abi.ABI)
+	decodeTxFunc := func(transaction *Transaction) *DecodedTransaction {
+		decodedTransaction := DecodedTransaction{Transaction: *transaction}
+		abi := GetABIForContractWithCache(chainId, transaction.ToAddress, abiCache)
+		if abi == nil {
+			return &decodedTransaction
+		}
+
+		decodedData, err := hex.DecodeString(strings.TrimPrefix(transaction.Data, "0x"))
+		if err != nil {
+			return &decodedTransaction
+		}
+
+		if len(decodedData) < 4 {
+			return &decodedTransaction
+		}
+		methodID := decodedData[:4]
+		method, err := abi.MethodById(methodID)
+		if err != nil {
+			log.Debug().Msgf("failed to get method by id: %v", err)
+			return &decodedTransaction
+		}
+		if method == nil {
+			return &decodedTransaction
+		}
+		return transaction.Decode(method)
+	}
+
+	var wg sync.WaitGroup
+	for idx, transaction := range txs {
+		wg.Add(1)
+		go func(idx int, transaction Transaction) {
+			defer wg.Done()
+			decodedTx := decodeTxFunc(&transaction)
+			decodedTxs[idx] = decodedTx
+		}(idx, transaction)
+	}
+	wg.Wait()
+	return decodedTxs
 }
 
 func (t *Transaction) Decode(functionABI *abi.Method) *DecodedTransaction {
