@@ -41,6 +41,9 @@ type QueryParams struct {
 	Limit int `schema:"limit"`
 	// @Description List of aggregate functions to apply
 	Aggregates []string `schema:"aggregate"`
+
+	// @Description Flag to enable abi decoding of tx data
+	AbiDecodingEnabled bool `schema:"abi_decoding_enabled"`
 }
 
 // Meta represents metadata for a query response

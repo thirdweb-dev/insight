@@ -209,7 +209,7 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 			}
 			queryResult.Data = decodedLogs
 		} else {
-			if config.Cfg.API.AbiDecodingEnabled {
+			if config.Cfg.API.AbiDecodingEnabled && queryParams.AbiDecodingEnabled {
 				decodedLogs := common.DecodeLogs(chainId.String(), logsResult.Data)
 				queryResult.Data = decodedLogs
 			} else {
