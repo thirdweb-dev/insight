@@ -220,7 +220,7 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 			}
 			queryResult.Data = decodedTransactions
 		} else {
-			if config.Cfg.API.AbiDecodingEnabled && queryParams.AbiDecodingEnabled {
+			if config.Cfg.API.AbiDecodingEnabled && queryParams.Decode {
 				decodedTransactions := common.DecodeTransactions(chainId.String(), transactionsResult.Data)
 				queryResult.Data = decodedTransactions
 			} else {
