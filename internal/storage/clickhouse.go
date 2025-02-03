@@ -306,6 +306,11 @@ func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], 
 	return executeQuery[common.Log](c, "logs", columns, qf, scanLog)
 }
 
+func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces QueryResult[common.Trace], err error) {
+	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, subtraces, trace_address, type, call_type, error, from_address, to_address, gas, gas_used, input, output, value, author, reward_type, refund_address"
+	return executeQuery[common.Trace](c, "traces", columns, qf, scanTrace)
+}
+
 func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error) {
 	// Build the SELECT clause with aggregates
 	selectColumns := strings.Join(append(qf.GroupBy, qf.Aggregates...), ", ")
@@ -596,6 +601,37 @@ func scanBlock(rows driver.Rows) (common.Block, error) {
 	return block, nil
 }
 
+func scanTrace(rows driver.Rows) (common.Trace, error) {
+	var trace common.Trace
+	err := rows.Scan(
+		&trace.ChainID,
+		&trace.BlockNumber,
+		&trace.BlockHash,
+		&trace.BlockTimestamp,
+		&trace.TransactionHash,
+		&trace.TransactionIndex,
+		&trace.Subtraces,
+		&trace.TraceAddress,
+		&trace.TraceType,
+		&trace.CallType,
+		&trace.Error,
+		&trace.FromAddress,
+		&trace.ToAddress,
+		&trace.Gas,
+		&trace.GasUsed,
+		&trace.Input,
+		&trace.Output,
+		&trace.Value,
+		&trace.Author,
+		&trace.RewardType,
+		&trace.RefundAddress,
+	)
+	if err != nil {
+		return common.Trace{}, fmt.Errorf("error scanning trace: %w", err)
+	}
+	return trace, nil
+}
+
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
 	query := fmt.Sprintf("SELECT number FROM %s.blocks WHERE is_deleted = 0", c.cfg.Database)
 	if chainId.Sign() > 0 {
@@ -841,60 +877,6 @@ func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace) error {
 	}
 
 	return nil
-}
-
-func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces []common.Trace, err error) {
-	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, subtraces, trace_address, type, call_type, error, from_address, to_address, gas, gas_used, input, output, value, author, reward_type, refund_address"
-	query := fmt.Sprintf("SELECT %s FROM %s.traces WHERE block_number IN (%s) AND is_deleted = 0",
-		columns, c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
-
-	if qf.ChainId.Sign() > 0 {
-		query += fmt.Sprintf(" AND chain_id = %s", qf.ChainId.String())
-	}
-
-	query += getLimitClause(int(qf.Limit))
-
-	if err := common.ValidateQuery(query); err != nil {
-		return nil, err
-	}
-	rows, err := c.conn.Query(context.Background(), query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var trace common.Trace
-		err := rows.Scan(
-			&trace.ChainID,
-			&trace.BlockNumber,
-			&trace.BlockHash,
-			&trace.BlockTimestamp,
-			&trace.TransactionHash,
-			&trace.TransactionIndex,
-			&trace.Subtraces,
-			&trace.TraceAddress,
-			&trace.TraceType,
-			&trace.CallType,
-			&trace.Error,
-			&trace.FromAddress,
-			&trace.ToAddress,
-			&trace.Gas,
-			&trace.GasUsed,
-			&trace.Input,
-			&trace.Output,
-			&trace.Value,
-			&trace.Author,
-			&trace.RewardType,
-			&trace.RefundAddress,
-		)
-		if err != nil {
-			zLog.Error().Err(err).Msg("Error scanning transaction")
-			return nil, err
-		}
-		traces = append(traces, trace)
-	}
-	return traces, nil
 }
 
 func (c *ClickHouseConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
