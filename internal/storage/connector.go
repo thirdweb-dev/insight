@@ -57,7 +57,7 @@ type IMainStorage interface {
 	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
 	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
 	GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error)
-	GetTraces(qf QueryFilter) (traces []common.Trace, err error)
+	GetTraces(qf QueryFilter) (traces QueryResult[common.Trace], err error)
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	/**
 	 * Get block headers ordered from latest to oldest.

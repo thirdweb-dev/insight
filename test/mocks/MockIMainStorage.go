@@ -361,24 +361,22 @@ func (_c *MockIMainStorage_GetMaxBlockNumber_Call) RunAndReturn(run func(*big.In
 }
 
 // GetTraces provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetTraces(qf storage.QueryFilter) ([]common.Trace, error) {
+func (_m *MockIMainStorage) GetTraces(qf storage.QueryFilter) (storage.QueryResult[common.Trace], error) {
 	ret := _m.Called(qf)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTraces")
 	}
 
-	var r0 []common.Trace
+	var r0 storage.QueryResult[common.Trace]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) ([]common.Trace, error)); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Trace], error)); ok {
 		return rf(qf)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) []common.Trace); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Trace]); ok {
 		r0 = rf(qf)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]common.Trace)
-		}
+		r0 = ret.Get(0).(storage.QueryResult[common.Trace])
 	}
 
 	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
@@ -408,12 +406,12 @@ func (_c *MockIMainStorage_GetTraces_Call) Run(run func(qf storage.QueryFilter))
 	return _c
 }
 
-func (_c *MockIMainStorage_GetTraces_Call) Return(traces []common.Trace, err error) *MockIMainStorage_GetTraces_Call {
+func (_c *MockIMainStorage_GetTraces_Call) Return(traces storage.QueryResult[common.Trace], err error) *MockIMainStorage_GetTraces_Call {
 	_c.Call.Return(traces, err)
 	return _c
 }
 
-func (_c *MockIMainStorage_GetTraces_Call) RunAndReturn(run func(storage.QueryFilter) ([]common.Trace, error)) *MockIMainStorage_GetTraces_Call {
+func (_c *MockIMainStorage_GetTraces_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Trace], error)) *MockIMainStorage_GetTraces_Call {
 	_c.Call.Return(run)
 	return _c
 }
