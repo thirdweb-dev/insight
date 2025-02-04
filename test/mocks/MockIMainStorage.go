@@ -190,9 +190,16 @@ func (_c *MockIMainStorage_GetBlockHeadersDescending_Call) RunAndReturn(run func
 	return _c
 }
 
-// GetBlocks provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetBlocks(qf storage.QueryFilter) (storage.QueryResult[common.Block], error) {
-	ret := _m.Called(qf)
+// GetBlocks provides a mock function with given fields: qf, fields
+func (_m *MockIMainStorage) GetBlocks(qf storage.QueryFilter, fields ...string) (storage.QueryResult[common.Block], error) {
+	_va := make([]interface{}, len(fields))
+	for _i := range fields {
+		_va[_i] = fields[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, qf)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBlocks")
@@ -200,17 +207,17 @@ func (_m *MockIMainStorage) GetBlocks(qf storage.QueryFilter) (storage.QueryResu
 
 	var r0 storage.QueryResult[common.Block]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Block], error)); ok {
-		return rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) (storage.QueryResult[common.Block], error)); ok {
+		return rf(qf, fields...)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Block]); ok {
-		r0 = rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) storage.QueryResult[common.Block]); ok {
+		r0 = rf(qf, fields...)
 	} else {
 		r0 = ret.Get(0).(storage.QueryResult[common.Block])
 	}
 
-	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
-		r1 = rf(qf)
+	if rf, ok := ret.Get(1).(func(storage.QueryFilter, ...string) error); ok {
+		r1 = rf(qf, fields...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -225,13 +232,21 @@ type MockIMainStorage_GetBlocks_Call struct {
 
 // GetBlocks is a helper method to define mock.On call
 //   - qf storage.QueryFilter
-func (_e *MockIMainStorage_Expecter) GetBlocks(qf interface{}) *MockIMainStorage_GetBlocks_Call {
-	return &MockIMainStorage_GetBlocks_Call{Call: _e.mock.On("GetBlocks", qf)}
+//   - fields ...string
+func (_e *MockIMainStorage_Expecter) GetBlocks(qf interface{}, fields ...interface{}) *MockIMainStorage_GetBlocks_Call {
+	return &MockIMainStorage_GetBlocks_Call{Call: _e.mock.On("GetBlocks",
+		append([]interface{}{qf}, fields...)...)}
 }
 
-func (_c *MockIMainStorage_GetBlocks_Call) Run(run func(qf storage.QueryFilter)) *MockIMainStorage_GetBlocks_Call {
+func (_c *MockIMainStorage_GetBlocks_Call) Run(run func(qf storage.QueryFilter, fields ...string)) *MockIMainStorage_GetBlocks_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(storage.QueryFilter))
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(storage.QueryFilter), variadicArgs...)
 	})
 	return _c
 }
@@ -241,14 +256,21 @@ func (_c *MockIMainStorage_GetBlocks_Call) Return(blocks storage.QueryResult[com
 	return _c
 }
 
-func (_c *MockIMainStorage_GetBlocks_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Block], error)) *MockIMainStorage_GetBlocks_Call {
+func (_c *MockIMainStorage_GetBlocks_Call) RunAndReturn(run func(storage.QueryFilter, ...string) (storage.QueryResult[common.Block], error)) *MockIMainStorage_GetBlocks_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// GetLogs provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetLogs(qf storage.QueryFilter) (storage.QueryResult[common.Log], error) {
-	ret := _m.Called(qf)
+// GetLogs provides a mock function with given fields: qf, fields
+func (_m *MockIMainStorage) GetLogs(qf storage.QueryFilter, fields ...string) (storage.QueryResult[common.Log], error) {
+	_va := make([]interface{}, len(fields))
+	for _i := range fields {
+		_va[_i] = fields[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, qf)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLogs")
@@ -256,17 +278,17 @@ func (_m *MockIMainStorage) GetLogs(qf storage.QueryFilter) (storage.QueryResult
 
 	var r0 storage.QueryResult[common.Log]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Log], error)); ok {
-		return rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) (storage.QueryResult[common.Log], error)); ok {
+		return rf(qf, fields...)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Log]); ok {
-		r0 = rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) storage.QueryResult[common.Log]); ok {
+		r0 = rf(qf, fields...)
 	} else {
 		r0 = ret.Get(0).(storage.QueryResult[common.Log])
 	}
 
-	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
-		r1 = rf(qf)
+	if rf, ok := ret.Get(1).(func(storage.QueryFilter, ...string) error); ok {
+		r1 = rf(qf, fields...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -281,13 +303,21 @@ type MockIMainStorage_GetLogs_Call struct {
 
 // GetLogs is a helper method to define mock.On call
 //   - qf storage.QueryFilter
-func (_e *MockIMainStorage_Expecter) GetLogs(qf interface{}) *MockIMainStorage_GetLogs_Call {
-	return &MockIMainStorage_GetLogs_Call{Call: _e.mock.On("GetLogs", qf)}
+//   - fields ...string
+func (_e *MockIMainStorage_Expecter) GetLogs(qf interface{}, fields ...interface{}) *MockIMainStorage_GetLogs_Call {
+	return &MockIMainStorage_GetLogs_Call{Call: _e.mock.On("GetLogs",
+		append([]interface{}{qf}, fields...)...)}
 }
 
-func (_c *MockIMainStorage_GetLogs_Call) Run(run func(qf storage.QueryFilter)) *MockIMainStorage_GetLogs_Call {
+func (_c *MockIMainStorage_GetLogs_Call) Run(run func(qf storage.QueryFilter, fields ...string)) *MockIMainStorage_GetLogs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(storage.QueryFilter))
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(storage.QueryFilter), variadicArgs...)
 	})
 	return _c
 }
@@ -297,7 +327,7 @@ func (_c *MockIMainStorage_GetLogs_Call) Return(logs storage.QueryResult[common.
 	return _c
 }
 
-func (_c *MockIMainStorage_GetLogs_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Log], error)) *MockIMainStorage_GetLogs_Call {
+func (_c *MockIMainStorage_GetLogs_Call) RunAndReturn(run func(storage.QueryFilter, ...string) (storage.QueryResult[common.Log], error)) *MockIMainStorage_GetLogs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -360,9 +390,16 @@ func (_c *MockIMainStorage_GetMaxBlockNumber_Call) RunAndReturn(run func(*big.In
 	return _c
 }
 
-// GetTraces provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetTraces(qf storage.QueryFilter) (storage.QueryResult[common.Trace], error) {
-	ret := _m.Called(qf)
+// GetTraces provides a mock function with given fields: qf, fields
+func (_m *MockIMainStorage) GetTraces(qf storage.QueryFilter, fields ...string) (storage.QueryResult[common.Trace], error) {
+	_va := make([]interface{}, len(fields))
+	for _i := range fields {
+		_va[_i] = fields[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, qf)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTraces")
@@ -370,17 +407,17 @@ func (_m *MockIMainStorage) GetTraces(qf storage.QueryFilter) (storage.QueryResu
 
 	var r0 storage.QueryResult[common.Trace]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Trace], error)); ok {
-		return rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) (storage.QueryResult[common.Trace], error)); ok {
+		return rf(qf, fields...)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Trace]); ok {
-		r0 = rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) storage.QueryResult[common.Trace]); ok {
+		r0 = rf(qf, fields...)
 	} else {
 		r0 = ret.Get(0).(storage.QueryResult[common.Trace])
 	}
 
-	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
-		r1 = rf(qf)
+	if rf, ok := ret.Get(1).(func(storage.QueryFilter, ...string) error); ok {
+		r1 = rf(qf, fields...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -395,13 +432,21 @@ type MockIMainStorage_GetTraces_Call struct {
 
 // GetTraces is a helper method to define mock.On call
 //   - qf storage.QueryFilter
-func (_e *MockIMainStorage_Expecter) GetTraces(qf interface{}) *MockIMainStorage_GetTraces_Call {
-	return &MockIMainStorage_GetTraces_Call{Call: _e.mock.On("GetTraces", qf)}
+//   - fields ...string
+func (_e *MockIMainStorage_Expecter) GetTraces(qf interface{}, fields ...interface{}) *MockIMainStorage_GetTraces_Call {
+	return &MockIMainStorage_GetTraces_Call{Call: _e.mock.On("GetTraces",
+		append([]interface{}{qf}, fields...)...)}
 }
 
-func (_c *MockIMainStorage_GetTraces_Call) Run(run func(qf storage.QueryFilter)) *MockIMainStorage_GetTraces_Call {
+func (_c *MockIMainStorage_GetTraces_Call) Run(run func(qf storage.QueryFilter, fields ...string)) *MockIMainStorage_GetTraces_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(storage.QueryFilter))
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(storage.QueryFilter), variadicArgs...)
 	})
 	return _c
 }
@@ -411,14 +456,21 @@ func (_c *MockIMainStorage_GetTraces_Call) Return(traces storage.QueryResult[com
 	return _c
 }
 
-func (_c *MockIMainStorage_GetTraces_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Trace], error)) *MockIMainStorage_GetTraces_Call {
+func (_c *MockIMainStorage_GetTraces_Call) RunAndReturn(run func(storage.QueryFilter, ...string) (storage.QueryResult[common.Trace], error)) *MockIMainStorage_GetTraces_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// GetTransactions provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetTransactions(qf storage.QueryFilter) (storage.QueryResult[common.Transaction], error) {
-	ret := _m.Called(qf)
+// GetTransactions provides a mock function with given fields: qf, fields
+func (_m *MockIMainStorage) GetTransactions(qf storage.QueryFilter, fields ...string) (storage.QueryResult[common.Transaction], error) {
+	_va := make([]interface{}, len(fields))
+	for _i := range fields {
+		_va[_i] = fields[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, qf)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTransactions")
@@ -426,17 +478,17 @@ func (_m *MockIMainStorage) GetTransactions(qf storage.QueryFilter) (storage.Que
 
 	var r0 storage.QueryResult[common.Transaction]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (storage.QueryResult[common.Transaction], error)); ok {
-		return rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) (storage.QueryResult[common.Transaction], error)); ok {
+		return rf(qf, fields...)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) storage.QueryResult[common.Transaction]); ok {
-		r0 = rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter, ...string) storage.QueryResult[common.Transaction]); ok {
+		r0 = rf(qf, fields...)
 	} else {
 		r0 = ret.Get(0).(storage.QueryResult[common.Transaction])
 	}
 
-	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
-		r1 = rf(qf)
+	if rf, ok := ret.Get(1).(func(storage.QueryFilter, ...string) error); ok {
+		r1 = rf(qf, fields...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -451,13 +503,21 @@ type MockIMainStorage_GetTransactions_Call struct {
 
 // GetTransactions is a helper method to define mock.On call
 //   - qf storage.QueryFilter
-func (_e *MockIMainStorage_Expecter) GetTransactions(qf interface{}) *MockIMainStorage_GetTransactions_Call {
-	return &MockIMainStorage_GetTransactions_Call{Call: _e.mock.On("GetTransactions", qf)}
+//   - fields ...string
+func (_e *MockIMainStorage_Expecter) GetTransactions(qf interface{}, fields ...interface{}) *MockIMainStorage_GetTransactions_Call {
+	return &MockIMainStorage_GetTransactions_Call{Call: _e.mock.On("GetTransactions",
+		append([]interface{}{qf}, fields...)...)}
 }
 
-func (_c *MockIMainStorage_GetTransactions_Call) Run(run func(qf storage.QueryFilter)) *MockIMainStorage_GetTransactions_Call {
+func (_c *MockIMainStorage_GetTransactions_Call) Run(run func(qf storage.QueryFilter, fields ...string)) *MockIMainStorage_GetTransactions_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(storage.QueryFilter))
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(storage.QueryFilter), variadicArgs...)
 	})
 	return _c
 }
@@ -467,7 +527,7 @@ func (_c *MockIMainStorage_GetTransactions_Call) Return(transactions storage.Que
 	return _c
 }
 
-func (_c *MockIMainStorage_GetTransactions_Call) RunAndReturn(run func(storage.QueryFilter) (storage.QueryResult[common.Transaction], error)) *MockIMainStorage_GetTransactions_Call {
+func (_c *MockIMainStorage_GetTransactions_Call) RunAndReturn(run func(storage.QueryFilter, ...string) (storage.QueryResult[common.Transaction], error)) *MockIMainStorage_GetTransactions_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -24,7 +24,7 @@ var (
 // LogModel represents a simplified Log structure for Swagger documentation
 type LogModel struct {
 	ChainId          string   `json:"chain_id"`
-	BlockNumber      string   `json:"block_number"`
+	BlockNumber      uint64   `json:"block_number"`
 	BlockHash        string   `json:"block_hash"`
 	BlockTimestamp   uint64   `json:"block_timestamp"`
 	TransactionHash  string   `json:"transaction_hash"`
@@ -32,18 +32,20 @@ type LogModel struct {
 	LogIndex         uint64   `json:"log_index"`
 	Address          string   `json:"address"`
 	Data             string   `json:"data"`
-	Topics           []string `json:"topics"`
+	Topics           []string `json:"topics" swaggertype:"array,string"`
 }
 
 type DecodedLogDataModel struct {
-	Name      string                 `json:"name"`
-	Signature string                 `json:"signature"`
-	Inputs    map[string]interface{} `json:"inputs"`
+	Name             string                 `json:"name"`
+	Signature        string                 `json:"signature"`
+	IndexedParams    map[string]interface{} `json:"indexedParams" swaggertype:"object"`
+	NonIndexedParams map[string]interface{} `json:"nonIndexedParams" swaggertype:"object"`
 }
 
 type DecodedLogModel struct {
 	LogModel
-	Decoded DecodedLogDataModel `json:"decoded"`
+	Decoded     DecodedLogDataModel `json:"decoded"`
+	DecodedData DecodedLogDataModel `json:"decodedData" deprecated:"true"` // Deprecated: Use Decoded field instead
 }
 
 // @Summary Get all logs
@@ -202,18 +204,18 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 			return
 		}
 		if eventABI != nil {
-			decodedLogs := []*common.DecodedLog{}
+			decodedLogs := []DecodedLogModel{}
 			for _, log := range logsResult.Data {
 				decodedLog := log.Decode(eventABI)
-				decodedLogs = append(decodedLogs, decodedLog)
+				decodedLogs = append(decodedLogs, serializeDecodedLog(*decodedLog))
 			}
 			queryResult.Data = decodedLogs
 		} else {
 			if config.Cfg.API.AbiDecodingEnabled && queryParams.Decode {
 				decodedLogs := common.DecodeLogs(chainId.String(), logsResult.Data)
-				queryResult.Data = decodedLogs
+				queryResult.Data = serializeDecodedLogs(decodedLogs)
 			} else {
-				queryResult.Data = logsResult.Data
+				queryResult.Data = serializeLogs(logsResult.Data)
 			}
 		}
 		queryResult.Meta.TotalItems = len(logsResult.Data)
@@ -236,4 +238,60 @@ func getMainStorage() (storage.IMainStorage, error) {
 
 func sendJSONResponse(c *gin.Context, response interface{}) {
 	c.JSON(http.StatusOK, response)
+}
+
+func serializeDecodedLogs(logs []*common.DecodedLog) []DecodedLogModel {
+	decodedLogModels := make([]DecodedLogModel, len(logs))
+	for i, log := range logs {
+		decodedLogModels[i] = serializeDecodedLog(*log)
+	}
+	return decodedLogModels
+}
+
+func serializeDecodedLog(log common.DecodedLog) DecodedLogModel {
+	decodedData := DecodedLogDataModel{
+		Name:             log.Decoded.Name,
+		Signature:        log.Decoded.Signature,
+		IndexedParams:    log.Decoded.IndexedParams,
+		NonIndexedParams: log.Decoded.NonIndexedParams,
+	}
+	return DecodedLogModel{
+		LogModel:    serializeLog(log.Log),
+		Decoded:     decodedData,
+		DecodedData: decodedData,
+	}
+}
+
+func serializeLogs(logs []common.Log) []LogModel {
+	logModels := make([]LogModel, len(logs))
+	for i, log := range logs {
+		logModels[i] = serializeLog(log)
+	}
+	return logModels
+}
+
+func serializeLog(log common.Log) LogModel {
+	return LogModel{
+		ChainId:          log.ChainId.String(),
+		BlockNumber:      log.BlockNumber.Uint64(),
+		BlockHash:        log.BlockHash,
+		BlockTimestamp:   log.BlockTimestamp,
+		TransactionHash:  log.TransactionHash,
+		TransactionIndex: log.TransactionIndex,
+		LogIndex:         log.LogIndex,
+		Address:          log.Address,
+		Data:             log.Data,
+		Topics:           serializeTopics(log),
+	}
+}
+
+func serializeTopics(log common.Log) []string {
+	topics := []string{log.Topic0, log.Topic1, log.Topic2, log.Topic3}
+	resultTopics := make([]string, 0, len(topics))
+	for _, topic := range topics {
+		if topic != "" {
+			resultTopics = append(resultTopics, topic)
+		}
+	}
+	return resultTopics
 }

@@ -53,11 +53,11 @@ type IStagingStorage interface {
 type IMainStorage interface {
 	InsertBlockData(data *[]common.BlockData) error
 
-	GetBlocks(qf QueryFilter) (blocks QueryResult[common.Block], err error)
-	GetTransactions(qf QueryFilter) (transactions QueryResult[common.Transaction], err error)
-	GetLogs(qf QueryFilter) (logs QueryResult[common.Log], err error)
+	GetBlocks(qf QueryFilter, fields ...string) (blocks QueryResult[common.Block], err error)
+	GetTransactions(qf QueryFilter, fields ...string) (transactions QueryResult[common.Transaction], err error)
+	GetLogs(qf QueryFilter, fields ...string) (logs QueryResult[common.Log], err error)
+	GetTraces(qf QueryFilter, fields ...string) (traces QueryResult[common.Trace], err error)
 	GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error)
-	GetTraces(qf QueryFilter) (traces QueryResult[common.Trace], err error)
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	/**
 	 * Get block headers ordered from latest to oldest.

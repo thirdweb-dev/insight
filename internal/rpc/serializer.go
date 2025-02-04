@@ -310,11 +310,7 @@ func serializeLogs(chainId *big.Int, rawLogs []map[string]interface{}, block com
 }
 
 func serializeLog(chainId *big.Int, rawLog map[string]interface{}, block common.Block) common.Log {
-	topics := make([]string, len(rawLog["topics"].([]interface{})))
-	for i, topic := range rawLog["topics"].([]interface{}) {
-		topics[i] = topic.(string)
-	}
-	return common.Log{
+	log := common.Log{
 		ChainId:          chainId,
 		BlockNumber:      block.Number,
 		BlockHash:        block.Hash,
@@ -324,8 +320,19 @@ func serializeLog(chainId *big.Int, rawLog map[string]interface{}, block common.
 		LogIndex:         hexToUint64(rawLog["logIndex"]),
 		Address:          interfaceToString(rawLog["address"]),
 		Data:             interfaceToString(rawLog["data"]),
-		Topics:           topics,
 	}
+	for i, topic := range rawLog["topics"].([]interface{}) {
+		if i == 0 {
+			log.Topic0 = topic.(string)
+		} else if i == 1 {
+			log.Topic1 = topic.(string)
+		} else if i == 2 {
+			log.Topic2 = topic.(string)
+		} else if i == 3 {
+			log.Topic3 = topic.(string)
+		}
+	}
+	return log
 }
 
 func serializeTraces(chainId *big.Int, traces []map[string]interface{}, block common.Block) []common.Trace {

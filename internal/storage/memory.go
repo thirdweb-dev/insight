@@ -85,11 +85,11 @@ func (m *MemoryConnector) insertBlocks(blocks *[]common.Block) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetBlocks(qf QueryFilter) (QueryResult[common.Block], error) {
+func (m *MemoryConnector) GetBlocks(qf QueryFilter, fields ...string) (QueryResult[common.Block], error) {
 	blocks := []common.Block{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
-
+	fieldsSet := createFieldsSet(fields)
 	for _, key := range m.cache.Keys() {
 		if len(blocks) >= int(limit) {
 			break
@@ -97,12 +97,11 @@ func (m *MemoryConnector) GetBlocks(qf QueryFilter) (QueryResult[common.Block], 
 		if isKeyForBlock(key, fmt.Sprintf("block:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
-				block := common.Block{}
-				err := json.Unmarshal([]byte(value), &block)
+				block, err := extractFields[common.Block](fieldsSet, value)
 				if err != nil {
 					return QueryResult[common.Block]{}, err
 				}
-				blocks = append(blocks, block)
+				blocks = append(blocks, *block)
 			}
 		}
 	}
@@ -120,10 +119,11 @@ func (m *MemoryConnector) insertTransactions(txs *[]common.Transaction) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Transaction], error) {
+func (m *MemoryConnector) GetTransactions(qf QueryFilter, fields ...string) (QueryResult[common.Transaction], error) {
 	txs := []common.Transaction{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
+	fieldsSet := createFieldsSet(fields)
 	for _, key := range m.cache.Keys() {
 		if len(txs) >= limit {
 			break
@@ -131,12 +131,11 @@ func (m *MemoryConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Tr
 		if isKeyForBlock(key, fmt.Sprintf("transaction:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
-				tx := common.Transaction{}
-				err := json.Unmarshal([]byte(value), &tx)
+				tx, err := extractFields[common.Transaction](fieldsSet, value)
 				if err != nil {
 					return QueryResult[common.Transaction]{}, err
 				}
-				txs = append(txs, tx)
+				txs = append(txs, *tx)
 			}
 		}
 	}
@@ -154,10 +153,11 @@ func (m *MemoryConnector) insertLogs(logs *[]common.Log) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], error) {
+func (m *MemoryConnector) GetLogs(qf QueryFilter, fields ...string) (QueryResult[common.Log], error) {
 	logs := []common.Log{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
+	fieldsSet := createFieldsSet(fields)
 	for _, key := range m.cache.Keys() {
 		if len(logs) >= limit {
 			break
@@ -165,12 +165,11 @@ func (m *MemoryConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], erro
 		if isKeyForBlock(key, fmt.Sprintf("log:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
-				log := common.Log{}
-				err := json.Unmarshal([]byte(value), &log)
+				log, err := extractFields[common.Log](fieldsSet, value)
 				if err != nil {
 					return QueryResult[common.Log]{}, err
 				}
-				logs = append(logs, log)
+				logs = append(logs, *log)
 			}
 		}
 	}
@@ -314,10 +313,11 @@ func (m *MemoryConnector) insertTraces(traces *[]common.Trace) error {
 	return nil
 }
 
-func (m *MemoryConnector) GetTraces(qf QueryFilter) (QueryResult[common.Trace], error) {
+func (m *MemoryConnector) GetTraces(qf QueryFilter, fields ...string) (QueryResult[common.Trace], error) {
 	traces := []common.Trace{}
 	limit := getLimit(qf)
 	blockNumbersToCheck := getBlockNumbersToCheck(qf)
+	fieldsSet := createFieldsSet(fields)
 	for _, key := range m.cache.Keys() {
 		if len(traces) >= limit {
 			break
@@ -325,16 +325,64 @@ func (m *MemoryConnector) GetTraces(qf QueryFilter) (QueryResult[common.Trace], 
 		if isKeyForBlock(key, fmt.Sprintf("trace:%s:", qf.ChainId.String()), blockNumbersToCheck) {
 			value, ok := m.cache.Get(key)
 			if ok {
-				trace := common.Trace{}
-				err := json.Unmarshal([]byte(value), &trace)
+				trace, err := extractFields[common.Trace](fieldsSet, value)
 				if err != nil {
 					return QueryResult[common.Trace]{}, err
 				}
-				traces = append(traces, trace)
+				traces = append(traces, *trace)
 			}
 		}
 	}
 	return QueryResult[common.Trace]{Data: traces}, nil
+}
+
+func createFieldsSet(fields []string) map[string]bool {
+	fieldsSet := make(map[string]bool)
+	if len(fields) == 0 {
+		fieldsSet["*"] = true
+	} else {
+		for _, field := range fields {
+			fieldsSet[field] = true
+		}
+	}
+	return fieldsSet
+}
+
+func extractFields[T common.Block | common.Transaction | common.Log | common.Trace](fields map[string]bool, data string) (*T, error) {
+	if fields["*"] {
+		result := new(T)
+		err := json.Unmarshal([]byte(data), result)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+
+	// For specific fields, first unmarshal into a map
+	var resultMap map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &resultMap); err != nil {
+		return nil, err
+	}
+
+	// Then create a new map with only requested fields
+	filteredMap := make(map[string]interface{})
+	for field := range fields {
+		if val, exists := resultMap[field]; exists {
+			filteredMap[field] = val
+		}
+	}
+
+	// Marshal and unmarshal to convert to type T
+	jsonBytes, err := json.Marshal(filteredMap)
+	if err != nil {
+		return nil, err
+	}
+
+	result := new(T)
+	if err := json.Unmarshal(jsonBytes, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func traceAddressToString(traceAddress []uint64) string {
