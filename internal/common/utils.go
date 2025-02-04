@@ -163,20 +163,21 @@ func isType(word string) bool {
 var allowedFunctions = map[string]struct{}{
 	"sum":                  {},
 	"count":                {},
-	"reinterpretAsUInt256": {},
+	"reinterpretasuint256": {},
 	"reverse":              {},
 	"unhex":                {},
 	"substring":            {},
 	"length":               {},
-	"toUInt256":            {},
+	"touint256":            {},
 	"if":                   {},
-	"toStartOfMonth":       {},
-	"toStartOfDay":         {},
-	"toStartOfHour":        {},
-	"toStartOfMinute":      {},
-	"toDate":               {},
-	"toDateTime":           {},
+	"tostartofmonth":       {},
+	"tostartofday":         {},
+	"tostartofhour":        {},
+	"tostartofminute":      {},
+	"todate":               {},
+	"todatetime":           {},
 	"concat":               {},
+	"in":                   {},
 }
 
 var disallowedPatterns = []string{
@@ -207,7 +208,7 @@ func ValidateQuery(query string) error {
 	matches := functionPattern.FindAllStringSubmatch(query, -1)
 	for _, match := range matches {
 		funcName := match[1]
-		if _, ok := allowedFunctions[funcName]; !ok {
+		if _, ok := allowedFunctions[strings.ToLower(funcName)]; !ok {
 			return fmt.Errorf("function '%s' is not allowed", funcName)
 		}
 	}

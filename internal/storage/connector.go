@@ -9,19 +9,20 @@ import (
 )
 
 type QueryFilter struct {
-	ChainId         *big.Int
-	BlockNumbers    []*big.Int
-	FilterParams    map[string]string
-	GroupBy         []string
-	SortBy          string
-	SortOrder       string
-	Page            int
-	Limit           int
-	Offset          int
-	Aggregates      []string // e.g., ["COUNT(*) AS count", "SUM(amount) AS total_amount"]
-	FromAddress     string
-	ContractAddress string
-	Signature       string
+	ChainId             *big.Int
+	BlockNumbers        []*big.Int
+	FilterParams        map[string]string
+	GroupBy             []string
+	SortBy              string
+	SortOrder           string
+	Page                int
+	Limit               int
+	Offset              int
+	Aggregates          []string // e.g., ["COUNT(*) AS count", "SUM(amount) AS total_amount"]
+	FromAddress         string
+	ContractAddress     string
+	Signature           string
+	ForceConsistentData bool
 }
 type QueryResult[T any] struct {
 	// TODO: findout how to only allow Log/transaction arrays or split the result

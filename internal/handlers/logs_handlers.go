@@ -62,6 +62,7 @@ type DecodedLogModel struct {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]LogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -86,6 +87,7 @@ func GetLogs(c *gin.Context) {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]LogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -112,6 +114,7 @@ func GetLogsByContract(c *gin.Context) {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]DecodedLogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -155,14 +158,15 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 
 	// Prepare the QueryFilter
 	qf := storage.QueryFilter{
-		FilterParams:    queryParams.FilterParams,
-		ContractAddress: contractAddress,
-		Signature:       signatureHash,
-		ChainId:         chainId,
-		SortBy:          queryParams.SortBy,
-		SortOrder:       queryParams.SortOrder,
-		Page:            queryParams.Page,
-		Limit:           queryParams.Limit,
+		FilterParams:        queryParams.FilterParams,
+		ContractAddress:     contractAddress,
+		Signature:           signatureHash,
+		ChainId:             chainId,
+		SortBy:              queryParams.SortBy,
+		SortOrder:           queryParams.SortOrder,
+		Page:                queryParams.Page,
+		Limit:               queryParams.Limit,
+		ForceConsistentData: queryParams.ForceConsistentData,
 	}
 
 	// Initialize the QueryResult
@@ -275,7 +279,7 @@ func serializeLog(log common.Log) LogModel {
 		ChainId:          log.ChainId.String(),
 		BlockNumber:      log.BlockNumber.Uint64(),
 		BlockHash:        log.BlockHash,
-		BlockTimestamp:   log.BlockTimestamp,
+		BlockTimestamp:   uint64(log.BlockTimestamp.Unix()),
 		TransactionHash:  log.TransactionHash,
 		TransactionIndex: log.TransactionIndex,
 		LogIndex:         log.LogIndex,

@@ -1,8 +1,8 @@
-CREATE TABLE traces (
+CREATE TABLE IF NOT EXISTS traces (
     `chain_id` UInt256,
     `block_number` UInt256,
     `block_hash` FixedString(66),
-    `block_timestamp` UInt64 CODEC(Delta, ZSTD),
+    `block_timestamp` DateTime CODEC(Delta, ZSTD),
     `transaction_hash` FixedString(66),
     `transaction_index` UInt64,
     `subtraces` Int64,
@@ -20,15 +20,13 @@ CREATE TABLE traces (
     `author` Nullable(FixedString(42)),
     `reward_type` LowCardinality(Nullable(String)),
     `refund_address` Nullable(FixedString(42)),
-    `is_deleted` UInt8 DEFAULT 0,
+    `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
-    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
-    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_transaction_hash transaction_hash TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 3,
+    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 3,
+    INDEX idx_transaction_hash transaction_hash TYPE bloom_filter GRANULARITY 3,
     INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 1,
     INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_type type TYPE bloom_filter GRANULARITY 1,
-) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
+) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, block_number, transaction_hash, trace_address)
-PARTITION BY chain_id
-SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+PARTITION BY chain_id;

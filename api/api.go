@@ -44,6 +44,8 @@ type QueryParams struct {
 
 	// @Description Flag to enable abi decoding of tx data
 	Decode bool `schema:"decode"`
+	// @Description Flag to force consistent data at the expense of query speed
+	ForceConsistentData bool `schema:"force_consistent_data"`
 }
 
 // Meta represents metadata for a query response
