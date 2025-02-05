@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sort"
@@ -44,13 +45,18 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 	}
 }
 
-func (c *Committer) Start() {
+func (c *Committer) Start(ctx context.Context) {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	log.Debug().Msgf("Committer running")
-	go func() {
-		for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Committer shutting down")
+			return
+		case <-ticker.C:
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit()
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting block data to commit")
@@ -64,10 +70,7 @@ func (c *Committer) Start() {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
 		}
-	}()
-
-	// Keep the program running (otherwise it will exit)
-	select {}
+	}
 }
 
 func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {

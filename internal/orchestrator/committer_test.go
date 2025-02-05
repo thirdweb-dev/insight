@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -207,10 +208,59 @@ func TestStartCommitter(t *testing.T) {
 	mockStagingStorage.On("DeleteStagingData", &blockData).Return(nil)
 
 	// Start the committer in a goroutine
-	go committer.Start()
+	go committer.Start(context.Background())
 
 	// Wait for a short time to allow the committer to run
 	time.Sleep(200 * time.Millisecond)
+}
+
+func TestCommitterRespectsSIGTERM(t *testing.T) {
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+
+	committer := NewCommitter(mockRPC, mockStorage)
+	committer.triggerIntervalMs = 100 // Short interval for testing
+
+	chainID := big.NewInt(1)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+
+	blockData := []common.BlockData{
+		{Block: common.Block{Number: big.NewInt(101)}},
+		{Block: common.Block{Number: big.NewInt(102)}},
+	}
+	mockStagingStorage.On("GetStagingData", mock.Anything).Return(&blockData, nil)
+	mockMainStorage.On("InsertBlockData", &blockData).Return(nil)
+	mockStagingStorage.On("DeleteStagingData", &blockData).Return(nil)
+
+	// Create a context that we can cancel
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start the committer in a goroutine
+	done := make(chan struct{})
+	go func() {
+		committer.Start(ctx)
+		close(done)
+	}()
+
+	// Wait a bit to ensure the committer is running
+	time.Sleep(200 * time.Millisecond)
+
+	// Cancel the context (simulating SIGTERM)
+	cancel()
+
+	// Wait for the committer to stop with a timeout
+	select {
+	case <-done:
+		// Success - committer stopped
+	case <-time.After(2 * time.Second):
+		t.Fatal("Committer did not stop within timeout period after receiving cancel signal")
+	}
 }
 
 func TestHandleMissingStagingData(t *testing.T) {

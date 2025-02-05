@@ -1,8 +1,13 @@
 package orchestrator
 
 import (
+	"context"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
+	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
@@ -15,6 +20,7 @@ type Orchestrator struct {
 	failureRecovererEnabled bool
 	committerEnabled        bool
 	reorgHandlerEnabled     bool
+	cancel                  context.CancelFunc
 }
 
 func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
@@ -34,14 +40,26 @@ func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
 }
 
 func (o *Orchestrator) Start() {
+	ctx, cancel := context.WithCancel(context.Background())
+	o.cancel = cancel
+
 	var wg sync.WaitGroup
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		sig := <-sigChan
+		log.Info().Msgf("Received signal %v, initiating graceful shutdown", sig)
+		o.cancel()
+	}()
 
 	if o.pollerEnabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			poller := NewPoller(o.rpc, o.storage)
-			poller.Start()
+			poller.Start(ctx)
 		}()
 	}
 
@@ -50,7 +68,7 @@ func (o *Orchestrator) Start() {
 		go func() {
 			defer wg.Done()
 			failureRecoverer := NewFailureRecoverer(o.rpc, o.storage)
-			failureRecoverer.Start()
+			failureRecoverer.Start(ctx)
 		}()
 	}
 
@@ -59,7 +77,7 @@ func (o *Orchestrator) Start() {
 		go func() {
 			defer wg.Done()
 			committer := NewCommitter(o.rpc, o.storage)
-			committer.Start()
+			committer.Start(ctx)
 		}()
 	}
 
@@ -68,7 +86,7 @@ func (o *Orchestrator) Start() {
 		go func() {
 			defer wg.Done()
 			reorgHandler := NewReorgHandler(o.rpc, o.storage)
-			reorgHandler.Start()
+			reorgHandler.Start(ctx)
 		}()
 	}
 
@@ -77,8 +95,14 @@ func (o *Orchestrator) Start() {
 	go func() {
 		defer wg.Done()
 		chainTracker := NewChainTracker(o.rpc)
-		chainTracker.Start()
+		chainTracker.Start(ctx)
 	}()
 
 	wg.Wait()
+}
+
+func (o *Orchestrator) Shutdown() {
+	if o.cancel != nil {
+		o.cancel()
+	}
 }

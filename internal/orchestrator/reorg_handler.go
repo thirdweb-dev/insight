@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sort"
@@ -66,13 +67,18 @@ func getInitialCheckedBlockNumber(storage storage.IStorage, chainId *big.Int) *b
 	return bn
 }
 
-func (rh *ReorgHandler) Start() {
+func (rh *ReorgHandler) Start(ctx context.Context) {
 	interval := time.Duration(rh.triggerInterval) * time.Millisecond
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	log.Debug().Msgf("Reorg handler running")
-	go func() {
-		for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Reorg handler shutting down")
+			return
+		case <-ticker.C:
 			mostRecentBlockChecked, err := rh.RunFromBlock(rh.lastCheckedBlock)
 			if err != nil {
 				log.Error().Err(err).Msgf("Error during reorg handling: %s", err.Error())
@@ -86,10 +92,7 @@ func (rh *ReorgHandler) Start() {
 			rh.storage.OrchestratorStorage.SetLastReorgCheckedBlockNumber(rh.rpc.GetChainID(), mostRecentBlockChecked)
 			metrics.ReorgHandlerLastCheckedBlock.Set(float64(mostRecentBlockChecked.Int64()))
 		}
-	}()
-
-	// Keep the program running (otherwise it will exit)
-	select {}
+	}
 }
 
 func (rh *ReorgHandler) RunFromBlock(latestCheckedBlock *big.Int) (lastCheckedBlock *big.Int, err error) {
