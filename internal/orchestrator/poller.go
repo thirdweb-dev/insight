@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -76,43 +77,73 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	return poller
 }
 
-func (p *Poller) Start() {
+func (p *Poller) Start(ctx context.Context) {
 	interval := time.Duration(p.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	log.Debug().Msgf("Poller running")
 
 	tasks := make(chan struct{}, p.parallelPollers)
 	var blockRangeMutex sync.Mutex
+	var wg sync.WaitGroup
+
+	pollCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	for i := 0; i < p.parallelPollers; i++ {
+		wg.Add(1)
 		go func() {
-			for range tasks {
-				blockRangeMutex.Lock()
-				blockNumbers, err := p.getNextBlockRange()
-				blockRangeMutex.Unlock()
-
-				if err != nil {
-					if err != ErrNoNewBlocks {
-						log.Error().Err(err).Msg("Failed to get block range to poll")
-					}
-					continue
-				}
-
-				lastPolledBlock := p.Poll(blockNumbers)
-				if p.reachedPollLimit(lastPolledBlock) {
-					log.Debug().Msg("Reached poll limit, exiting poller")
-					ticker.Stop()
+			defer wg.Done()
+			for {
+				select {
+				case <-pollCtx.Done():
 					return
+				case _, ok := <-tasks:
+					if !ok {
+						return
+					}
+					blockRangeMutex.Lock()
+					blockNumbers, err := p.getNextBlockRange()
+					blockRangeMutex.Unlock()
+
+					if pollCtx.Err() != nil {
+						return
+					}
+
+					if err != nil {
+						if err != ErrNoNewBlocks {
+							log.Error().Err(err).Msg("Failed to get block range to poll")
+						}
+						continue
+					}
+
+					lastPolledBlock := p.Poll(blockNumbers)
+					if p.reachedPollLimit(lastPolledBlock) {
+						log.Debug().Msg("Reached poll limit, exiting poller")
+						cancel()
+						return
+					}
 				}
 			}
 		}()
 	}
 
-	for range ticker.C {
-		tasks <- struct{}{}
+	for {
+		select {
+		case <-ctx.Done():
+			cancel()
+			close(tasks)
+			wg.Wait()
+			log.Info().Msg("Poller shutting down")
+			return
+		case <-ticker.C:
+			select {
+			case tasks <- struct{}{}:
+			default:
+				// Channel full, skip this tick
+			}
+		}
 	}
-
-	// Keep the program running (otherwise it will exit)
-	select {}
 }
 
 func (p *Poller) Poll(blockNumbers []*big.Int) (lastPolledBlock *big.Int) {

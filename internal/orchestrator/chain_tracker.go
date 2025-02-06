@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -22,13 +23,18 @@ func NewChainTracker(rpc rpc.IRPCClient) *ChainTracker {
 	}
 }
 
-func (ct *ChainTracker) Start() {
+func (ct *ChainTracker) Start(ctx context.Context) {
 	interval := time.Duration(ct.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	log.Debug().Msgf("Chain tracker running")
-	go func() {
-		for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Chain tracker shutting down")
+			return
+		case <-ticker.C:
 			latestBlockNumber, err := ct.rpc.GetLatestBlockNumber()
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting latest block number")
@@ -37,8 +43,5 @@ func (ct *ChainTracker) Start() {
 			latestBlockNumberFloat, _ := latestBlockNumber.Float64()
 			metrics.ChainHead.Set(latestBlockNumberFloat)
 		}
-	}()
-
-	// Keep the program running (otherwise it will exit)
-	select {}
+	}
 }

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -536,7 +537,7 @@ func TestStartReorgHandler(t *testing.T) {
 
 	mockOrchestratorStorage.EXPECT().SetLastReorgCheckedBlockNumber(mock.Anything, mock.Anything).Return(nil).Times(2)
 
-	go handler.Start()
+	go handler.Start(context.Background())
 
 	// Allow some time for the goroutine to run
 	time.Sleep(250 * time.Millisecond)

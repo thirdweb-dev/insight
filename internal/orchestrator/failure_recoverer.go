@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"time"
@@ -41,13 +42,19 @@ func NewFailureRecoverer(rpc rpc.IRPCClient, storage storage.IStorage) *FailureR
 	}
 }
 
-func (fr *FailureRecoverer) Start() {
+func (fr *FailureRecoverer) Start(ctx context.Context) {
 	interval := time.Duration(fr.triggerIntervalMs) * time.Millisecond
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	log.Debug().Msgf("Failure Recovery running")
-	go func() {
-		for range ticker.C {
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Failure recoverer shutting down")
+			return
+		case <-ticker.C:
 			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{
 				ChainId: fr.rpc.GetChainID(),
 				Limit:   fr.failuresPerPoll,
@@ -75,10 +82,7 @@ func (fr *FailureRecoverer) Start() {
 			metrics.FailureRecovererLastTriggeredBlock.Set(float64(blockFailures[len(blockFailures)-1].BlockNumber.Int64()))
 			metrics.FirstBlocknumberInFailureRecovererBatch.Set(float64(blockFailures[0].BlockNumber.Int64()))
 		}
-	}()
-
-	// Keep the program running (otherwise it will exit)
-	select {}
+	}
 }
 
 func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFailure, results []rpc.GetFullBlockResult) {
