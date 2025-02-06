@@ -24,6 +24,20 @@ type QueryFilter struct {
 	Signature           string
 	ForceConsistentData bool
 }
+
+type BalancesQueryFilter struct {
+	ChainId      *big.Int
+	TokenType    string
+	TokenAddress string
+	Owner        string
+	ZeroBalance  bool
+	SortBy       string
+	SortOrder    string
+	Page         int
+	Limit        int
+	Offset       int
+}
+
 type QueryResult[T any] struct {
 	// TODO: findout how to only allow Log/transaction arrays or split the result
 	Data       []T                      `json:"data"`
@@ -65,6 +79,8 @@ type IMainStorage interface {
 	 */
 	GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error)
 	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error
+
+	GetTokenBalances(qf BalancesQueryFilter) (QueryResult[common.TokenBalance], error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {

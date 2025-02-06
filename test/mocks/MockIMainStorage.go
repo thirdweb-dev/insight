@@ -390,6 +390,62 @@ func (_c *MockIMainStorage_GetMaxBlockNumber_Call) RunAndReturn(run func(*big.In
 	return _c
 }
 
+// GetTokenBalances provides a mock function with given fields: qf
+func (_m *MockIMainStorage) GetTokenBalances(qf storage.BalancesQueryFilter) (storage.QueryResult[common.TokenBalance], error) {
+	ret := _m.Called(qf)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTokenBalances")
+	}
+
+	var r0 storage.QueryResult[common.TokenBalance]
+	var r1 error
+	if rf, ok := ret.Get(0).(func(storage.BalancesQueryFilter) (storage.QueryResult[common.TokenBalance], error)); ok {
+		return rf(qf)
+	}
+	if rf, ok := ret.Get(0).(func(storage.BalancesQueryFilter) storage.QueryResult[common.TokenBalance]); ok {
+		r0 = rf(qf)
+	} else {
+		r0 = ret.Get(0).(storage.QueryResult[common.TokenBalance])
+	}
+
+	if rf, ok := ret.Get(1).(func(storage.BalancesQueryFilter) error); ok {
+		r1 = rf(qf)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_GetTokenBalances_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTokenBalances'
+type MockIMainStorage_GetTokenBalances_Call struct {
+	*mock.Call
+}
+
+// GetTokenBalances is a helper method to define mock.On call
+//   - qf storage.BalancesQueryFilter
+func (_e *MockIMainStorage_Expecter) GetTokenBalances(qf interface{}) *MockIMainStorage_GetTokenBalances_Call {
+	return &MockIMainStorage_GetTokenBalances_Call{Call: _e.mock.On("GetTokenBalances", qf)}
+}
+
+func (_c *MockIMainStorage_GetTokenBalances_Call) Run(run func(qf storage.BalancesQueryFilter)) *MockIMainStorage_GetTokenBalances_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(storage.BalancesQueryFilter))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_GetTokenBalances_Call) Return(_a0 storage.QueryResult[common.TokenBalance], _a1 error) *MockIMainStorage_GetTokenBalances_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIMainStorage_GetTokenBalances_Call) RunAndReturn(run func(storage.BalancesQueryFilter) (storage.QueryResult[common.TokenBalance], error)) *MockIMainStorage_GetTokenBalances_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetTraces provides a mock function with given fields: qf, fields
 func (_m *MockIMainStorage) GetTraces(qf storage.QueryFilter, fields ...string) (storage.QueryResult[common.Trace], error) {
 	_va := make([]interface{}, len(fields))
