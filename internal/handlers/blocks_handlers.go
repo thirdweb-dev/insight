@@ -4,28 +4,34 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 // BlockModel represents a simplified Block structure for Swagger documentation
 type BlockModel struct {
-	ChainId         string `json:"chain_id"`
-	Number          string `json:"number"`
-	Hash            string `json:"hash"`
-	ParentHash      string `json:"parent_hash"`
-	Timestamp       uint64 `json:"timestamp"`
-	Nonce           string `json:"nonce"`
-	Sha3Uncles      string `json:"sha3_uncles"`
-	LogsBloom       string `json:"logs_bloom"`
-	ReceiptsRoot    string `json:"receipts_root"`
-	Difficulty      string `json:"difficulty"`
-	TotalDifficulty string `json:"total_difficulty"`
-	Size            uint64 `json:"size"`
-	ExtraData       string `json:"extra_data"`
-	GasLimit        uint64 `json:"gas_limit"`
-	GasUsed         uint64 `json:"gas_used"`
-	BaseFeePerGas   string `json:"base_fee_per_gas"`
-	WithdrawalsRoot string `json:"withdrawals_root"`
+	ChainId          string `json:"chain_id"`
+	Number           uint64 `json:"number"`
+	Hash             string `json:"hash"`
+	ParentHash       string `json:"parent_hash"`
+	Timestamp        uint64 `json:"timestamp"`
+	Nonce            string `json:"nonce"`
+	Sha3Uncles       string `json:"sha3_uncles"`
+	MixHash          string `json:"mix_hash"`
+	Miner            string `json:"miner"`
+	StateRoot        string `json:"state_root"`
+	TransactionsRoot string `json:"transactions_root"`
+	ReceiptsRoot     string `json:"receipts_root"`
+	LogsBloom        string `json:"logs_bloom"`
+	Size             uint64 `json:"size"`
+	ExtraData        string `json:"extra_data"`
+	Difficulty       string `json:"difficulty"`
+	TotalDifficulty  string `json:"total_difficulty"`
+	TransactionCount uint64 `json:"transaction_count"`
+	GasLimit         uint64 `json:"gas_limit"`
+	GasUsed          uint64 `json:"gas_used"`
+	WithdrawalsRoot  string `json:"withdrawals_root"`
+	BaseFeePerGas    uint64 `json:"base_fee_per_gas"`
 }
 
 // @Summary Get all blocks
@@ -118,9 +124,40 @@ func handleBlocksRequest(c *gin.Context) {
 			return
 		}
 
-		queryResult.Data = blocksResult.Data
+		queryResult.Data = serializeBlocks(blocksResult.Data)
 		queryResult.Meta.TotalItems = len(blocksResult.Data)
 	}
 
 	sendJSONResponse(c, queryResult)
+}
+
+func serializeBlocks(blocks []common.Block) []BlockModel {
+	blockModels := make([]BlockModel, len(blocks))
+	for i, block := range blocks {
+		blockModels[i] = BlockModel{
+			ChainId:          block.ChainId.String(),
+			Number:           block.Number.Uint64(),
+			Hash:             block.Hash,
+			ParentHash:       block.ParentHash,
+			Timestamp:        block.Timestamp,
+			Nonce:            block.Nonce,
+			Sha3Uncles:       block.Sha3Uncles,
+			MixHash:          block.MixHash,
+			Miner:            block.Miner,
+			StateRoot:        block.StateRoot,
+			TransactionsRoot: block.TransactionsRoot,
+			ReceiptsRoot:     block.ReceiptsRoot,
+			LogsBloom:        block.LogsBloom,
+			Size:             block.Size,
+			ExtraData:        block.ExtraData,
+			Difficulty:       block.Difficulty.String(),
+			TotalDifficulty:  block.TotalDifficulty.String(),
+			TransactionCount: block.TransactionCount,
+			GasLimit:         block.GasLimit.Uint64(),
+			GasUsed:          block.GasUsed.Uint64(),
+			WithdrawalsRoot:  block.WithdrawalsRoot,
+			BaseFeePerGas:    block.BaseFeePerGas,
+		}
+	}
+	return blockModels
 }

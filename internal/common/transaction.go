@@ -31,7 +31,7 @@ type Transaction struct {
 	R                    *big.Int `json:"r" ch:"r" swaggertype:"string"`
 	S                    *big.Int `json:"s" ch:"s" swaggertype:"string"`
 	V                    *big.Int `json:"v" ch:"v" swaggertype:"string"`
-	AccessListJson       *string  `json:"access_list_json" ch:"access_list_json"`
+	AccessListJson       *string  `json:"access_list_json" ch:"access_list"`
 	ContractAddress      *string  `json:"contract_address" ch:"contract_address"`
 	GasUsed              *uint64  `json:"gas_used" ch:"gas_used"`
 	CumulativeGasUsed    *uint64  `json:"cumulative_gas_used" ch:"cumulative_gas_used"`

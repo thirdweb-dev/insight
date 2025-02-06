@@ -21,7 +21,23 @@ type Log struct {
 	LogIndex         uint64   `json:"log_index" ch:"log_index"`
 	Address          string   `json:"address" ch:"address"`
 	Data             string   `json:"data" ch:"data"`
-	Topics           []string `json:"topics"`
+	Topic0           string   `json:"topic_0" ch:"topic_0"`
+	Topic1           string   `json:"topic_1" ch:"topic_1"`
+	Topic2           string   `json:"topic_2" ch:"topic_2"`
+	Topic3           string   `json:"topic_3" ch:"topic_3"`
+}
+
+func (l *Log) GetTopic(index int) (string, error) {
+	if index == 0 {
+		return l.Topic0, nil
+	} else if index == 1 {
+		return l.Topic1, nil
+	} else if index == 2 {
+		return l.Topic2, nil
+	} else if index == 3 {
+		return l.Topic3, nil
+	}
+	return "", fmt.Errorf("invalid topic index: %d", index)
 }
 
 type RawLogs = []map[string]interface{}
@@ -51,7 +67,7 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 			return &decodedLog
 		}
 
-		event, err := abi.EventByID(gethCommon.HexToHash(eventLog.Topics[0]))
+		event, err := abi.EventByID(gethCommon.HexToHash(eventLog.Topic0))
 		if err != nil {
 			log.Debug().Msgf("failed to get method by id: %v", err)
 			return &decodedLog
@@ -77,7 +93,6 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 }
 
 func (l *Log) Decode(eventABI *abi.Event) *DecodedLog {
-
 	decodedIndexed := make(map[string]interface{})
 	indexedArgs := abi.Arguments{}
 	for _, arg := range eventABI.Inputs {
@@ -87,11 +102,12 @@ func (l *Log) Decode(eventABI *abi.Event) *DecodedLog {
 	}
 	// Decode indexed parameters
 	for i, arg := range indexedArgs {
-		if len(l.Topics) <= i+1 {
+		topic, err := l.GetTopic(i + 1)
+		if err != nil {
 			log.Warn().Msgf("missing topic for indexed parameter: %s, signature: %s", arg.Name, eventABI.Sig)
 			return &DecodedLog{Log: *l}
 		}
-		decodedValue, err := decodeIndexedArgument(arg.Type, l.Topics[i+1])
+		decodedValue, err := decodeIndexedArgument(arg.Type, topic)
 		if err != nil {
 			log.Warn().Msgf("failed to decode indexed parameter %s: %v, signature: %s", arg.Name, err, eventABI.Sig)
 			return &DecodedLog{Log: *l}

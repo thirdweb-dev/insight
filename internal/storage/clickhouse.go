@@ -26,6 +26,8 @@ type ClickHouseConnector struct {
 }
 
 var DEFAULT_MAX_ROWS_PER_INSERT = 100000
+var ZERO_BYTES_66 = strings.Repeat("\x00", 66)
+var ZERO_BYTES_10 = strings.Repeat("\x00", 10)
 
 func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector, error) {
 	conn, err := connectDB(cfg)
@@ -227,30 +229,10 @@ func (c *ClickHouseConnector) insertLogs(logs *[]common.Log) error {
 				log.LogIndex,
 				log.Address,
 				log.Data,
-				func() string {
-					if len(log.Topics) > 0 {
-						return log.Topics[0]
-					}
-					return ""
-				}(),
-				func() string {
-					if len(log.Topics) > 1 {
-						return log.Topics[1]
-					}
-					return ""
-				}(),
-				func() string {
-					if len(log.Topics) > 2 {
-						return log.Topics[2]
-					}
-					return ""
-				}(),
-				func() string {
-					if len(log.Topics) > 3 {
-						return log.Topics[3]
-					}
-					return ""
-				}(),
+				log.Topic0,
+				log.Topic1,
+				log.Topic2,
+				log.Topic3,
 			)
 			if err != nil {
 				return err
@@ -291,24 +273,32 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) GetBlocks(qf QueryFilter) (QueryResult[common.Block], error) {
-	columns := "chain_id, number, hash, parent_hash, timestamp, nonce, sha3_uncles, logs_bloom, receipts_root, difficulty, total_difficulty, size, extra_data, gas_limit, gas_used, transaction_count, base_fee_per_gas, withdrawals_root"
-	return executeQuery[common.Block](c, "blocks", columns, qf, scanBlock)
+func (c *ClickHouseConnector) GetBlocks(qf QueryFilter, fields ...string) (QueryResult[common.Block], error) {
+	if len(fields) == 0 {
+		fields = []string{"chain_id", "number", "hash", "parent_hash", "timestamp", "nonce", "sha3_uncles", "mix_hash", "miner", "state_root", "transactions_root", "logs_bloom", "receipts_root", "difficulty", "total_difficulty", "size", "extra_data", "gas_limit", "gas_used", "transaction_count", "base_fee_per_gas", "withdrawals_root"}
+	}
+	return executeQuery[common.Block](c, "blocks", strings.Join(fields, ", "), qf, scanBlock)
 }
 
-func (c *ClickHouseConnector) GetTransactions(qf QueryFilter) (QueryResult[common.Transaction], error) {
-	columns := "chain_id, hash, nonce, block_hash, block_number, block_timestamp, transaction_index, from_address, to_address, value, gas, gas_price, data, function_selector, max_fee_per_gas, max_priority_fee_per_gas, transaction_type, r, s, v, access_list"
-	return executeQuery[common.Transaction](c, "transactions", columns, qf, scanTransaction)
+func (c *ClickHouseConnector) GetTransactions(qf QueryFilter, fields ...string) (QueryResult[common.Transaction], error) {
+	if len(fields) == 0 {
+		fields = []string{"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp", "transaction_index", "from_address", "to_address", "value", "gas", "gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "transaction_type", "r", "s", "v", "access_list", "contract_address", "gas_used", "cumulative_gas_used", "effective_gas_price", "blob_gas_used", "blob_gas_price", "logs_bloom", "status"}
+	}
+	return executeQuery[common.Transaction](c, "transactions", strings.Join(fields, ", "), qf, scanTransaction)
 }
 
-func (c *ClickHouseConnector) GetLogs(qf QueryFilter) (QueryResult[common.Log], error) {
-	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, log_index, address, data, topic_0, topic_1, topic_2, topic_3"
-	return executeQuery[common.Log](c, "logs", columns, qf, scanLog)
+func (c *ClickHouseConnector) GetLogs(qf QueryFilter, fields ...string) (QueryResult[common.Log], error) {
+	if len(fields) == 0 {
+		fields = []string{"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index", "log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3"}
+	}
+	return executeQuery[common.Log](c, "logs", strings.Join(fields, ", "), qf, scanLog)
 }
 
-func (c *ClickHouseConnector) GetTraces(qf QueryFilter) (traces QueryResult[common.Trace], err error) {
-	columns := "chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, subtraces, trace_address, type, call_type, error, from_address, to_address, gas, gas_used, input, output, value, author, reward_type, refund_address"
-	return executeQuery[common.Trace](c, "traces", columns, qf, scanTrace)
+func (c *ClickHouseConnector) GetTraces(qf QueryFilter, fields ...string) (QueryResult[common.Trace], error) {
+	if len(fields) == 0 {
+		fields = []string{"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index", "subtraces", "trace_address", "type", "call_type", "error", "from_address", "to_address", "gas", "gas_used", "input", "output", "value", "author", "reward_type", "refund_address"}
+	}
+	return executeQuery[common.Trace](c, "traces", strings.Join(fields, ", "), qf, scanTrace)
 }
 
 func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error) {
@@ -514,88 +504,34 @@ func getTopicValueFormat(topic string) string {
 
 func scanTransaction(rows driver.Rows) (common.Transaction, error) {
 	var tx common.Transaction
-	err := rows.Scan(
-		&tx.ChainId,
-		&tx.Hash,
-		&tx.Nonce,
-		&tx.BlockHash,
-		&tx.BlockNumber,
-		&tx.BlockTimestamp,
-		&tx.TransactionIndex,
-		&tx.FromAddress,
-		&tx.ToAddress,
-		&tx.Value,
-		&tx.Gas,
-		&tx.GasPrice,
-		&tx.Data,
-		&tx.FunctionSelector,
-		&tx.MaxFeePerGas,
-		&tx.MaxPriorityFeePerGas,
-		&tx.TransactionType,
-		&tx.R,
-		&tx.S,
-		&tx.V,
-		&tx.AccessListJson,
-	)
+	err := rows.ScanStruct(&tx)
 	if err != nil {
 		return common.Transaction{}, fmt.Errorf("error scanning transaction: %w", err)
+	}
+	if tx.FunctionSelector == ZERO_BYTES_10 {
+		tx.FunctionSelector = ""
 	}
 	return tx, nil
 }
 
 func scanLog(rows driver.Rows) (common.Log, error) {
 	var log common.Log
-	var topics [4]string
-	err := rows.Scan(
-		&log.ChainId,
-		&log.BlockNumber,
-		&log.BlockHash,
-		&log.BlockTimestamp,
-		&log.TransactionHash,
-		&log.TransactionIndex,
-		&log.LogIndex,
-		&log.Address,
-		&log.Data,
-		&topics[0],
-		&topics[1],
-		&topics[2],
-		&topics[3],
-	)
+	err := rows.ScanStruct(&log)
 	if err != nil {
 		return common.Log{}, fmt.Errorf("error scanning log: %w", err)
-	}
-	for _, topic := range topics {
-		if topic != "" {
-			log.Topics = append(log.Topics, topic)
-		}
 	}
 	return log, nil
 }
 
 func scanBlock(rows driver.Rows) (common.Block, error) {
 	var block common.Block
-	err := rows.Scan(
-		&block.ChainId,
-		&block.Number,
-		&block.Hash,
-		&block.ParentHash,
-		&block.Timestamp,
-		&block.Nonce,
-		&block.Sha3Uncles,
-		&block.LogsBloom,
-		&block.ReceiptsRoot,
-		&block.Difficulty,
-		&block.TotalDifficulty,
-		&block.Size,
-		&block.ExtraData,
-		&block.GasLimit,
-		&block.GasUsed,
-		&block.TransactionCount,
-		&block.BaseFeePerGas,
-		&block.WithdrawalsRoot,
-	)
+	err := rows.ScanStruct(&block)
 	if err != nil {
 		return common.Block{}, fmt.Errorf("error scanning block: %w", err)
+	}
+
+	if block.WithdrawalsRoot == ZERO_BYTES_66 {
+		block.WithdrawalsRoot = ""
 	}
 
 	return block, nil
@@ -603,29 +539,7 @@ func scanBlock(rows driver.Rows) (common.Block, error) {
 
 func scanTrace(rows driver.Rows) (common.Trace, error) {
 	var trace common.Trace
-	err := rows.Scan(
-		&trace.ChainID,
-		&trace.BlockNumber,
-		&trace.BlockHash,
-		&trace.BlockTimestamp,
-		&trace.TransactionHash,
-		&trace.TransactionIndex,
-		&trace.Subtraces,
-		&trace.TraceAddress,
-		&trace.TraceType,
-		&trace.CallType,
-		&trace.Error,
-		&trace.FromAddress,
-		&trace.ToAddress,
-		&trace.Gas,
-		&trace.GasUsed,
-		&trace.Input,
-		&trace.Output,
-		&trace.Value,
-		&trace.Author,
-		&trace.RewardType,
-		&trace.RefundAddress,
-	)
+	err := rows.ScanStruct(&trace)
 	if err != nil {
 		return common.Trace{}, fmt.Errorf("error scanning trace: %w", err)
 	}
