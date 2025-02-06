@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -63,15 +65,23 @@ type StorageConnectionConfig struct {
 	Redis      *RedisConfig      `mapstructure:"redis"`
 }
 
+type TableConfig struct {
+	DefaultSelectFields []string `mapstructure:"defaultSelectFields"`
+	TableName           string   `mapstructure:"tableName"`
+}
+
+type TableOverrideConfig map[string]TableConfig
+
 type ClickhouseConfig struct {
-	Host             string `mapstructure:"host"`
-	Port             int    `mapstructure:"port"`
-	Username         string `mapstructure:"username"`
-	Password         string `mapstructure:"password"`
-	Database         string `mapstructure:"database"`
-	DisableTLS       bool   `mapstructure:"disableTLS"`
-	AsyncInsert      bool   `mapstructure:"asyncInsert"`
-	MaxRowsPerInsert int    `mapstructure:"maxRowsPerInsert"`
+	Host             string                         `mapstructure:"host"`
+	Port             int                            `mapstructure:"port"`
+	Username         string                         `mapstructure:"username"`
+	Password         string                         `mapstructure:"password"`
+	Database         string                         `mapstructure:"database"`
+	DisableTLS       bool                           `mapstructure:"disableTLS"`
+	AsyncInsert      bool                           `mapstructure:"asyncInsert"`
+	MaxRowsPerInsert int                            `mapstructure:"maxRowsPerInsert"`
+	ChainBasedConfig map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
 }
 
 type MemoryConfig struct {
@@ -160,5 +170,48 @@ func LoadConfig(cfgFile string) error {
 		return fmt.Errorf("error unmarshalling config: %v", err)
 	}
 
+	err = setCustomJSONConfigs()
+	if err != nil {
+		return fmt.Errorf("error setting custom JSON configs: %v", err)
+	}
+
+	// Add debug logging
+	if clickhouse := Cfg.Storage.Main.Clickhouse; clickhouse != nil {
+		log.Debug().
+			Interface("chainConfig", clickhouse.ChainBasedConfig).
+			Msgf("Loaded chain config %v", clickhouse.ChainBasedConfig)
+	}
+
+	return nil
+}
+
+func setCustomJSONConfigs() error {
+	if chainConfigJSON := os.Getenv("STORAGE_MAIN_CLICKHOUSE_CHAINBASEDCONFIG"); chainConfigJSON != "" {
+		var mainChainConfig map[string]TableOverrideConfig
+		if err := json.Unmarshal([]byte(chainConfigJSON), &mainChainConfig); err != nil {
+			return fmt.Errorf("error parsing main chainBasedConfig JSON: %v", err)
+		}
+		if Cfg.Storage.Main.Clickhouse != nil {
+			Cfg.Storage.Main.Clickhouse.ChainBasedConfig = mainChainConfig
+		}
+	}
+	if chainConfigJSON := os.Getenv("STORAGE_STAGING_CLICKHOUSE_CHAINBASEDCONFIG"); chainConfigJSON != "" {
+		var stagingChainConfig map[string]TableOverrideConfig
+		if err := json.Unmarshal([]byte(chainConfigJSON), &stagingChainConfig); err != nil {
+			return fmt.Errorf("error parsing staging chainBasedConfig JSON: %v", err)
+		}
+		if Cfg.Storage.Staging.Clickhouse != nil {
+			Cfg.Storage.Staging.Clickhouse.ChainBasedConfig = stagingChainConfig
+		}
+	}
+	if chainConfigJSON := os.Getenv("STORAGE_ORCHESTRATOR_CLICKHOUSE_CHAINBASEDCONFIG"); chainConfigJSON != "" {
+		var orchestratorChainConfig map[string]TableOverrideConfig
+		if err := json.Unmarshal([]byte(chainConfigJSON), &orchestratorChainConfig); err != nil {
+			return fmt.Errorf("error parsing orchestrator chainBasedConfig JSON: %v", err)
+		}
+		if Cfg.Storage.Main.Clickhouse != nil {
+			Cfg.Storage.Main.Clickhouse.ChainBasedConfig = orchestratorChainConfig
+		}
+	}
 	return nil
 }

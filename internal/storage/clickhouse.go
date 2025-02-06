@@ -33,6 +33,34 @@ var DEFAULT_MAX_ROWS_PER_INSERT = 100000
 var ZERO_BYTES_66 = strings.Repeat("\x00", 66)
 var ZERO_BYTES_10 = strings.Repeat("\x00", 10)
 
+var defaultBlockFields = []string{
+	"chain_id", "block_number", "hash", "parent_hash", "block_timestamp", "nonce",
+	"sha3_uncles", "mix_hash", "miner", "state_root", "transactions_root", "logs_bloom",
+	"receipts_root", "difficulty", "total_difficulty", "size", "extra_data", "gas_limit",
+	"gas_used", "transaction_count", "base_fee_per_gas", "withdrawals_root",
+}
+
+var defaultTransactionFields = []string{
+	"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp",
+	"transaction_index", "from_address", "to_address", "value", "gas", "gas_price",
+	"data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas",
+	"transaction_type", "r", "s", "v", "access_list", "contract_address", "gas_used",
+	"cumulative_gas_used", "effective_gas_price", "blob_gas_used", "blob_gas_price",
+	"logs_bloom", "status",
+}
+
+var defaultLogFields = []string{
+	"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash",
+	"transaction_index", "log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3",
+}
+
+var defaultTraceFields = []string{
+	"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash",
+	"transaction_index", "subtraces", "trace_address", "type", "call_type", "error",
+	"from_address", "to_address", "gas", "gas_used", "input", "output", "value", "author",
+	"reward_type", "refund_address",
+}
+
 func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector, error) {
 	conn, err := connectDB(cfg)
 	// Question: Should we add the table setup here?
@@ -87,6 +115,10 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 }
 
 func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOptions) error {
+	if len(*blocks) == 0 {
+		return nil
+	}
+	tableName := c.getTableName((*blocks)[0].ChainId, "blocks")
 	columns := []string{
 		"chain_id", "block_number", "block_timestamp", "hash", "parent_hash", "sha3_uncles", "nonce",
 		"mix_hash", "miner", "state_root", "transactions_root", "receipts_root", "size", "logs_bloom",
@@ -96,7 +128,7 @@ func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOpt
 	if opt.AsDeleted {
 		columns = append(columns, "insert_timestamp")
 	}
-	query := fmt.Sprintf("INSERT INTO %s.blocks (%s)", c.cfg.Database, strings.Join(columns, ", "))
+	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
 	for i := 0; i < len(*blocks); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
 		if end > len(*blocks) {
@@ -154,6 +186,10 @@ func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOpt
 }
 
 func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt InsertOptions) error {
+	if len(*txs) == 0 {
+		return nil
+	}
+	tableName := c.getTableName((*txs)[0].ChainId, "transactions")
 	columns := []string{
 		"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp", "transaction_index", "from_address", "to_address", "value", "gas",
 		"gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "transaction_type", "r", "s", "v", "access_list",
@@ -162,7 +198,7 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt 
 	if opt.AsDeleted {
 		columns = append(columns, "insert_timestamp")
 	}
-	query := fmt.Sprintf("INSERT INTO %s.transactions (%s)", c.cfg.Database, strings.Join(columns, ", "))
+	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
 	for i := 0; i < len(*txs); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
 		if end > len(*txs) {
@@ -229,6 +265,10 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt 
 }
 
 func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) error {
+	if len(*logs) == 0 {
+		return nil
+	}
+	tableName := c.getTableName((*logs)[0].ChainId, "logs")
 	columns := []string{
 		"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index",
 		"log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3", "sign",
@@ -236,7 +276,7 @@ func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) 
 	if opt.AsDeleted {
 		columns = append(columns, "insert_timestamp")
 	}
-	query := fmt.Sprintf("INSERT INTO %s.logs (%s)", c.cfg.Database, strings.Join(columns, ", "))
+	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
 	for i := 0; i < len(*logs); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
 		if end > len(*logs) {
@@ -287,6 +327,10 @@ func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) 
 }
 
 func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace, opt InsertOptions) error {
+	if len(*traces) == 0 {
+		return nil
+	}
+	tableName := c.getTableName((*traces)[0].ChainID, "traces")
 	columns := []string{
 		"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index",
 		"subtraces", "trace_address", "type", "call_type", "error", "from_address", "to_address", "gas", "gas_used",
@@ -295,7 +339,7 @@ func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace, opt InsertOpt
 	if opt.AsDeleted {
 		columns = append(columns, "insert_timestamp")
 	}
-	query := fmt.Sprintf("INSERT INTO %s.traces (%s)", c.cfg.Database, strings.Join(columns, ", "))
+	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
 	for i := 0; i < len(*traces); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
 		if end > len(*traces) {
@@ -381,36 +425,37 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 
 func (c *ClickHouseConnector) GetBlocks(qf QueryFilter, fields ...string) (QueryResult[common.Block], error) {
 	if len(fields) == 0 {
-		fields = []string{"chain_id", "block_number", "hash", "parent_hash", "block_timestamp", "nonce", "sha3_uncles", "mix_hash", "miner", "state_root", "transactions_root", "logs_bloom", "receipts_root", "difficulty", "total_difficulty", "size", "extra_data", "gas_limit", "gas_used", "transaction_count", "base_fee_per_gas", "withdrawals_root"}
+		fields = c.getChainSpecificFields(qf.ChainId, "blocks", defaultBlockFields)
 	}
 	return executeQuery[common.Block](c, "blocks", strings.Join(fields, ", "), qf, scanBlock)
 }
 
 func (c *ClickHouseConnector) GetTransactions(qf QueryFilter, fields ...string) (QueryResult[common.Transaction], error) {
 	if len(fields) == 0 {
-		fields = []string{"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp", "transaction_index", "from_address", "to_address", "value", "gas", "gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "transaction_type", "r", "s", "v", "access_list", "contract_address", "gas_used", "cumulative_gas_used", "effective_gas_price", "blob_gas_used", "blob_gas_price", "logs_bloom", "status"}
+		fields = c.getChainSpecificFields(qf.ChainId, "transactions", defaultTransactionFields)
 	}
 	return executeQuery[common.Transaction](c, "transactions", strings.Join(fields, ", "), qf, scanTransaction)
 }
 
 func (c *ClickHouseConnector) GetLogs(qf QueryFilter, fields ...string) (QueryResult[common.Log], error) {
 	if len(fields) == 0 {
-		fields = []string{"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index", "log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3"}
+		fields = c.getChainSpecificFields(qf.ChainId, "logs", defaultLogFields)
 	}
 	return executeQuery[common.Log](c, "logs", strings.Join(fields, ", "), qf, scanLog)
 }
 
 func (c *ClickHouseConnector) GetTraces(qf QueryFilter, fields ...string) (QueryResult[common.Trace], error) {
 	if len(fields) == 0 {
-		fields = []string{"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index", "subtraces", "trace_address", "type", "call_type", "error", "from_address", "to_address", "gas", "gas_used", "input", "output", "value", "author", "reward_type", "refund_address"}
+		fields = c.getChainSpecificFields(qf.ChainId, "traces", defaultTraceFields)
 	}
 	return executeQuery[common.Trace](c, "traces", strings.Join(fields, ", "), qf, scanTrace)
 }
 
 func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error) {
+	tableName := c.getTableName(qf.ChainId, table)
 	// Build the SELECT clause with aggregates
 	selectColumns := strings.Join(append(qf.GroupBy, qf.Aggregates...), ", ")
-	query := fmt.Sprintf("SELECT %s FROM %s.%s", selectColumns, c.cfg.Database, table)
+	query := fmt.Sprintf("SELECT %s FROM %s.%s", selectColumns, c.cfg.Database, tableName)
 	if qf.ForceConsistentData {
 		query += " FINAL"
 	}
@@ -500,7 +545,8 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 }
 
 func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf QueryFilter, scanFunc func(driver.Rows) (T, error)) (QueryResult[T], error) {
-	query := c.buildQuery(table, columns, qf)
+	tableName := c.getTableName(qf.ChainId, table)
+	query := c.buildQuery(tableName, columns, qf)
 
 	if err := common.ValidateQuery(query); err != nil {
 		return QueryResult[T]{}, err
@@ -691,7 +737,8 @@ func scanTrace(rows driver.Rows) (common.Trace, error) {
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT block_number FROM %s.blocks WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1", c.cfg.Database)
+	tableName := c.getTableName(chainId, "blocks")
+	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1", c.cfg.Database, tableName)
 	err = c.conn.QueryRow(context.Background(), query, chainId).Scan(&maxBlockNumber)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -901,7 +948,8 @@ func (c *ClickHouseConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, b
 }
 
 func (c *ClickHouseConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error) {
-	query := fmt.Sprintf("SELECT block_number, hash, parent_hash FROM %s.blocks FINAL WHERE chain_id = ? AND block_number >= ? AND block_number <= ? ORDER BY block_number DESC", c.cfg.Database)
+	tableName := c.getTableName(chainId, "blocks")
+	query := fmt.Sprintf("SELECT block_number, hash, parent_hash FROM %s.%s FINAL WHERE chain_id = ? AND block_number >= ? AND block_number <= ? ORDER BY block_number DESC", c.cfg.Database, tableName)
 
 	rows, err := c.conn.Query(context.Background(), query, chainId, from, to)
 	if err != nil {
@@ -1276,4 +1324,48 @@ func getUnderlyingValue(valuePtr interface{}) interface{} {
 	}
 
 	return v.Interface()
+}
+
+func (c *ClickHouseConnector) getChainSpecificFields(chainId *big.Int, entityType string, defaultFields []string) []string {
+	if c.cfg.ChainBasedConfig == nil {
+		return defaultFields
+	}
+
+	chainFields, exists := c.cfg.ChainBasedConfig[chainId.String()]
+	if !exists {
+		return defaultFields
+	}
+
+	config, exists := chainFields[entityType]
+	if !exists {
+		return defaultFields
+	}
+
+	if len(config.DefaultSelectFields) > 0 {
+		return config.DefaultSelectFields
+	}
+
+	return defaultFields
+}
+
+func (c *ClickHouseConnector) getTableName(chainId *big.Int, defaultTable string) string {
+	if c.cfg.ChainBasedConfig == nil {
+		return defaultTable
+	}
+
+	chainFields, exists := c.cfg.ChainBasedConfig[chainId.String()]
+	if !exists {
+		return defaultTable
+	}
+
+	config, exists := chainFields[defaultTable]
+	if !exists {
+		return defaultTable
+	}
+
+	if len(config.TableName) > 0 {
+		return config.TableName
+	}
+
+	return defaultTable
 }
