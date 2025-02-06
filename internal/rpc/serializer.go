@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -118,7 +119,7 @@ func serializeBlock(chainId *big.Int, block common.RawBlock) common.Block {
 		Number:           hexToBigInt(block["number"]),
 		Hash:             interfaceToString(block["hash"]),
 		ParentHash:       interfaceToString(block["parentHash"]),
-		Timestamp:        hexToUint64(block["timestamp"]),
+		Timestamp:        hexToTime(block["timestamp"]),
 		Nonce:            interfaceToString(block["nonce"]),
 		Sha3Uncles:       interfaceToString(block["sha3Uncles"]),
 		MixHash:          interfaceToString(block["mixHash"]),
@@ -139,7 +140,7 @@ func serializeBlock(chainId *big.Int, block common.RawBlock) common.Block {
 	}
 }
 
-func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTimestamp uint64, receipts *common.RawReceipts) []common.Transaction {
+func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTimestamp time.Time, receipts *common.RawReceipts) []common.Transaction {
 	if len(transactions) == 0 {
 		return []common.Transaction{}
 	}
@@ -164,7 +165,7 @@ func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTi
 	return serializedTransactions
 }
 
-func serializeTransaction(chainId *big.Int, tx map[string]interface{}, blockTimestamp uint64, receipt *common.RawReceipt) common.Transaction {
+func serializeTransaction(chainId *big.Int, tx map[string]interface{}, blockTimestamp time.Time, receipt *common.RawReceipt) common.Transaction {
 	return common.Transaction{
 		ChainId:          chainId,
 		Hash:             interfaceToString(tx["hash"]),
@@ -401,6 +402,11 @@ func serializeTraceAddress(traceAddress interface{}) []uint64 {
 		return addresses
 	}
 	return []uint64{}
+}
+
+func hexToTime(hex interface{}) time.Time {
+	unixTime := hexToUint64(hex)
+	return time.Unix(int64(unixTime), 0)
 }
 
 func hexToUint64(hex interface{}) uint64 {

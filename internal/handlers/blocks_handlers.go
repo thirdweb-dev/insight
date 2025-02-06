@@ -48,6 +48,7 @@ type BlockModel struct {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]BlockModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -79,12 +80,13 @@ func handleBlocksRequest(c *gin.Context) {
 
 	// Prepare the QueryFilter
 	qf := storage.QueryFilter{
-		FilterParams: queryParams.FilterParams,
-		ChainId:      chainId,
-		SortBy:       queryParams.SortBy,
-		SortOrder:    queryParams.SortOrder,
-		Page:         queryParams.Page,
-		Limit:        queryParams.Limit,
+		FilterParams:        queryParams.FilterParams,
+		ChainId:             chainId,
+		SortBy:              queryParams.SortBy,
+		SortOrder:           queryParams.SortOrder,
+		Page:                queryParams.Page,
+		Limit:               queryParams.Limit,
+		ForceConsistentData: queryParams.ForceConsistentData,
 	}
 
 	// Initialize the QueryResult
@@ -139,7 +141,7 @@ func serializeBlocks(blocks []common.Block) []BlockModel {
 			Number:           block.Number.Uint64(),
 			Hash:             block.Hash,
 			ParentHash:       block.ParentHash,
-			Timestamp:        block.Timestamp,
+			Timestamp:        uint64(block.Timestamp.Unix()),
 			Nonce:            block.Nonce,
 			Sha3Uncles:       block.Sha3Uncles,
 			MixHash:          block.MixHash,

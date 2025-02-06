@@ -1,7 +1,7 @@
-CREATE TABLE blocks (
+CREATE TABLE IF NOT EXISTS blocks (
     `chain_id` UInt256,
-    `number` UInt256,
-    `timestamp` UInt64 CODEC(Delta, ZSTD),
+    `block_number` UInt256,
+    `block_timestamp` DateTime CODEC(Delta, ZSTD),
     `hash` FixedString(66),
     `parent_hash` FixedString(66),
     `sha3_uncles` FixedString(66),
@@ -19,13 +19,12 @@ CREATE TABLE blocks (
     `transaction_count` UInt64,
     `gas_limit` UInt256,
     `gas_used` UInt256,
-    `withdrawals_root` Nullable(FixedString(66)),
+    `withdrawals_root` FixedString(66),
     `base_fee_per_gas` Nullable(UInt64),
     `insert_timestamp` DateTime DEFAULT now(),
-    `is_deleted` UInt8 DEFAULT 0,
-    INDEX idx_timestamp timestamp TYPE minmax GRANULARITY 1,
-    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 1,
-) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
-ORDER BY (chain_id, number)
-PARTITION BY chain_id
-SETTINGS allow_experimental_replacing_merge_with_cleanup = 1;
+    `sign` Int8 DEFAULT 1,
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 3,
+    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 3,
+) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
+ORDER BY (chain_id, block_number)
+PARTITION BY chain_id;

@@ -74,6 +74,7 @@ type DecodedTransactionModel struct {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -98,6 +99,7 @@ func GetTransactions(c *gin.Context) {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -124,6 +126,7 @@ func GetTransactionsByContract(c *gin.Context) {
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Success 200 {object} api.QueryResponse{data=[]DecodedTransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -167,14 +170,15 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 
 	// Prepare the QueryFilter
 	qf := storage.QueryFilter{
-		FilterParams:    queryParams.FilterParams,
-		ContractAddress: contractAddress,
-		Signature:       signatureHash,
-		ChainId:         chainId,
-		SortBy:          queryParams.SortBy,
-		SortOrder:       queryParams.SortOrder,
-		Page:            queryParams.Page,
-		Limit:           queryParams.Limit,
+		FilterParams:        queryParams.FilterParams,
+		ContractAddress:     contractAddress,
+		Signature:           signatureHash,
+		ChainId:             chainId,
+		SortBy:              queryParams.SortBy,
+		SortOrder:           queryParams.SortOrder,
+		Page:                queryParams.Page,
+		Limit:               queryParams.Limit,
+		ForceConsistentData: queryParams.ForceConsistentData,
 	}
 
 	// Initialize the QueryResult
@@ -272,7 +276,7 @@ func serializeTransaction(transaction common.Transaction) TransactionModel {
 		Nonce:                transaction.Nonce,
 		BlockHash:            transaction.BlockHash,
 		BlockNumber:          transaction.BlockNumber.Uint64(),
-		BlockTimestamp:       transaction.BlockTimestamp,
+		BlockTimestamp:       uint64(transaction.BlockTimestamp.Unix()),
 		TransactionIndex:     transaction.TransactionIndex,
 		FromAddress:          transaction.FromAddress,
 		ToAddress:            transaction.ToAddress,
