@@ -68,7 +68,7 @@ FROM (
                 reinterpretAsUInt64(reverse(unhex(substring(data, amounts_length_idx, 64)))) AS amounts_length,
                 amounts_length_idx + 64 as amounts_values_idx
             FROM logs
-            WHERE topic_0 = '0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb'
+            WHERE topic_0 = '0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb' AND topic_2 != '' AND topic_3 != '' AND ids_length = amounts_length
         ),
         decoded AS (
             SELECT
