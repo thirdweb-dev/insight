@@ -19,11 +19,12 @@ const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 2000
 const DEFAULT_BLOCKS_PER_COMMIT = 1000
 
 type Committer struct {
-	triggerIntervalMs int
-	blocksPerCommit   int
-	storage           storage.IStorage
-	pollFromBlock     *big.Int
-	rpc               rpc.IRPCClient
+	triggerIntervalMs  int
+	blocksPerCommit    int
+	storage            storage.IStorage
+	commitFromBlock    *big.Int
+	rpc                rpc.IRPCClient
+	lastCommittedBlock *big.Int
 }
 
 func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
@@ -36,12 +37,14 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
+	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	return &Committer{
-		triggerIntervalMs: triggerInterval,
-		blocksPerCommit:   blocksPerCommit,
-		storage:           storage,
-		pollFromBlock:     big.NewInt(int64(config.Cfg.Committer.FromBlock)),
-		rpc:               rpc,
+		triggerIntervalMs:  triggerInterval,
+		blocksPerCommit:    blocksPerCommit,
+		storage:            storage,
+		commitFromBlock:    commitFromBlock,
+		rpc:                rpc,
+		lastCommittedBlock: commitFromBlock,
 	}
 }
 
@@ -80,8 +83,13 @@ func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 	}
 
 	if latestCommittedBlockNumber.Sign() == 0 {
-		// If no blocks have been committed yet, start from the fromBlock specified in the config (same start for the poller)
-		latestCommittedBlockNumber = new(big.Int).Sub(c.pollFromBlock, big.NewInt(1))
+		// If no blocks have been committed yet, start from the fromBlock specified in the config
+		latestCommittedBlockNumber = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
+	} else {
+		if latestCommittedBlockNumber.Cmp(c.lastCommittedBlock) < 0 {
+			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), c.lastCommittedBlock.String())
+			return []*big.Int{}, nil
+		}
 	}
 
 	startBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(1))
@@ -166,10 +174,18 @@ func (c *Committer) commit(blockData *[]common.BlockData) error {
 		return fmt.Errorf("error deleting data from staging storage: %v", err)
 	}
 
+	// Find highest block number from committed blocks
+	highestBlockNumber := (*blockData)[0].Block.Number
+	for _, block := range *blockData {
+		if block.Block.Number.Cmp(highestBlockNumber) > 0 {
+			highestBlockNumber = block.Block.Number
+		}
+	}
+	c.lastCommittedBlock = new(big.Int).Set(highestBlockNumber)
+
 	// Update metrics for successful commits
 	metrics.SuccessfulCommits.Add(float64(len(*blockData)))
-	metrics.LastCommittedBlock.Set(float64((*blockData)[len(*blockData)-1].Block.Number.Int64()))
-
+	metrics.LastCommittedBlock.Set(float64(highestBlockNumber.Int64()))
 	return nil
 }
 

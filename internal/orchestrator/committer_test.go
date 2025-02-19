@@ -53,6 +53,180 @@ func TestGetBlockNumbersToCommit(t *testing.T) {
 	assert.Equal(t, big.NewInt(100+int64(committer.blocksPerCommit)), blockNumbers[len(blockNumbers)-1])
 }
 
+func TestGetBlockNumbersToCommitWithoutConfiguredAndNotStored(t *testing.T) {
+	// start from 0
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
+	assert.Equal(t, big.NewInt(0), blockNumbers[0])
+	assert.Equal(t, big.NewInt(int64(committer.blocksPerCommit)-1), blockNumbers[len(blockNumbers)-1])
+}
+
+func TestGetBlockNumbersToCommitWithConfiguredAndNotStored(t *testing.T) {
+	// start from configured
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Committer.FromBlock = 50
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
+	assert.Equal(t, big.NewInt(50), blockNumbers[0])
+	assert.Equal(t, big.NewInt(50+int64(committer.blocksPerCommit)-1), blockNumbers[len(blockNumbers)-1])
+}
+
+func TestGetBlockNumbersToCommitWithConfiguredAndStored(t *testing.T) {
+	// start from stored + 1
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Committer.FromBlock = 50
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
+	assert.Equal(t, big.NewInt(2001), blockNumbers[0])
+	assert.Equal(t, big.NewInt(2000+int64(committer.blocksPerCommit)), blockNumbers[len(blockNumbers)-1])
+}
+
+func TestGetBlockNumbersToCommitWithoutConfiguredAndStored(t *testing.T) {
+	// start from stored + 1
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
+	assert.Equal(t, big.NewInt(2001), blockNumbers[0])
+	assert.Equal(t, big.NewInt(2000+int64(committer.blocksPerCommit)), blockNumbers[len(blockNumbers)-1])
+}
+
+func TestGetBlockNumbersToCommitWithStoredHigherThanInMemory(t *testing.T) {
+	// start from stored + 1
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Committer.FromBlock = 100
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
+	assert.Equal(t, big.NewInt(2001), blockNumbers[0])
+	assert.Equal(t, big.NewInt(2000+int64(committer.blocksPerCommit)), blockNumbers[len(blockNumbers)-1])
+}
+
+func TestGetBlockNumbersToCommitWithStoredLowerThanInMemory(t *testing.T) {
+	// return empty array
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Committer.FromBlock = 100
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(99), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(blockNumbers))
+}
+
+func TestGetBlockNumbersToCommitWithStoredEqualThanInMemory(t *testing.T) {
+	// start from stored + 1
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Committer.FromBlock = 2000
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:    mockMainStorage,
+		StagingStorage: mockStagingStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+
+	blockNumbers, err := committer.getBlockNumbersToCommit()
+
+	assert.NoError(t, err)
+	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
+	assert.Equal(t, big.NewInt(2001), blockNumbers[0])
+	assert.Equal(t, big.NewInt(2000+int64(committer.blocksPerCommit)), blockNumbers[len(blockNumbers)-1])
+}
+
 func TestGetSequentialBlockDataToCommit(t *testing.T) {
 	defer func() { config.Cfg = config.Config{} }()
 	config.Cfg.Committer.BlocksPerCommit = 3
