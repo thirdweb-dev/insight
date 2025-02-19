@@ -130,9 +130,11 @@ func TestCommit(t *testing.T) {
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)
 	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
 	mockStorage := storage.IStorage{
-		MainStorage:    mockMainStorage,
-		StagingStorage: mockStagingStorage,
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
 
@@ -186,10 +188,12 @@ func TestStartCommitter(t *testing.T) {
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)
 	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
 
 	mockStorage := storage.IStorage{
-		MainStorage:    mockMainStorage,
-		StagingStorage: mockStagingStorage,
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
 	}
 
 	committer := NewCommitter(mockRPC, mockStorage)
@@ -218,9 +222,11 @@ func TestCommitterRespectsSIGTERM(t *testing.T) {
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)
 	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
 	mockStorage := storage.IStorage{
-		MainStorage:    mockMainStorage,
-		StagingStorage: mockStagingStorage,
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
 	}
 
 	committer := NewCommitter(mockRPC, mockStorage)

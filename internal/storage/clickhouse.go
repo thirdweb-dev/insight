@@ -1084,6 +1084,9 @@ func (c *ClickHouseConnector) deleteTraces(chainId *big.Int, blockNumbers []*big
 
 // TODO make this atomic
 func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
+	if len(*data) == 0 {
+		return nil
+	}
 	blocks := make([]common.Block, 0, len(*data))
 	logs := make([]common.Log, 0)
 	transactions := make([]common.Transaction, 0)

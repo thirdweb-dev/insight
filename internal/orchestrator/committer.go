@@ -47,8 +47,6 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 
 func (c *Committer) Start(ctx context.Context) {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 
 	log.Debug().Msgf("Committer running")
 	for {
@@ -56,7 +54,8 @@ func (c *Committer) Start(ctx context.Context) {
 		case <-ctx.Done():
 			log.Info().Msg("Committer shutting down")
 			return
-		case <-ticker.C:
+		default:
+			time.Sleep(interval)
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit()
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting block data to commit")
