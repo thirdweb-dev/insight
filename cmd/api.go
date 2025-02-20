@@ -86,6 +86,9 @@ func RunApi(cmd *cobra.Command, args []string) {
 
 		// token balance queries
 		root.GET("/balances/:owner/:type", handlers.GetTokenBalancesByType)
+
+		// token holder queries
+		root.GET("/holders/:address", handlers.GetTokenHoldersByType)
 	}
 
 	r.GET("/health", func(c *gin.Context) {
