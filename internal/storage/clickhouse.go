@@ -1378,8 +1378,14 @@ func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ..
 	if len(fields) > 0 {
 		columns = strings.Join(fields, ", ")
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s.token_balances WHERE chain_id = ? AND token_type = ? AND owner = ?", columns, c.cfg.Database)
+	query := fmt.Sprintf("SELECT %s FROM %s.token_balances WHERE chain_id = ?", columns, c.cfg.Database)
 
+	if qf.TokenType != "" {
+		query += fmt.Sprintf(" AND token_type = '%s'", qf.TokenType)
+	}
+	if qf.Owner != "" {
+		query += fmt.Sprintf(" AND owner = '%s'", qf.Owner)
+	}
 	if qf.TokenAddress != "" {
 		query += fmt.Sprintf(" AND address = '%s'", qf.TokenAddress)
 	}
@@ -1420,7 +1426,7 @@ func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ..
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
 	}
 
-	rows, err := c.conn.Query(context.Background(), query, qf.ChainId, qf.TokenType, qf.Owner)
+	rows, err := c.conn.Query(context.Background(), query, qf.ChainId)
 	if err != nil {
 		return QueryResult[common.TokenBalance]{}, err
 	}
