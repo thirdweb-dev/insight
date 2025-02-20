@@ -8,15 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 // BalanceModel return type for Swagger documentation
 type BalanceModel struct {
-	ChainId      string   `json:"chain_id" ch:"chain_id"`
-	TokenType    string   `json:"token_type" ch:"token_type"`
 	TokenAddress string   `json:"token_address" ch:"address"`
-	Owner        string   `json:"owner" ch:"owner"`
 	TokenId      string   `json:"token_id" ch:"token_id"`
 	Balance      *big.Int `json:"balance" ch:"balance"`
 }
@@ -37,7 +35,7 @@ type BalanceModel struct {
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
-// @Router /{chainId}/events [get]
+// @Router /{chainId}/balances/{owner}/{type} [get]
 func GetTokenBalancesByType(c *gin.Context) {
 	chainId, err := api.GetChainId(c)
 	if err != nil {
@@ -60,12 +58,21 @@ func GetTokenBalancesByType(c *gin.Context) {
 		return
 	}
 	hideZeroBalances := c.Query("hide_zero_balances") != "false"
+
+	columns := []string{"address", "sum(balance) as balance"}
+	groupBy := []string{"address"}
+	if tokenType != "erc20" {
+		columns = []string{"address", "token_id", "sum(balance) as balance"}
+		groupBy = []string{"address", "token_id"}
+	}
+
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
 		Owner:        owner,
 		TokenType:    tokenType,
 		TokenAddress: tokenAddress,
 		ZeroBalance:  hideZeroBalances,
+		GroupBy:      groupBy,
 		SortBy:       c.Query("sort_by"),
 		SortOrder:    c.Query("sort_order"),
 		Page:         api.ParseIntQueryParam(c.Query("page"), 0),
@@ -87,13 +94,34 @@ func GetTokenBalancesByType(c *gin.Context) {
 		return
 	}
 
-	balancesResult, err := mainStorage.GetTokenBalances(qf)
+	balancesResult, err := mainStorage.GetTokenBalances(qf, columns...)
 	if err != nil {
 		log.Error().Err(err).Msg("Error querying balances")
 		// TODO: might want to choose BadRequestError if it's due to not-allowed functions
 		api.InternalErrorHandler(c)
 		return
 	}
-	queryResult.Data = balancesResult.Data
+	queryResult.Data = serializeBalances(balancesResult.Data)
 	sendJSONResponse(c, queryResult)
+}
+
+func serializeBalances(balances []common.TokenBalance) []BalanceModel {
+	balanceModels := make([]BalanceModel, len(balances))
+	for i, balance := range balances {
+		balanceModels[i] = serializeBalance(balance)
+	}
+	return balanceModels
+}
+
+func serializeBalance(balance common.TokenBalance) BalanceModel {
+	return BalanceModel{
+		TokenAddress: balance.TokenAddress,
+		Balance:      balance.Balance,
+		TokenId: func() string {
+			if balance.TokenId != nil {
+				return balance.TokenId.String()
+			}
+			return ""
+		}(),
+	}
 }

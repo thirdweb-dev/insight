@@ -390,9 +390,16 @@ func (_c *MockIMainStorage_GetMaxBlockNumber_Call) RunAndReturn(run func(*big.In
 	return _c
 }
 
-// GetTokenBalances provides a mock function with given fields: qf
-func (_m *MockIMainStorage) GetTokenBalances(qf storage.BalancesQueryFilter) (storage.QueryResult[common.TokenBalance], error) {
-	ret := _m.Called(qf)
+// GetTokenBalances provides a mock function with given fields: qf, fields
+func (_m *MockIMainStorage) GetTokenBalances(qf storage.BalancesQueryFilter, fields ...string) (storage.QueryResult[common.TokenBalance], error) {
+	_va := make([]interface{}, len(fields))
+	for _i := range fields {
+		_va[_i] = fields[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, qf)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTokenBalances")
@@ -400,17 +407,17 @@ func (_m *MockIMainStorage) GetTokenBalances(qf storage.BalancesQueryFilter) (st
 
 	var r0 storage.QueryResult[common.TokenBalance]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.BalancesQueryFilter) (storage.QueryResult[common.TokenBalance], error)); ok {
-		return rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.BalancesQueryFilter, ...string) (storage.QueryResult[common.TokenBalance], error)); ok {
+		return rf(qf, fields...)
 	}
-	if rf, ok := ret.Get(0).(func(storage.BalancesQueryFilter) storage.QueryResult[common.TokenBalance]); ok {
-		r0 = rf(qf)
+	if rf, ok := ret.Get(0).(func(storage.BalancesQueryFilter, ...string) storage.QueryResult[common.TokenBalance]); ok {
+		r0 = rf(qf, fields...)
 	} else {
 		r0 = ret.Get(0).(storage.QueryResult[common.TokenBalance])
 	}
 
-	if rf, ok := ret.Get(1).(func(storage.BalancesQueryFilter) error); ok {
-		r1 = rf(qf)
+	if rf, ok := ret.Get(1).(func(storage.BalancesQueryFilter, ...string) error); ok {
+		r1 = rf(qf, fields...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -425,13 +432,21 @@ type MockIMainStorage_GetTokenBalances_Call struct {
 
 // GetTokenBalances is a helper method to define mock.On call
 //   - qf storage.BalancesQueryFilter
-func (_e *MockIMainStorage_Expecter) GetTokenBalances(qf interface{}) *MockIMainStorage_GetTokenBalances_Call {
-	return &MockIMainStorage_GetTokenBalances_Call{Call: _e.mock.On("GetTokenBalances", qf)}
+//   - fields ...string
+func (_e *MockIMainStorage_Expecter) GetTokenBalances(qf interface{}, fields ...interface{}) *MockIMainStorage_GetTokenBalances_Call {
+	return &MockIMainStorage_GetTokenBalances_Call{Call: _e.mock.On("GetTokenBalances",
+		append([]interface{}{qf}, fields...)...)}
 }
 
-func (_c *MockIMainStorage_GetTokenBalances_Call) Run(run func(qf storage.BalancesQueryFilter)) *MockIMainStorage_GetTokenBalances_Call {
+func (_c *MockIMainStorage_GetTokenBalances_Call) Run(run func(qf storage.BalancesQueryFilter, fields ...string)) *MockIMainStorage_GetTokenBalances_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(storage.BalancesQueryFilter))
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(storage.BalancesQueryFilter), variadicArgs...)
 	})
 	return _c
 }
@@ -441,7 +456,7 @@ func (_c *MockIMainStorage_GetTokenBalances_Call) Return(_a0 storage.QueryResult
 	return _c
 }
 
-func (_c *MockIMainStorage_GetTokenBalances_Call) RunAndReturn(run func(storage.BalancesQueryFilter) (storage.QueryResult[common.TokenBalance], error)) *MockIMainStorage_GetTokenBalances_Call {
+func (_c *MockIMainStorage_GetTokenBalances_Call) RunAndReturn(run func(storage.BalancesQueryFilter, ...string) (storage.QueryResult[common.TokenBalance], error)) *MockIMainStorage_GetTokenBalances_Call {
 	_c.Call.Return(run)
 	return _c
 }

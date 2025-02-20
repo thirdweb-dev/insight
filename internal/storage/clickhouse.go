@@ -1373,16 +1373,38 @@ func (c *ClickHouseConnector) getTableName(chainId *big.Int, defaultTable string
 	return defaultTable
 }
 
-func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter) (QueryResult[common.TokenBalance], error) {
+func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error) {
 	columns := "chain_id, token_type, address, owner, token_id, balance"
+	if len(fields) > 0 {
+		columns = strings.Join(fields, ", ")
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s.token_balances WHERE chain_id = ? AND token_type = ? AND owner = ?", columns, c.cfg.Database)
+
+	if qf.TokenAddress != "" {
+		query += fmt.Sprintf(" AND address = '%s'", qf.TokenAddress)
+	}
+
+	isBalanceAggregated := false
+	for _, field := range fields {
+		if strings.Contains(field, "balance") && strings.TrimSpace(field) != "balance" {
+			isBalanceAggregated = true
+			break
+		}
+	}
 	balanceCondition := ">="
 	if qf.ZeroBalance {
 		balanceCondition = ">"
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s.token_balances FINAL WHERE chain_id = ? AND token_type = ? AND owner = ? AND balance %s 0", columns, c.cfg.Database, balanceCondition)
+	if !isBalanceAggregated {
+		query += fmt.Sprintf(" AND balance %s 0", balanceCondition)
+	}
 
-	if qf.TokenAddress != "" {
-		query += fmt.Sprintf(" AND address = '%s'", qf.TokenAddress)
+	if len(qf.GroupBy) > 0 {
+		query += fmt.Sprintf(" GROUP BY %s", strings.Join(qf.GroupBy, ", "))
+
+		if isBalanceAggregated {
+			query += fmt.Sprintf(" HAVING balance %s 0", balanceCondition)
+		}
 	}
 
 	// Add ORDER BY clause

@@ -31,6 +31,7 @@ type BalancesQueryFilter struct {
 	TokenAddress string
 	Owner        string
 	ZeroBalance  bool
+	GroupBy      []string
 	SortBy       string
 	SortOrder    string
 	Page         int
@@ -80,7 +81,7 @@ type IMainStorage interface {
 	GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error)
 	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error
 
-	GetTokenBalances(qf BalancesQueryFilter) (QueryResult[common.TokenBalance], error)
+	GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
