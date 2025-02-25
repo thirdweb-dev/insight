@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"math/big"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -14,51 +13,6 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
-
-// TransactionModel represents a simplified Transaction structure for Swagger documentation
-type TransactionModel struct {
-	ChainId              string   `json:"chain_id"`
-	Hash                 string   `json:"hash"`
-	Nonce                uint64   `json:"nonce"`
-	BlockHash            string   `json:"block_hash"`
-	BlockNumber          uint64   `json:"block_number"`
-	BlockTimestamp       uint64   `json:"block_timestamp"`
-	TransactionIndex     uint64   `json:"transaction_index"`
-	FromAddress          string   `json:"from_address"`
-	ToAddress            string   `json:"to_address"`
-	Value                uint64   `json:"value"`
-	Gas                  uint64   `json:"gas"`
-	GasPrice             uint64   `json:"gas_price"`
-	Data                 string   `json:"data"`
-	FunctionSelector     string   `json:"function_selector"`
-	MaxFeePerGas         uint64   `json:"max_fee_per_gas"`
-	MaxPriorityFeePerGas uint64   `json:"max_priority_fee_per_gas"`
-	TransactionType      uint8    `json:"transaction_type"`
-	R                    string   `json:"r"`
-	S                    string   `json:"s"`
-	V                    string   `json:"v"`
-	AccessListJson       *string  `json:"access_list_json"`
-	ContractAddress      *string  `json:"contract_address"`
-	GasUsed              *uint64  `json:"gas_used"`
-	CumulativeGasUsed    *uint64  `json:"cumulative_gas_used"`
-	EffectiveGasPrice    *big.Int `json:"effective_gas_price"`
-	BlobGasUsed          *uint64  `json:"blob_gas_used"`
-	BlobGasPrice         *big.Int `json:"blob_gas_price"`
-	LogsBloom            *string  `json:"logs_bloom"`
-	Status               *uint64  `json:"status"`
-}
-
-type DecodedTransactionDataModel struct {
-	Name      string                 `json:"name"`
-	Signature string                 `json:"signature"`
-	Inputs    map[string]interface{} `json:"inputs"`
-}
-
-type DecodedTransactionModel struct {
-	TransactionModel
-	Decoded     DecodedTransactionDataModel `json:"decoded"`
-	DecodedData DecodedTransactionDataModel `json:"decodedData" deprecated:"true"` // Deprecated: Use Decoded field instead
-}
 
 // @Summary Get all transactions
 // @Description Retrieve all transactions across all contracts
@@ -75,7 +29,7 @@ type DecodedTransactionModel struct {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
-// @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
+// @Success 200 {object} api.QueryResponse{data=[]common.TransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -127,7 +81,7 @@ func GetTransactionsByContract(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
-// @Success 200 {object} api.QueryResponse{data=[]DecodedTransactionModel}
+// @Success 200 {object} api.QueryResponse{data=[]common.DecodedTransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -220,10 +174,10 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 			return
 		}
 		if functionABI != nil {
-			decodedTransactions := []DecodedTransactionModel{}
+			decodedTransactions := []common.DecodedTransactionModel{}
 			for _, transaction := range transactionsResult.Data {
 				decodedTransaction := transaction.Decode(functionABI)
-				decodedTransactions = append(decodedTransactions, serializeDecodedTransaction(*decodedTransaction))
+				decodedTransactions = append(decodedTransactions, decodedTransaction.Serialize())
 			}
 			queryResult.Data = decodedTransactions
 		} else {
@@ -240,65 +194,18 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 	c.JSON(http.StatusOK, queryResult)
 }
 
-func serializeDecodedTransactions(transactions []*common.DecodedTransaction) []DecodedTransactionModel {
-	decodedTransactionModels := make([]DecodedTransactionModel, len(transactions))
+func serializeDecodedTransactions(transactions []*common.DecodedTransaction) []common.DecodedTransactionModel {
+	decodedTransactionModels := make([]common.DecodedTransactionModel, len(transactions))
 	for i, transaction := range transactions {
-		decodedTransactionModels[i] = serializeDecodedTransaction(*transaction)
+		decodedTransactionModels[i] = transaction.Serialize()
 	}
 	return decodedTransactionModels
 }
 
-func serializeDecodedTransaction(transaction common.DecodedTransaction) DecodedTransactionModel {
-	decodedData := DecodedTransactionDataModel{
-		Name:      transaction.Decoded.Name,
-		Signature: transaction.Decoded.Signature,
-		Inputs:    transaction.Decoded.Inputs,
-	}
-	return DecodedTransactionModel{
-		TransactionModel: serializeTransaction(transaction.Transaction),
-		Decoded:          decodedData,
-		DecodedData:      decodedData,
-	}
-}
-
-func serializeTransactions(transactions []common.Transaction) []TransactionModel {
-	transactionModels := make([]TransactionModel, len(transactions))
+func serializeTransactions(transactions []common.Transaction) []common.TransactionModel {
+	transactionModels := make([]common.TransactionModel, len(transactions))
 	for i, transaction := range transactions {
-		transactionModels[i] = serializeTransaction(transaction)
+		transactionModels[i] = transaction.Serialize()
 	}
 	return transactionModels
-}
-
-func serializeTransaction(transaction common.Transaction) TransactionModel {
-	return TransactionModel{
-		ChainId:              transaction.ChainId.String(),
-		Hash:                 transaction.Hash,
-		Nonce:                transaction.Nonce,
-		BlockHash:            transaction.BlockHash,
-		BlockNumber:          transaction.BlockNumber.Uint64(),
-		BlockTimestamp:       uint64(transaction.BlockTimestamp.Unix()),
-		TransactionIndex:     transaction.TransactionIndex,
-		FromAddress:          transaction.FromAddress,
-		ToAddress:            transaction.ToAddress,
-		Value:                transaction.Value.Uint64(),
-		Gas:                  transaction.Gas,
-		GasPrice:             transaction.GasPrice.Uint64(),
-		Data:                 transaction.Data,
-		FunctionSelector:     transaction.FunctionSelector,
-		MaxFeePerGas:         transaction.MaxFeePerGas.Uint64(),
-		MaxPriorityFeePerGas: transaction.MaxPriorityFeePerGas.Uint64(),
-		TransactionType:      transaction.TransactionType,
-		R:                    transaction.R.String(),
-		S:                    transaction.S.String(),
-		V:                    transaction.V.String(),
-		AccessListJson:       transaction.AccessListJson,
-		ContractAddress:      transaction.ContractAddress,
-		GasUsed:              transaction.GasUsed,
-		CumulativeGasUsed:    transaction.CumulativeGasUsed,
-		EffectiveGasPrice:    transaction.EffectiveGasPrice,
-		BlobGasUsed:          transaction.BlobGasUsed,
-		BlobGasPrice:         transaction.BlobGasPrice,
-		LogsBloom:            transaction.LogsBloom,
-		Status:               transaction.Status,
-	}
 }

@@ -21,33 +21,6 @@ var (
 	storageErr  error
 )
 
-// LogModel represents a simplified Log structure for Swagger documentation
-type LogModel struct {
-	ChainId          string   `json:"chain_id"`
-	BlockNumber      uint64   `json:"block_number"`
-	BlockHash        string   `json:"block_hash"`
-	BlockTimestamp   uint64   `json:"block_timestamp"`
-	TransactionHash  string   `json:"transaction_hash"`
-	TransactionIndex uint64   `json:"transaction_index"`
-	LogIndex         uint64   `json:"log_index"`
-	Address          string   `json:"address"`
-	Data             string   `json:"data"`
-	Topics           []string `json:"topics" swaggertype:"array,string"`
-}
-
-type DecodedLogDataModel struct {
-	Name             string                 `json:"name"`
-	Signature        string                 `json:"signature"`
-	IndexedParams    map[string]interface{} `json:"indexedParams" swaggertype:"object"`
-	NonIndexedParams map[string]interface{} `json:"nonIndexedParams" swaggertype:"object"`
-}
-
-type DecodedLogModel struct {
-	LogModel
-	Decoded     DecodedLogDataModel `json:"decoded"`
-	DecodedData DecodedLogDataModel `json:"decodedData" deprecated:"true"` // Deprecated: Use Decoded field instead
-}
-
 // @Summary Get all logs
 // @Description Retrieve all logs across all contracts
 // @Tags events
@@ -63,7 +36,7 @@ type DecodedLogModel struct {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
-// @Success 200 {object} api.QueryResponse{data=[]LogModel}
+// @Success 200 {object} api.QueryResponse{data=[]common.LogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -88,7 +61,7 @@ func GetLogs(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
-// @Success 200 {object} api.QueryResponse{data=[]LogModel}
+// @Success 200 {object} api.QueryResponse{data=[]common.LogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -115,7 +88,7 @@ func GetLogsByContract(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
-// @Success 200 {object} api.QueryResponse{data=[]DecodedLogModel}
+// @Success 200 {object} api.QueryResponse{data=[]common.DecodedLogModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -208,10 +181,10 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 			return
 		}
 		if eventABI != nil {
-			decodedLogs := []DecodedLogModel{}
+			decodedLogs := []common.DecodedLogModel{}
 			for _, log := range logsResult.Data {
 				decodedLog := log.Decode(eventABI)
-				decodedLogs = append(decodedLogs, serializeDecodedLog(*decodedLog))
+				decodedLogs = append(decodedLogs, decodedLog.Serialize())
 			}
 			queryResult.Data = decodedLogs
 		} else {
@@ -244,58 +217,18 @@ func sendJSONResponse(c *gin.Context, response interface{}) {
 	c.JSON(http.StatusOK, response)
 }
 
-func serializeDecodedLogs(logs []*common.DecodedLog) []DecodedLogModel {
-	decodedLogModels := make([]DecodedLogModel, len(logs))
+func serializeDecodedLogs(logs []*common.DecodedLog) []common.DecodedLogModel {
+	decodedLogModels := make([]common.DecodedLogModel, len(logs))
 	for i, log := range logs {
-		decodedLogModels[i] = serializeDecodedLog(*log)
+		decodedLogModels[i] = log.Serialize()
 	}
 	return decodedLogModels
 }
 
-func serializeDecodedLog(log common.DecodedLog) DecodedLogModel {
-	decodedData := DecodedLogDataModel{
-		Name:             log.Decoded.Name,
-		Signature:        log.Decoded.Signature,
-		IndexedParams:    log.Decoded.IndexedParams,
-		NonIndexedParams: log.Decoded.NonIndexedParams,
-	}
-	return DecodedLogModel{
-		LogModel:    serializeLog(log.Log),
-		Decoded:     decodedData,
-		DecodedData: decodedData,
-	}
-}
-
-func serializeLogs(logs []common.Log) []LogModel {
-	logModels := make([]LogModel, len(logs))
+func serializeLogs(logs []common.Log) []common.LogModel {
+	logModels := make([]common.LogModel, len(logs))
 	for i, log := range logs {
-		logModels[i] = serializeLog(log)
+		logModels[i] = log.Serialize()
 	}
 	return logModels
-}
-
-func serializeLog(log common.Log) LogModel {
-	return LogModel{
-		ChainId:          log.ChainId.String(),
-		BlockNumber:      log.BlockNumber.Uint64(),
-		BlockHash:        log.BlockHash,
-		BlockTimestamp:   uint64(log.BlockTimestamp.Unix()),
-		TransactionHash:  log.TransactionHash,
-		TransactionIndex: log.TransactionIndex,
-		LogIndex:         log.LogIndex,
-		Address:          log.Address,
-		Data:             log.Data,
-		Topics:           serializeTopics(log),
-	}
-}
-
-func serializeTopics(log common.Log) []string {
-	topics := []string{log.Topic0, log.Topic1, log.Topic2, log.Topic3}
-	resultTopics := make([]string, 0, len(topics))
-	for _, topic := range topics {
-		if topic != "" {
-			resultTopics = append(resultTopics, topic)
-		}
-	}
-	return resultTopics
 }

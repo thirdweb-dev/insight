@@ -43,6 +43,33 @@ func (l *Log) GetTopic(index int) (string, error) {
 	return "", fmt.Errorf("invalid topic index: %d", index)
 }
 
+// LogModel represents a simplified Log structure for Swagger documentation
+type LogModel struct {
+	ChainId          string   `json:"chain_id"`
+	BlockNumber      uint64   `json:"block_number"`
+	BlockHash        string   `json:"block_hash"`
+	BlockTimestamp   uint64   `json:"block_timestamp"`
+	TransactionHash  string   `json:"transaction_hash"`
+	TransactionIndex uint64   `json:"transaction_index"`
+	LogIndex         uint64   `json:"log_index"`
+	Address          string   `json:"address"`
+	Data             string   `json:"data"`
+	Topics           []string `json:"topics" swaggertype:"array,string"`
+}
+
+type DecodedLogDataModel struct {
+	Name             string                 `json:"name"`
+	Signature        string                 `json:"signature"`
+	IndexedParams    map[string]interface{} `json:"indexedParams" swaggertype:"object"`
+	NonIndexedParams map[string]interface{} `json:"nonIndexedParams" swaggertype:"object"`
+}
+
+type DecodedLogModel struct {
+	LogModel
+	Decoded     DecodedLogDataModel `json:"decoded"`
+	DecodedData DecodedLogDataModel `json:"decodedData" deprecated:"true"` // Deprecated: Use Decoded field instead
+}
+
 type RawLogs = []map[string]interface{}
 type RawReceipts = []RawReceipt
 type RawReceipt = map[string]interface{}
@@ -197,5 +224,41 @@ func convertBytesAndNumericToHex(data interface{}) interface{} {
 		return fmt.Sprintf("0x%s", hex.EncodeToString(v[:]))
 	default:
 		return v
+	}
+}
+
+func (l *Log) Serialize() LogModel {
+	allTopics := []string{l.Topic0, l.Topic1, l.Topic2, l.Topic3}
+	topics := make([]string, 0, len(allTopics))
+	for _, topic := range allTopics {
+		if topic != "" {
+			topics = append(topics, topic)
+		}
+	}
+	return LogModel{
+		ChainId:          l.ChainId.String(),
+		BlockNumber:      l.BlockNumber.Uint64(),
+		BlockHash:        l.BlockHash,
+		BlockTimestamp:   uint64(l.BlockTimestamp.Unix()),
+		TransactionHash:  l.TransactionHash,
+		TransactionIndex: l.TransactionIndex,
+		LogIndex:         l.LogIndex,
+		Address:          l.Address,
+		Data:             l.Data,
+		Topics:           topics,
+	}
+}
+
+func (l *DecodedLog) Serialize() DecodedLogModel {
+	decodedData := DecodedLogDataModel{
+		Name:             l.Decoded.Name,
+		Signature:        l.Decoded.Signature,
+		IndexedParams:    l.Decoded.IndexedParams,
+		NonIndexedParams: l.Decoded.NonIndexedParams,
+	}
+	return DecodedLogModel{
+		LogModel:    l.Log.Serialize(),
+		Decoded:     decodedData,
+		DecodedData: decodedData,
 	}
 }
