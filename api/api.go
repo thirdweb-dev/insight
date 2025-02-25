@@ -54,17 +54,17 @@ type Meta struct {
 	// @Description Chain ID of the blockchain
 	ChainId uint64 `json:"chain_id"`
 	// @Description Contract address
-	ContractAddress string `json:"address"`
+	ContractAddress string `json:"address,omitempty"`
 	// @Description Function or event signature
-	Signature string `json:"signature"`
+	Signature string `json:"signature,omitempty"`
 	// @Description Current page number
 	Page int `json:"page"`
 	// @Description Number of items per page
-	Limit int `json:"limit"`
+	Limit int `json:"limit,omitempty"`
 	// @Description Total number of items
-	TotalItems int `json:"total_items"`
+	TotalItems int `json:"total_items,omitempty"`
 	// @Description Total number of pages
-	TotalPages int `json:"total_pages"`
+	TotalPages int `json:"total_pages,omitempty"`
 }
 
 // QueryResponse represents the response structure for a query
