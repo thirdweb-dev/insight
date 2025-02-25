@@ -100,6 +100,7 @@ func init() {
 	rootCmd.PersistentFlags().String("api-host", "localhost:3000", "API host")
 	rootCmd.PersistentFlags().String("api-basicAuth-username", "", "API basic auth username")
 	rootCmd.PersistentFlags().String("api-basicAuth-password", "", "API basic auth password")
+	rootCmd.PersistentFlags().String("api-thirdweb-clientId", "", "Thirdweb client id")
 	viper.BindPFlag("rpc.url", rootCmd.PersistentFlags().Lookup("rpc-url"))
 	viper.BindPFlag("rpc.blocks.blocksPerRequest", rootCmd.PersistentFlags().Lookup("rpc-blocks-blocksPerRequest"))
 	viper.BindPFlag("rpc.blocks.batchDelay", rootCmd.PersistentFlags().Lookup("rpc-blocks-batchDelay"))
@@ -164,6 +165,7 @@ func init() {
 	viper.BindPFlag("api.host", rootCmd.PersistentFlags().Lookup("api-host"))
 	viper.BindPFlag("api.basicAuth.username", rootCmd.PersistentFlags().Lookup("api-basicAuth-username"))
 	viper.BindPFlag("api.basicAuth.password", rootCmd.PersistentFlags().Lookup("api-basicAuth-password"))
+	viper.BindPFlag("api.thirdweb.clientId", rootCmd.PersistentFlags().Lookup("api-thirdweb-clientId"))
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
 }

@@ -118,11 +118,16 @@ type BasicAuthConfig struct {
 	Password string `mapstructure:"password"`
 }
 
+type ThirdwebConfig struct {
+	ClientId string `mapstructure:"clientId"`
+}
+
 type APIConfig struct {
 	Host                string          `mapstructure:"host"`
 	BasicAuth           BasicAuthConfig `mapstructure:"basicAuth"`
 	ThirdwebContractApi string          `mapstructure:"thirdwebContractApi"`
 	AbiDecodingEnabled  bool            `mapstructure:"abiDecodingEnabled"`
+	Thirdweb            ThirdwebConfig  `mapstructure:"thirdweb"`
 }
 
 type Config struct {
