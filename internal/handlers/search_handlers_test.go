@@ -59,8 +59,8 @@ func TestSearch_BlockNumber(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, SearchResultTypeBlock, response.Data.Type)
-	assert.Equal(t, blockNumber.Uint64(), response.Data.Blocks[0].Number)
-	assert.Equal(t, "0xabc", response.Data.Blocks[0].Hash)
+	assert.Equal(t, blockNumber.Uint64(), response.Data.Blocks[0].BlockNumber)
+	assert.Equal(t, "0xabc", response.Data.Blocks[0].BlockHash)
 
 	mockStorage.AssertExpectations(t)
 }
