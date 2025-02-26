@@ -54,24 +54,72 @@ definitions:
         - $ref: '#/definitions/api.Meta'
         description: '@Description Metadata for the query response'
     type: object
-  handlers.DecodedLogDataModel:
+  common.BlockModel:
     properties:
-      inputs:
-        additionalProperties: true
+      base_fee_per_gas:
+        type: integer
+      block_hash:
+        type: string
+      block_number:
+        type: integer
+      block_timestamp:
+        type: integer
+      chain_id:
+        type: string
+      difficulty:
+        type: string
+      extra_data:
+        type: string
+      gas_limit:
+        type: integer
+      gas_used:
+        type: integer
+      logs_bloom:
+        type: string
+      miner:
+        type: string
+      mix_hash:
+        type: string
+      nonce:
+        type: string
+      parent_hash:
+        type: string
+      receipts_root:
+        type: string
+      sha3_uncles:
+        type: string
+      size:
+        type: integer
+      state_root:
+        type: string
+      total_difficulty:
+        type: string
+      transaction_count:
+        type: integer
+      transactions_root:
+        type: string
+      withdrawals_root:
+        type: string
+    type: object
+  common.DecodedLogDataModel:
+    properties:
+      indexedParams:
         type: object
       name:
         type: string
+      nonIndexedParams:
+        type: object
       signature:
         type: string
     type: object
-  handlers.DecodedLogModel:
+  common.DecodedLogModel:
     properties:
       address:
         type: string
       block_hash:
         type: string
       block_number:
-        type: string
+        type: integer
       block_timestamp:
         type: integer
       chain_id:
@@ -79,7 +127,11 @@ definitions:
       data:
         type: string
       decoded:
-        $ref: '#/definitions/handlers.DecodedLogDataModel'
+        $ref: '#/definitions/common.DecodedLogDataModel'
+      decodedData:
+        allOf:
+        - $ref: '#/definitions/common.DecodedLogDataModel'
+        description: 'Deprecated: Use Decoded field instead'
       log_index:
         type: integer
       topics:
@@ -91,7 +143,7 @@ definitions:
       transaction_index:
         type: integer
     type: object
-  handlers.DecodedTransactionDataModel:
+  common.DecodedTransactionDataModel:
     properties:
       inputs:
         additionalProperties: true
@@ -101,18 +153,18 @@ definitions:
       signature:
         type: string
     type: object
-  handlers.DecodedTransactionModel:
+  common.DecodedTransactionModel:
     properties:
       access_list_json:
         type: string
       blob_gas_price:
-        type: string
+        type: integer
       blob_gas_used:
         type: integer
       block_hash:
         type: string
       block_number:
-        type: string
+        type: integer
       block_timestamp:
         type: integer
       chain_id:
@@ -124,15 +176,21 @@ definitions:
       data:
         type: string
       decoded:
-        $ref: '#/definitions/handlers.DecodedTransactionDataModel'
+        $ref: '#/definitions/common.DecodedTransactionDataModel'
+      decodedData:
+        allOf:
+        - $ref: '#/definitions/common.DecodedTransactionDataModel'
+        description: 'Deprecated: Use Decoded field instead'
       effective_gas_price:
-        type: string
+        type: integer
       from_address:
+        type: string
+      function_selector:
         type: string
       gas:
         type: integer
       gas_price:
-        type: string
+        type: integer
       gas_used:
         type: integer
       hash:
@@ -140,9 +198,9 @@ definitions:
       logs_bloom:
         type: string
       max_fee_per_gas:
-        type: string
+        type: integer
       max_priority_fee_per_gas:
-        type: string
+        type: integer
       nonce:
         type: integer
       r:
@@ -160,16 +218,16 @@ definitions:
       v:
         type: string
       value:
-        type: string
+        type: integer
     type: object
-  handlers.LogModel:
+  common.LogModel:
     properties:
       address:
         type: string
       block_hash:
         type: string
       block_number:
-        type: string
+        type: integer
       block_timestamp:
         type: integer
       chain_id:
@@ -187,18 +245,18 @@ definitions:
       transaction_index:
         type: integer
     type: object
-  handlers.TransactionModel:
+  common.TransactionModel:
     properties:
       access_list_json:
         type: string
       blob_gas_price:
-        type: string
+        type: integer
       blob_gas_used:
         type: integer
       block_hash:
         type: string
       block_number:
-        type: string
+        type: integer
       block_timestamp:
         type: integer
       chain_id:
@@ -210,13 +268,15 @@ definitions:
       data:
         type: string
       effective_gas_price:
-        type: string
+        type: integer
       from_address:
+        type: string
+      function_selector:
         type: string
       gas:
         type: integer
       gas_price:
-        type: string
+        type: integer
       gas_used:
         type: integer
       hash:
@@ -224,9 +284,9 @@ definitions:
       logs_bloom:
         type: string
       max_fee_per_gas:
-        type: string
+        type: integer
       max_priority_fee_per_gas:
-        type: string
+        type: integer
       nonce:
         type: integer
       r:
@@ -244,8 +304,59 @@ definitions:
       v:
         type: string
       value:
+        type: integer
+    type: object
+  handlers.BalanceModel:
+    properties:
+      balance:
+        type: string
+      token_address:
+        type: string
+      token_id:
         type: string
     type: object
+  handlers.HolderModel:
+    properties:
+      balance:
+        type: string
+      holder_address:
+        type: string
+      token_id:
+        type: string
+    type: object
+  handlers.SearchResultModel:
+    properties:
+      blocks:
+        items:
+          $ref: '#/definitions/common.BlockModel'
+        type: array
+      events:
+        items:
+          $ref: '#/definitions/common.LogModel'
+        type: array
+      transactions:
+        items:
+          $ref: '#/definitions/common.TransactionModel'
+        type: array
+      type:
+        $ref: '#/definitions/handlers.SearchResultType'
+    type: object
+  handlers.SearchResultType:
+    enum:
+    - block
+    - transaction
+    - event_signature
+    - function_signature
+    - address
+    - contract
+    type: string
+    x-enum-varnames:
+    - SearchResultTypeBlock
+    - SearchResultTypeTransaction
+    - SearchResultTypeEventSignature
+    - SearchResultTypeFunctionSignature
+    - SearchResultTypeAddress
+    - SearchResultTypeContract
 info:
   contact: {}
   description: API for querying blockchain transactions and events
@@ -255,6 +366,150 @@ info:
   title: Thirdweb Insight
   version: v0.0.1-beta
 paths:
+  /{chainId}/balances/{owner}/{type}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve token balances of an address by type
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - description: Owner address
+        in: path
+        name: owner
+        required: true
+        type: string
+      - description: Type of token balance
+        in: path
+        name: type
+        required: true
+        type: string
+      - description: Hide zero balances
+        in: query
+        name: hide_zero_balances
+        required: true
+        type: boolean
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - default: 5
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.BalanceModel'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Get token balances of an address by type
+      tags:
+      - balances
+  /{chainId}/blocks:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all blocks
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - description: Filter parameters
+        in: query
+        name: filter
+        type: string
+      - description: Field to group results by
+        in: query
+        name: group_by
+        type: string
+      - description: Field to sort results by
+        in: query
+        name: sort_by
+        type: string
+      - description: Sort order (asc or desc)
+        in: query
+        name: sort_order
+        type: string
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - default: 5
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      - collectionFormat: csv
+        description: List of aggregate functions to apply
+        in: query
+        items:
+          type: string
+        name: aggregate
+        type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/common.BlockModel'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Get all blocks
+      tags:
+      - blocks
   /{chainId}/events:
     get:
       consumes:
@@ -298,6 +553,10 @@ paths:
           type: string
         name: aggregate
         type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -309,7 +568,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/handlers.LogModel'
+                    $ref: '#/definitions/common.LogModel'
                   type: array
               type: object
         "400":
@@ -377,6 +636,10 @@ paths:
           type: string
         name: aggregate
         type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -388,7 +651,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/handlers.LogModel'
+                    $ref: '#/definitions/common.LogModel'
                   type: array
               type: object
         "400":
@@ -463,6 +726,10 @@ paths:
           type: string
         name: aggregate
         type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -474,7 +741,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/handlers.DecodedLogModel'
+                    $ref: '#/definitions/common.DecodedLogModel'
                   type: array
               type: object
         "400":
@@ -494,6 +761,71 @@ paths:
       summary: Get logs by contract and event signature
       tags:
       - events
+  /{chainId}/holders/{address}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve holders of a token
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - description: Address of the token
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Type of token
+        in: path
+        name: token_type
+        type: string
+      - description: Hide zero balances
+        in: query
+        name: hide_zero_balances
+        required: true
+        type: boolean
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - default: 5
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.HolderModel'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Get holders of a token
+      tags:
+      - holders
   /{chainId}/transactions:
     get:
       consumes:
@@ -537,6 +869,10 @@ paths:
           type: string
         name: aggregate
         type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -548,7 +884,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/handlers.TransactionModel'
+                    $ref: '#/definitions/common.TransactionModel'
                   type: array
               type: object
         "400":
@@ -616,6 +952,10 @@ paths:
           type: string
         name: aggregate
         type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -627,7 +967,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/handlers.TransactionModel'
+                    $ref: '#/definitions/common.TransactionModel'
                   type: array
               type: object
         "400":
@@ -702,6 +1042,10 @@ paths:
           type: string
         name: aggregate
         type: array
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -713,7 +1057,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/handlers.DecodedTransactionModel'
+                    $ref: '#/definitions/common.DecodedTransactionModel'
                   type: array
               type: object
         "400":
@@ -733,6 +1077,51 @@ paths:
       summary: Get transactions by contract and signature
       tags:
       - transactions
+  /search/:input:
+    get:
+      consumes:
+      - application/json
+      description: Search blocks, transactions and events
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - description: Search input
+        in: path
+        name: input
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.SearchResultModel'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Search blockchain data
+      tags:
+      - search
 security:
 - BasicAuth: []
 securityDefinitions:
