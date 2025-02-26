@@ -469,6 +469,10 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	if contractAddressClause != "" {
 		whereClauses = append(whereClauses, contractAddressClause)
 	}
+	fromAddressClause := createFromAddressClause(table, qf.FromAddress)
+	if fromAddressClause != "" {
+		whereClauses = append(whereClauses, fromAddressClause)
+	}
 	signatureClause := createSignatureClause(table, qf.Signature)
 	if signatureClause != "" {
 		whereClauses = append(whereClauses, signatureClause)
@@ -545,8 +549,7 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 }
 
 func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf QueryFilter, scanFunc func(driver.Rows) (T, error)) (QueryResult[T], error) {
-	tableName := c.getTableName(qf.ChainId, table)
-	query := c.buildQuery(tableName, columns, qf)
+	query := c.buildQuery(table, columns, qf)
 
 	if err := common.ValidateQuery(query); err != nil {
 		return QueryResult[T]{}, err
@@ -573,7 +576,8 @@ func executeQuery[T any](c *ClickHouseConnector, table, columns string, qf Query
 }
 
 func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) string {
-	query := fmt.Sprintf("SELECT %s FROM %s.%s", columns, c.cfg.Database, table)
+	tableName := c.getTableName(qf.ChainId, table)
+	query := fmt.Sprintf("SELECT %s FROM %s.%s", columns, c.cfg.Database, tableName)
 	if qf.ForceConsistentData {
 		query += " FINAL"
 	}
@@ -589,6 +593,10 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 	contractAddressClause := createContractAddressClause(table, qf.ContractAddress)
 	if contractAddressClause != "" {
 		whereClauses = append(whereClauses, contractAddressClause)
+	}
+	fromAddressClause := createFromAddressClause(table, qf.FromAddress)
+	if fromAddressClause != "" {
+		whereClauses = append(whereClauses, fromAddressClause)
 	}
 	signatureClause := createSignatureClause(table, qf.Signature)
 	if signatureClause != "" {
@@ -656,6 +664,17 @@ func createContractAddressClause(table, contractAddress string) string {
 		if contractAddress != "" {
 			return fmt.Sprintf("to_address = '%s'", contractAddress)
 		}
+	}
+	return ""
+}
+
+func createFromAddressClause(table, fromAddress string) string {
+	if fromAddress == "" {
+		return ""
+	}
+	fromAddress = strings.ToLower(fromAddress)
+	if table == "transactions" {
+		return fmt.Sprintf("from_address = '%s'", fromAddress)
 	}
 	return ""
 }
