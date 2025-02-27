@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	gethRpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
@@ -42,6 +43,7 @@ type IRPCClient interface {
 	GetBlocksPerRequest() BlocksPerRequestConfig
 	IsWebsocket() bool
 	SupportsTraceBlock() bool
+	HasCode(address string) (bool, error)
 }
 
 type Client struct {
@@ -83,6 +85,20 @@ func Initialize() (IRPCClient, error) {
 	chainIdErr := rpc.setChainID()
 	if chainIdErr != nil {
 		return nil, chainIdErr
+	}
+	return IRPCClient(rpc), nil
+}
+
+func InitializeSimpleRPCWithUrl(url string) (IRPCClient, error) {
+	rpcClient, dialErr := gethRpc.Dial(url)
+	if dialErr != nil {
+		return nil, dialErr
+	}
+	ethClient := ethclient.NewClient(rpcClient)
+	rpc := &Client{
+		RPCClient: rpcClient,
+		EthClient: ethClient,
+		url:       url,
 	}
 	return IRPCClient(rpc), nil
 }
@@ -257,4 +273,12 @@ func (rpc *Client) GetLatestBlockNumber() (*big.Int, error) {
 		return nil, fmt.Errorf("failed to get latest block number: %v", err)
 	}
 	return new(big.Int).SetUint64(blockNumber), nil
+}
+
+func (rpc *Client) HasCode(address string) (bool, error) {
+	code, err := rpc.EthClient.CodeAt(context.Background(), gethCommon.HexToAddress(address), nil)
+	if err != nil {
+		return false, err
+	}
+	return len(code) > 0, nil
 }

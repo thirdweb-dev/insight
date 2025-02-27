@@ -314,6 +314,62 @@ func (_c *MockIRPCClient_GetURL_Call) RunAndReturn(run func() string) *MockIRPCC
 	return _c
 }
 
+// HasCode provides a mock function with given fields: address
+func (_m *MockIRPCClient) HasCode(address string) (bool, error) {
+	ret := _m.Called(address)
+
+	if len(ret) == 0 {
+		panic("no return value specified for HasCode")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (bool, error)); ok {
+		return rf(address)
+	}
+	if rf, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = rf(address)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(address)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIRPCClient_HasCode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HasCode'
+type MockIRPCClient_HasCode_Call struct {
+	*mock.Call
+}
+
+// HasCode is a helper method to define mock.On call
+//   - address string
+func (_e *MockIRPCClient_Expecter) HasCode(address interface{}) *MockIRPCClient_HasCode_Call {
+	return &MockIRPCClient_HasCode_Call{Call: _e.mock.On("HasCode", address)}
+}
+
+func (_c *MockIRPCClient_HasCode_Call) Run(run func(address string)) *MockIRPCClient_HasCode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockIRPCClient_HasCode_Call) Return(_a0 bool, _a1 error) *MockIRPCClient_HasCode_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIRPCClient_HasCode_Call) RunAndReturn(run func(string) (bool, error)) *MockIRPCClient_HasCode_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // IsWebsocket provides a mock function with no fields
 func (_m *MockIRPCClient) IsWebsocket() bool {
 	ret := _m.Called()
