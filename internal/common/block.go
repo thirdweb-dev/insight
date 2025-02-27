@@ -35,10 +35,10 @@ type Block struct {
 // BlockModel represents a simplified Block structure for Swagger documentation
 type BlockModel struct {
 	ChainId          string `json:"chain_id"`
-	Number           uint64 `json:"number"`
-	Hash             string `json:"hash"`
+	BlockNumber      uint64 `json:"block_number"`
+	BlockHash        string `json:"block_hash"`
 	ParentHash       string `json:"parent_hash"`
-	Timestamp        uint64 `json:"timestamp"`
+	BlockTimestamp   uint64 `json:"block_timestamp"`
 	Nonce            string `json:"nonce"`
 	Sha3Uncles       string `json:"sha3_uncles"`
 	MixHash          string `json:"mix_hash"`
@@ -76,10 +76,10 @@ type RawBlock = map[string]interface{}
 func (b *Block) Serialize() BlockModel {
 	return BlockModel{
 		ChainId:          b.ChainId.String(),
-		Number:           b.Number.Uint64(),
-		Hash:             b.Hash,
+		BlockNumber:      b.Number.Uint64(),
+		BlockHash:        b.Hash,
 		ParentHash:       b.ParentHash,
-		Timestamp:        uint64(b.Timestamp.Unix()),
+		BlockTimestamp:   uint64(b.Timestamp.Unix()),
 		Nonce:            b.Nonce,
 		Sha3Uncles:       b.Sha3Uncles,
 		MixHash:          b.MixHash,
