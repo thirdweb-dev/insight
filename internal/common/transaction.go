@@ -58,35 +58,35 @@ type DecodedTransaction struct {
 
 // TransactionModel represents a simplified Transaction structure for Swagger documentation
 type TransactionModel struct {
-	ChainId              string   `json:"chain_id"`
-	Hash                 string   `json:"hash"`
-	Nonce                uint64   `json:"nonce"`
-	BlockHash            string   `json:"block_hash"`
-	BlockNumber          uint64   `json:"block_number"`
-	BlockTimestamp       uint64   `json:"block_timestamp"`
-	TransactionIndex     uint64   `json:"transaction_index"`
-	FromAddress          string   `json:"from_address"`
-	ToAddress            string   `json:"to_address"`
-	Value                uint64   `json:"value"`
-	Gas                  uint64   `json:"gas"`
-	GasPrice             uint64   `json:"gas_price"`
-	Data                 string   `json:"data"`
-	FunctionSelector     string   `json:"function_selector"`
-	MaxFeePerGas         uint64   `json:"max_fee_per_gas"`
-	MaxPriorityFeePerGas uint64   `json:"max_priority_fee_per_gas"`
-	TransactionType      uint8    `json:"transaction_type"`
-	R                    string   `json:"r"`
-	S                    string   `json:"s"`
-	V                    string   `json:"v"`
-	AccessListJson       *string  `json:"access_list_json"`
-	ContractAddress      *string  `json:"contract_address"`
-	GasUsed              *uint64  `json:"gas_used"`
-	CumulativeGasUsed    *uint64  `json:"cumulative_gas_used"`
-	EffectiveGasPrice    *big.Int `json:"effective_gas_price"`
-	BlobGasUsed          *uint64  `json:"blob_gas_used"`
-	BlobGasPrice         *big.Int `json:"blob_gas_price"`
-	LogsBloom            *string  `json:"logs_bloom"`
-	Status               *uint64  `json:"status"`
+	ChainId              string  `json:"chain_id"`
+	Hash                 string  `json:"hash"`
+	Nonce                uint64  `json:"nonce"`
+	BlockHash            string  `json:"block_hash"`
+	BlockNumber          uint64  `json:"block_number"`
+	BlockTimestamp       uint64  `json:"block_timestamp"`
+	TransactionIndex     uint64  `json:"transaction_index"`
+	FromAddress          string  `json:"from_address"`
+	ToAddress            string  `json:"to_address"`
+	Value                uint64  `json:"value"`
+	Gas                  uint64  `json:"gas"`
+	GasPrice             uint64  `json:"gas_price"`
+	Data                 string  `json:"data"`
+	FunctionSelector     string  `json:"function_selector"`
+	MaxFeePerGas         uint64  `json:"max_fee_per_gas"`
+	MaxPriorityFeePerGas uint64  `json:"max_priority_fee_per_gas"`
+	TransactionType      uint8   `json:"transaction_type"`
+	R                    string  `json:"r"`
+	S                    string  `json:"s"`
+	V                    string  `json:"v"`
+	AccessListJson       *string `json:"access_list_json"`
+	ContractAddress      *string `json:"contract_address"`
+	GasUsed              *uint64 `json:"gas_used"`
+	CumulativeGasUsed    *uint64 `json:"cumulative_gas_used"`
+	EffectiveGasPrice    *uint64 `json:"effective_gas_price"`
+	BlobGasUsed          *uint64 `json:"blob_gas_used"`
+	BlobGasPrice         *uint64 `json:"blob_gas_price"`
+	LogsBloom            *string `json:"logs_bloom"`
+	Status               *uint64 `json:"status"`
 }
 
 type DecodedTransactionDataModel struct {
@@ -197,11 +197,23 @@ func (t *Transaction) Serialize() TransactionModel {
 		ContractAddress:      t.ContractAddress,
 		GasUsed:              t.GasUsed,
 		CumulativeGasUsed:    t.CumulativeGasUsed,
-		EffectiveGasPrice:    t.EffectiveGasPrice,
-		BlobGasUsed:          t.BlobGasUsed,
-		BlobGasPrice:         t.BlobGasPrice,
-		LogsBloom:            t.LogsBloom,
-		Status:               t.Status,
+		EffectiveGasPrice: func() *uint64 {
+			if t.EffectiveGasPrice == nil {
+				return nil
+			}
+			v := t.EffectiveGasPrice.Uint64()
+			return &v
+		}(),
+		BlobGasUsed: t.BlobGasUsed,
+		BlobGasPrice: func() *uint64 {
+			if t.BlobGasPrice == nil {
+				return nil
+			}
+			v := t.BlobGasPrice.Uint64()
+			return &v
+		}(),
+		LogsBloom: t.LogsBloom,
+		Status:    t.Status,
 	}
 }
 

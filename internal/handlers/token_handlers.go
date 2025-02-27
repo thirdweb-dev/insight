@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -14,15 +13,15 @@ import (
 
 // BalanceModel return type for Swagger documentation
 type BalanceModel struct {
-	TokenAddress string   `json:"token_address" ch:"address"`
-	TokenId      string   `json:"token_id" ch:"token_id"`
-	Balance      *big.Int `json:"balance" ch:"balance"`
+	TokenAddress string `json:"token_address" ch:"address"`
+	TokenId      string `json:"token_id" ch:"token_id"`
+	Balance      string `json:"balance" ch:"balance"`
 }
 
 type HolderModel struct {
-	HolderAddress string   `json:"holder_address" ch:"owner"`
-	TokenId       string   `json:"token_id" ch:"token_id"`
-	Balance       *big.Int `json:"balance" ch:"balance"`
+	HolderAddress string `json:"holder_address" ch:"owner"`
+	TokenId       string `json:"token_id" ch:"token_id"`
+	Balance       string `json:"balance" ch:"balance"`
 }
 
 // @Summary Get token balances of an address by type
@@ -37,7 +36,7 @@ type HolderModel struct {
 // @Param hide_zero_balances query bool true "Hide zero balances"
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
-// @Success 200 {object} api.QueryResponse{data=[]LogModel}
+// @Success 200 {object} api.QueryResponse{data=[]BalanceModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -122,7 +121,7 @@ func serializeBalances(balances []common.TokenBalance) []BalanceModel {
 func serializeBalance(balance common.TokenBalance) BalanceModel {
 	return BalanceModel{
 		TokenAddress: balance.TokenAddress,
-		Balance:      balance.Balance,
+		Balance:      balance.Balance.String(),
 		TokenId: func() string {
 			if balance.TokenId != nil {
 				return balance.TokenId.String()
@@ -144,7 +143,7 @@ func serializeBalance(balance common.TokenBalance) BalanceModel {
 // @Param hide_zero_balances query bool true "Hide zero balances"
 // @Param page query int false "Page number for pagination"
 // @Param limit query int false "Number of items per page" default(5)
-// @Success 200 {object} api.QueryResponse{data=[]LogModel}
+// @Success 200 {object} api.QueryResponse{data=[]HolderModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
@@ -225,7 +224,7 @@ func serializeHolders(holders []common.TokenBalance) []HolderModel {
 func serializeHolder(holder common.TokenBalance) HolderModel {
 	return HolderModel{
 		HolderAddress: holder.Owner,
-		Balance:       holder.Balance,
+		Balance:       holder.Balance.String(),
 		TokenId: func() string {
 			if holder.TokenId != nil {
 				return holder.TokenId.String()

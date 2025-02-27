@@ -54,7 +54,7 @@ func GetTransactions(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
-// @Success 200 {object} api.QueryResponse{data=[]TransactionModel}
+// @Success 200 {object} api.QueryResponse{data=[]common.TransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
 // @Failure 500 {object} api.Error
