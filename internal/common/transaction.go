@@ -53,7 +53,7 @@ type DecodedTransactionData struct {
 
 type DecodedTransaction struct {
 	Transaction
-	Decoded DecodedTransactionData `json:"decodedData"`
+	Decoded DecodedTransactionData `json:"decoded"`
 }
 
 // TransactionModel represents a simplified Transaction structure for Swagger documentation
