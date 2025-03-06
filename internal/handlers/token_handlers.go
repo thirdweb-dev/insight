@@ -49,14 +49,7 @@ func GetTokenBalancesByType(c *gin.Context) {
 		return
 	}
 
-	tokenTypesStr := c.Param("type")
-	if tokenTypesStr == "" {
-		tokenTypesStr = c.Query("token_types")
-	}
-
-	tokenTypesStr = strings.ToLower(tokenTypesStr)
-	tokenTypes, err := parseTokenType(tokenTypesStr)
-
+	tokenTypes, err := getTokenTypesFromReq(c)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
 		return
@@ -73,21 +66,17 @@ func GetTokenBalancesByType(c *gin.Context) {
 		return
 	}
 
-	tokenIds := []*big.Int{}
-	tokenIdsStr := strings.TrimSpace(c.Query("token_ids"))
-	if tokenIdsStr != "" {
-		tokenIds, err = parseTokenIds(tokenIdsStr)
-		if err != nil {
-			api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", tokenIdsStr))
-			return
-		}
+	tokenIds, err := getTokenIdsFromReq(c)
+	if err != nil {
+		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", err))
+		return
 	}
 
 	hideZeroBalances := c.Query("hide_zero_balances") != "false"
 
 	columns := []string{"address", "sum(balance) as balance"}
 	groupBy := []string{"address"}
-	if !strings.Contains(tokenTypesStr, "erc20") {
+	if !strings.Contains(strings.Join(tokenTypes, ","), "erc20") {
 		columns = []string{"address", "token_id", "sum(balance) as balance"}
 		groupBy = []string{"address", "token_id"}
 	}
@@ -153,35 +142,37 @@ func serializeBalance(balance common.TokenBalance) BalanceModel {
 	}
 }
 
-func parseTokenType(input string) ([]string, error) {
-	tokenTypes := []string{input}
-	if strings.Contains(input, ",") {
-		tokenTypes = strings.Split(input, ",")
+func getTokenTypesFromReq(c *gin.Context) ([]string, error) {
+	tokenTypeParam := c.Param("type")
+	var tokenTypes []string
+	if tokenTypeParam != "" {
+		tokenTypes = []string{tokenTypeParam}
+	} else {
+		tokenTypes = c.QueryArray("token_type")
 	}
-	for _, tokenType := range tokenTypes {
+
+	for i, tokenType := range tokenTypes {
+		tokenType = strings.ToLower(tokenType)
 		if tokenType != "erc721" && tokenType != "erc1155" && tokenType != "erc20" {
 			return []string{}, fmt.Errorf("invalid token type: %s", tokenType)
 		}
+		tokenTypes[i] = tokenType
 	}
 	return tokenTypes, nil
 }
 
-func parseTokenIds(input string) ([]*big.Int, error) {
-	tokenIdsStr := []string{input}
-	if strings.Contains(input, ",") {
-		tokenIdsStr = strings.Split(input, ",")
-	}
-	tokenIdsBn := make([]*big.Int, len(tokenIdsStr))
-
-	for i, strNum := range tokenIdsStr {
-		strNum = strings.TrimSpace(strNum) // Remove potential whitespace
-		if strNum == "" {
-			continue // Skip empty strings
+func getTokenIdsFromReq(c *gin.Context) ([]*big.Int, error) {
+	tokenIds := c.QueryArray("token_id")
+	tokenIdsBn := make([]*big.Int, len(tokenIds))
+	for i, tokenId := range tokenIds {
+		tokenId = strings.TrimSpace(tokenId) // Remove potential whitespace
+		if tokenId == "" {
+			return nil, fmt.Errorf("invalid token id: %s", tokenId)
 		}
 		num := new(big.Int)
-		_, ok := num.SetString(strNum, 10) // Base 10
+		_, ok := num.SetString(tokenId, 10) // Base 10
 		if !ok {
-			return nil, fmt.Errorf("invalid token id: %s", strNum)
+			return nil, fmt.Errorf("invalid token id: %s", tokenId)
 		}
 		tokenIdsBn[i] = num
 	}
@@ -218,8 +209,7 @@ func GetTokenHoldersByType(c *gin.Context) {
 		return
 	}
 
-	tokenTypesStr := strings.ToLower(c.Query("token_types"))
-	tokenTypes, err := parseTokenType(tokenTypesStr)
+	tokenTypes, err := getTokenTypesFromReq(c)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
 		return
@@ -229,21 +219,16 @@ func GetTokenHoldersByType(c *gin.Context) {
 	columns := []string{"owner", "sum(balance) as balance"}
 	groupBy := []string{"owner"}
 
-	if !strings.Contains(tokenTypesStr, "erc20") {
+	if !strings.Contains(strings.Join(tokenTypes, ","), "erc20") {
 		columns = []string{"owner", "token_id", "sum(balance) as balance"}
 		groupBy = []string{"owner", "token_id"}
 	}
 
-	tokenIds := []*big.Int{}
-	tokenIdsStr := strings.TrimSpace(c.Query("token_ids"))
-	if tokenIdsStr != "" {
-		tokenIds, err = parseTokenIds(c.Query("token_ids"))
-		if err != nil {
-			api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", tokenIdsStr))
-			return
-		}
+	tokenIds, err := getTokenIdsFromReq(c)
+	if err != nil {
+		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", err))
+		return
 	}
-
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
 		TokenTypes:   tokenTypes,
