@@ -48,15 +48,20 @@ func GetTokenBalancesByType(c *gin.Context) {
 		api.BadRequestErrorHandler(c, err)
 		return
 	}
-	tokenType := c.Param("type")
-	if tokenType == "" {
-		tokenType = c.Query("token_type")
+
+	tokenTypesStr := c.Param("type")
+	if tokenTypesStr == "" {
+		tokenTypesStr = c.Query("token_types")
 	}
 
-	if tokenType != "" && tokenType != "erc20" && tokenType != "erc1155" && tokenType != "erc721" {
-		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token type '%s'", tokenType))
+	tokenTypesStr = strings.ToLower(tokenTypesStr)
+	tokenTypes, err := parseTokenType(tokenTypesStr)
+
+	if err != nil {
+		api.BadRequestErrorHandler(c, err)
 		return
 	}
+
 	owner := strings.ToLower(c.Param("owner"))
 	if !strings.HasPrefix(owner, "0x") {
 		api.BadRequestErrorHandler(c, fmt.Errorf("invalid owner address '%s'", owner))
@@ -71,7 +76,7 @@ func GetTokenBalancesByType(c *gin.Context) {
 	tokenIds := []*big.Int{}
 	tokenIdsStr := strings.TrimSpace(c.Query("token_ids"))
 	if tokenIdsStr != "" {
-		tokenIds, err = parseTokenIds(c.Query("token_ids"))
+		tokenIds, err = parseTokenIds(tokenIdsStr)
 		if err != nil {
 			api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", tokenIdsStr))
 			return
@@ -82,7 +87,7 @@ func GetTokenBalancesByType(c *gin.Context) {
 
 	columns := []string{"address", "sum(balance) as balance"}
 	groupBy := []string{"address"}
-	if tokenType != "erc20" {
+	if !strings.Contains(tokenTypesStr, "erc20") {
 		columns = []string{"address", "token_id", "sum(balance) as balance"}
 		groupBy = []string{"address", "token_id"}
 	}
@@ -90,7 +95,7 @@ func GetTokenBalancesByType(c *gin.Context) {
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
 		Owner:        owner,
-		TokenType:    tokenType,
+		TokenTypes:   tokenTypes,
 		TokenAddress: tokenAddress,
 		ZeroBalance:  hideZeroBalances,
 		TokenIds:     tokenIds,
@@ -148,8 +153,24 @@ func serializeBalance(balance common.TokenBalance) BalanceModel {
 	}
 }
 
+func parseTokenType(input string) ([]string, error) {
+	tokenTypes := []string{input}
+	if strings.Contains(input, ",") {
+		tokenTypes = strings.Split(input, ",")
+	}
+	for _, tokenType := range tokenTypes {
+		if tokenType != "erc721" && tokenType != "erc1155" && tokenType != "erc20" {
+			return []string{}, fmt.Errorf("invalid token type: %s", tokenType)
+		}
+	}
+	return tokenTypes, nil
+}
+
 func parseTokenIds(input string) ([]*big.Int, error) {
-	tokenIdsStr := strings.Split(input, ",")
+	tokenIdsStr := []string{input}
+	if strings.Contains(input, ",") {
+		tokenIdsStr = strings.Split(input, ",")
+	}
 	tokenIdsBn := make([]*big.Int, len(tokenIdsStr))
 
 	for i, strNum := range tokenIdsStr {
@@ -197,16 +218,18 @@ func GetTokenHoldersByType(c *gin.Context) {
 		return
 	}
 
-	tokenType := c.Query("token_type")
-	if tokenType != "" && tokenType != "erc20" && tokenType != "erc1155" && tokenType != "erc721" {
-		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token type '%s'", tokenType))
+	tokenTypesStr := strings.ToLower(c.Query("token_types"))
+	tokenTypes, err := parseTokenType(tokenTypesStr)
+	if err != nil {
+		api.BadRequestErrorHandler(c, err)
 		return
 	}
 	hideZeroBalances := c.Query("hide_zero_balances") != "false"
 
 	columns := []string{"owner", "sum(balance) as balance"}
 	groupBy := []string{"owner"}
-	if tokenType != "erc20" {
+
+	if !strings.Contains(tokenTypesStr, "erc20") {
 		columns = []string{"owner", "token_id", "sum(balance) as balance"}
 		groupBy = []string{"owner", "token_id"}
 	}
@@ -223,7 +246,7 @@ func GetTokenHoldersByType(c *gin.Context) {
 
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
-		TokenType:    tokenType,
+		TokenTypes:   tokenTypes,
 		TokenAddress: address,
 		ZeroBalance:  hideZeroBalances,
 		TokenIds:     tokenIds,
