@@ -49,10 +49,10 @@ func GetTokenBalancesByType(c *gin.Context) {
 		return
 	}
 	tokenType := c.Param("type")
-	if tokenType != "erc20" && tokenType != "erc1155" && tokenType != "erc721" {
-		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token type '%s'", tokenType))
-		return
+	if tokenType == "" {
+		tokenType = c.Query("token_type")
 	}
+
 	owner := strings.ToLower(c.Param("owner"))
 	if !strings.HasPrefix(owner, "0x") {
 		api.BadRequestErrorHandler(c, fmt.Errorf("invalid owner address '%s'", owner))
@@ -63,6 +63,17 @@ func GetTokenBalancesByType(c *gin.Context) {
 		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token address '%s'", tokenAddress))
 		return
 	}
+
+	tokenIds := []*big.Int{}
+	tokenIdsStr := strings.TrimSpace(c.Query("token_ids"))
+	if tokenIdsStr != "" {
+		tokenIds, err = parseTokenIds(c.Query("token_ids"))
+		if err != nil {
+			api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", tokenIdsStr))
+			return
+		}
+	}
+
 	hideZeroBalances := c.Query("hide_zero_balances") != "false"
 
 	columns := []string{"address", "sum(balance) as balance"}
@@ -78,6 +89,7 @@ func GetTokenBalancesByType(c *gin.Context) {
 		TokenType:    tokenType,
 		TokenAddress: tokenAddress,
 		ZeroBalance:  hideZeroBalances,
+		TokenIds:     tokenIds,
 		GroupBy:      groupBy,
 		SortBy:       c.Query("sort_by"),
 		SortOrder:    c.Query("sort_order"),
