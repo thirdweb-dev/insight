@@ -53,6 +53,10 @@ func GetTokenBalancesByType(c *gin.Context) {
 		tokenType = c.Query("token_type")
 	}
 
+	if tokenType != "" && tokenType != "erc20" && tokenType != "erc1155" && tokenType != "erc721" {
+		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token type '%s'", tokenType))
+		return
+	}
 	owner := strings.ToLower(c.Param("owner"))
 	if !strings.HasPrefix(owner, "0x") {
 		api.BadRequestErrorHandler(c, fmt.Errorf("invalid owner address '%s'", owner))
