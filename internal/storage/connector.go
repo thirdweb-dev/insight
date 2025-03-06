@@ -30,6 +30,7 @@ type BalancesQueryFilter struct {
 	TokenType    string
 	TokenAddress string
 	Owner        string
+	TokenIds     []*big.Int
 	ZeroBalance  bool
 	GroupBy      []string
 	SortBy       string

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -131,6 +132,25 @@ func serializeBalance(balance common.TokenBalance) BalanceModel {
 	}
 }
 
+func parseTokenIds(input string) ([]*big.Int, error) {
+	tokenIdsStr := strings.Split(input, ",")
+	tokenIdsBn := make([]*big.Int, len(tokenIdsStr))
+
+	for i, strNum := range tokenIdsStr {
+		strNum = strings.TrimSpace(strNum) // Remove potential whitespace
+		if strNum == "" {
+			continue // Skip empty strings
+		}
+		num := new(big.Int)
+		_, ok := num.SetString(strNum, 10) // Base 10
+		if !ok {
+			return nil, fmt.Errorf("invalid token id: %s", strNum)
+		}
+		tokenIdsBn[i] = num
+	}
+	return tokenIdsBn, nil
+}
+
 // @Summary Get holders of a token
 // @Description Retrieve holders of a token
 // @Tags holders
@@ -175,11 +195,22 @@ func GetTokenHoldersByType(c *gin.Context) {
 		groupBy = []string{"owner", "token_id"}
 	}
 
+	tokenIds := []*big.Int{}
+	tokenIdsStr := strings.TrimSpace(c.Query("token_ids"))
+	if tokenIdsStr != "" {
+		tokenIds, err = parseTokenIds(c.Query("token_ids"))
+		if err != nil {
+			api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", tokenIdsStr))
+			return
+		}
+	}
+
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
 		TokenType:    tokenType,
 		TokenAddress: address,
 		ZeroBalance:  hideZeroBalances,
+		TokenIds:     tokenIds,
 		GroupBy:      groupBy,
 		SortBy:       c.Query("sort_by"),
 		SortOrder:    c.Query("sort_order"),
