@@ -1399,14 +1399,31 @@ func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ..
 	}
 	query := fmt.Sprintf("SELECT %s FROM %s.token_balances WHERE chain_id = ?", columns, c.cfg.Database)
 
-	if qf.TokenType != "" {
-		query += fmt.Sprintf(" AND token_type = '%s'", qf.TokenType)
+	if len(qf.TokenTypes) > 0 {
+		tokenTypesStr := ""
+		tokenTypesLen := len(qf.TokenTypes)
+		for i := 0; i < tokenTypesLen-1; i++ {
+			tokenTypesStr += fmt.Sprintf("'%s',", qf.TokenTypes[i])
+		}
+		tokenTypesStr += fmt.Sprintf("'%s'", qf.TokenTypes[tokenTypesLen-1])
+		query += fmt.Sprintf(" AND token_type in (%s)", tokenTypesStr)
 	}
+
 	if qf.Owner != "" {
 		query += fmt.Sprintf(" AND owner = '%s'", qf.Owner)
 	}
 	if qf.TokenAddress != "" {
 		query += fmt.Sprintf(" AND address = '%s'", qf.TokenAddress)
+	}
+
+	if len(qf.TokenIds) > 0 {
+		tokenIdsStr := ""
+		tokenIdsLen := len(qf.TokenIds)
+		for i := 0; i < tokenIdsLen-1; i++ {
+			tokenIdsStr += fmt.Sprintf("%s,", qf.TokenIds[i].String())
+		}
+		tokenIdsStr += qf.TokenIds[tokenIdsLen-1].String()
+		query += fmt.Sprintf(" AND token_id in (%s)", tokenIdsStr)
 	}
 
 	isBalanceAggregated := false

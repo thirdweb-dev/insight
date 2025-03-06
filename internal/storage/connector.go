@@ -27,9 +27,10 @@ type QueryFilter struct {
 
 type BalancesQueryFilter struct {
 	ChainId      *big.Int
-	TokenType    string
+	TokenTypes   []string
 	TokenAddress string
 	Owner        string
+	TokenIds     []*big.Int
 	ZeroBalance  bool
 	GroupBy      []string
 	SortBy       string
