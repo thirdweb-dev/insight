@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
@@ -42,7 +41,7 @@ var (
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/events [get]
 func GetLogs(c *gin.Context) {
-	handleLogsRequest(c, "", "", nil)
+	handleLogsRequest(c)
 }
 
 // @Summary Get logs by contract
@@ -67,8 +66,7 @@ func GetLogs(c *gin.Context) {
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/events/{contract} [get]
 func GetLogsByContract(c *gin.Context) {
-	contractAddress := c.Param("contract")
-	handleLogsRequest(c, contractAddress, "", nil)
+	handleLogsRequest(c)
 }
 
 // @Summary Get logs by contract and event signature
@@ -94,22 +92,18 @@ func GetLogsByContract(c *gin.Context) {
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/events/{contract}/{signature} [get]
 func GetLogsByContractAndSignature(c *gin.Context) {
-	contractAddress := c.Param("contract")
-	eventSignature := c.Param("signature")
-	strippedSignature := common.StripPayload(eventSignature)
-	eventABI, err := common.ConstructEventABI(eventSignature)
-	if err != nil {
-		log.Debug().Err(err).Msgf("Unable to construct event ABI for %s", eventSignature)
-	}
-	handleLogsRequest(c, contractAddress, strippedSignature, eventABI)
+	handleLogsRequest(c)
 }
 
-func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventABI *abi.Event) {
+func handleLogsRequest(c *gin.Context) {
 	chainId, err := api.GetChainId(c)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
 		return
 	}
+
+	contractAddress := c.Param("contract")
+	signature := c.Param("signature")
 
 	queryParams, err := api.ParseQueryParams(c.Request)
 	if err != nil {
@@ -117,9 +111,14 @@ func handleLogsRequest(c *gin.Context, contractAddress, signature string, eventA
 		return
 	}
 
+	var eventABI *abi.Event
 	signatureHash := ""
 	if signature != "" {
-		signatureHash = crypto.Keccak256Hash([]byte(signature)).Hex()
+		eventABI, err = common.ConstructEventABI(signature)
+		if err != nil {
+			log.Debug().Err(err).Msgf("Unable to construct event ABI for %s", signature)
+		}
+		signatureHash = eventABI.ID.Hex()
 	}
 
 	mainStorage, err := getMainStorage()
