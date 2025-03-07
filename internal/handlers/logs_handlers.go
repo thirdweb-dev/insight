@@ -179,25 +179,39 @@ func handleLogsRequest(c *gin.Context) {
 			api.InternalErrorHandler(c)
 			return
 		}
-		if eventABI != nil {
-			decodedLogs := []common.DecodedLogModel{}
-			for _, log := range logsResult.Data {
-				decodedLog := log.Decode(eventABI)
-				decodedLogs = append(decodedLogs, decodedLog.Serialize())
-			}
-			queryResult.Data = decodedLogs
+
+		if decodedLogs := decodeLogsIfNeeded(chainId.String(), logsResult.Data, eventABI, config.Cfg.API.AbiDecodingEnabled && queryParams.Decode); decodedLogs != nil {
+			queryResult.Data = serializeDecodedLogs(decodedLogs)
 		} else {
-			if config.Cfg.API.AbiDecodingEnabled && queryParams.Decode {
-				decodedLogs := common.DecodeLogs(chainId.String(), logsResult.Data)
-				queryResult.Data = serializeDecodedLogs(decodedLogs)
-			} else {
-				queryResult.Data = serializeLogs(logsResult.Data)
-			}
+			queryResult.Data = serializeLogs(logsResult.Data)
 		}
+
 		queryResult.Meta.TotalItems = len(logsResult.Data)
 	}
 
 	sendJSONResponse(c, queryResult)
+}
+
+func decodeLogsIfNeeded(chainId string, logs []common.Log, eventABI *abi.Event, useContractService bool) []*common.DecodedLog {
+	if eventABI != nil {
+		decodingCompletelySuccessful := true
+		decodedLogs := []*common.DecodedLog{}
+		for _, log := range logs {
+			decodedLog := log.Decode(eventABI)
+			if decodedLog.Decoded.Name == "" || decodedLog.Decoded.Signature == "" {
+				decodingCompletelySuccessful = false
+			}
+			decodedLogs = append(decodedLogs, decodedLog)
+		}
+		if !useContractService || decodingCompletelySuccessful {
+			// decoding was successful or contract service decoding is disabled
+			return decodedLogs
+		}
+	}
+	if useContractService {
+		return common.DecodeLogs(chainId, logs)
+	}
+	return nil
 }
 
 func getMainStorage() (storage.IMainStorage, error) {
