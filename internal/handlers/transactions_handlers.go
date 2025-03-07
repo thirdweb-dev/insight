@@ -4,13 +4,12 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/crypto"
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"github.com/thirdweb-dev/indexer/api"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
-	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
@@ -35,7 +34,7 @@ import (
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/transactions [get]
 func GetTransactions(c *gin.Context) {
-	handleTransactionsRequest(c, "", "", nil)
+	handleTransactionsRequest(c)
 }
 
 // @Summary Get transactions by contract
@@ -60,8 +59,7 @@ func GetTransactions(c *gin.Context) {
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/transactions/{to} [get]
 func GetTransactionsByContract(c *gin.Context) {
-	to := c.Param("to")
-	handleTransactionsRequest(c, to, "", nil)
+	handleTransactionsRequest(c)
 }
 
 // @Summary Get transactions by contract and signature
@@ -87,22 +85,18 @@ func GetTransactionsByContract(c *gin.Context) {
 // @Failure 500 {object} api.Error
 // @Router /{chainId}/transactions/{to}/{signature} [get]
 func GetTransactionsByContractAndSignature(c *gin.Context) {
-	to := c.Param("to")
-	signature := c.Param("signature")
-	strippedSignature := common.StripPayload(signature)
-	functionABI, err := common.ConstructFunctionABI(signature)
-	if err != nil {
-		log.Debug().Err(err).Msgf("Unable to construct function ABI for %s", signature)
-	}
-	handleTransactionsRequest(c, to, strippedSignature, functionABI)
+	handleTransactionsRequest(c)
 }
 
-func handleTransactionsRequest(c *gin.Context, contractAddress, signature string, functionABI *abi.Method) {
+func handleTransactionsRequest(c *gin.Context) {
 	chainId, err := api.GetChainId(c)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
 		return
 	}
+
+	contractAddress := c.Param("to")
+	signature := c.Param("signature")
 
 	queryParams, err := api.ParseQueryParams(c.Request)
 	if err != nil {
@@ -110,9 +104,14 @@ func handleTransactionsRequest(c *gin.Context, contractAddress, signature string
 		return
 	}
 
+	var functionABI *abi.Method
 	signatureHash := ""
 	if signature != "" {
-		signatureHash = rpc.ExtractFunctionSelector(crypto.Keccak256Hash([]byte(signature)).Hex())
+		functionABI, err = common.ConstructFunctionABI(signature)
+		if err != nil {
+			log.Debug().Err(err).Msgf("Unable to construct function ABI for %s", signature)
+		}
+		signatureHash = "0x" + gethCommon.Bytes2Hex(functionABI.ID)
 	}
 
 	mainStorage, err := getMainStorage()

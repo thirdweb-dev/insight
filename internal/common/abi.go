@@ -48,7 +48,7 @@ func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 
 func ConstructEventABI(signature string) (*abi.Event, error) {
 	// Regex to extract the event name and parameters
-	regex := regexp.MustCompile(`^(\w+)\((.*)\)$`)
+	regex := regexp.MustCompile(`^(\w+)\s*\((.*)\)$`)
 	matches := regex.FindStringSubmatch(strings.TrimSpace(signature))
 	if len(matches) != 3 {
 		return nil, fmt.Errorf("invalid event signature format")
@@ -68,7 +68,7 @@ func ConstructEventABI(signature string) (*abi.Event, error) {
 }
 
 func ConstructFunctionABI(signature string) (*abi.Method, error) {
-	regex := regexp.MustCompile(`^(\w+)\((.*)\)$`)
+	regex := regexp.MustCompile(`^(\w+)\s*\((.*)\)$`)
 	matches := regex.FindStringSubmatch(strings.TrimSpace(signature))
 	if len(matches) != 3 {
 		return nil, fmt.Errorf("invalid function signature format")
