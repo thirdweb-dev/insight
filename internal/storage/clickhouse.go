@@ -1039,8 +1039,9 @@ func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*
 
 func (c *ClickHouseConnector) deleteBlocks(chainId *big.Int, blockNumbers []*big.Int) error {
 	blocksQueryResult, err := c.GetBlocks(QueryFilter{
-		ChainId:      chainId,
-		BlockNumbers: blockNumbers,
+		ChainId:             chainId,
+		BlockNumbers:        blockNumbers,
+		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
 		return err
@@ -1055,8 +1056,9 @@ func (c *ClickHouseConnector) deleteBlocks(chainId *big.Int, blockNumbers []*big
 
 func (c *ClickHouseConnector) deleteLogs(chainId *big.Int, blockNumbers []*big.Int) error {
 	logsQueryResult, err := c.GetLogs(QueryFilter{
-		ChainId:      chainId,
-		BlockNumbers: blockNumbers,
+		ChainId:             chainId,
+		BlockNumbers:        blockNumbers,
+		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
 		return err
@@ -1071,8 +1073,9 @@ func (c *ClickHouseConnector) deleteLogs(chainId *big.Int, blockNumbers []*big.I
 
 func (c *ClickHouseConnector) deleteTransactions(chainId *big.Int, blockNumbers []*big.Int) error {
 	txsQueryResult, err := c.GetTransactions(QueryFilter{
-		ChainId:      chainId,
-		BlockNumbers: blockNumbers,
+		ChainId:             chainId,
+		BlockNumbers:        blockNumbers,
+		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
 		return err
@@ -1087,8 +1090,9 @@ func (c *ClickHouseConnector) deleteTransactions(chainId *big.Int, blockNumbers 
 
 func (c *ClickHouseConnector) deleteTraces(chainId *big.Int, blockNumbers []*big.Int) error {
 	tracesQueryResult, err := c.GetTraces(QueryFilter{
-		ChainId:      chainId,
-		BlockNumbers: blockNumbers,
+		ChainId:             chainId,
+		BlockNumbers:        blockNumbers,
+		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
 		return err
