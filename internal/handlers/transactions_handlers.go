@@ -172,25 +172,38 @@ func handleTransactionsRequest(c *gin.Context) {
 			api.InternalErrorHandler(c)
 			return
 		}
-		if functionABI != nil {
-			decodedTransactions := []common.DecodedTransactionModel{}
-			for _, transaction := range transactionsResult.Data {
-				decodedTransaction := transaction.Decode(functionABI)
-				decodedTransactions = append(decodedTransactions, decodedTransaction.Serialize())
-			}
-			queryResult.Data = decodedTransactions
+
+		if decodedTxs := decodeTransactionsIfNeeded(chainId.String(), transactionsResult.Data, functionABI, config.Cfg.API.AbiDecodingEnabled && queryParams.Decode); decodedTxs != nil {
+			queryResult.Data = serializeDecodedTransactions(decodedTxs)
 		} else {
-			if config.Cfg.API.AbiDecodingEnabled && queryParams.Decode {
-				decodedTransactions := common.DecodeTransactions(chainId.String(), transactionsResult.Data)
-				queryResult.Data = serializeDecodedTransactions(decodedTransactions)
-			} else {
-				queryResult.Data = serializeTransactions(transactionsResult.Data)
-			}
+			queryResult.Data = serializeTransactions(transactionsResult.Data)
 		}
 		queryResult.Meta.TotalItems = len(transactionsResult.Data)
 	}
 
 	c.JSON(http.StatusOK, queryResult)
+}
+
+func decodeTransactionsIfNeeded(chainId string, transactions []common.Transaction, functionABI *abi.Method, useContractService bool) []*common.DecodedTransaction {
+	if functionABI != nil {
+		decodingCompletelySuccessful := true
+		decodedTransactions := []*common.DecodedTransaction{}
+		for _, transaction := range transactions {
+			decodedTransaction := transaction.Decode(functionABI)
+			if decodedTransaction.Decoded.Name == "" || decodedTransaction.Decoded.Signature == "" {
+				decodingCompletelySuccessful = false
+			}
+			decodedTransactions = append(decodedTransactions, decodedTransaction)
+		}
+		if !useContractService || decodingCompletelySuccessful {
+			// decoding was successful or contract service decoding is disabled
+			return decodedTransactions
+		}
+	}
+	if useContractService {
+		return common.DecodeTransactions(chainId, transactions)
+	}
+	return nil
 }
 
 func serializeDecodedTransactions(transactions []*common.DecodedTransaction) []common.DecodedTransactionModel {
