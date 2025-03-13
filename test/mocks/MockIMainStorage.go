@@ -27,21 +27,33 @@ func (_m *MockIMainStorage) EXPECT() *MockIMainStorage_Expecter {
 }
 
 // DeleteBlockData provides a mock function with given fields: chainId, blockNumbers
-func (_m *MockIMainStorage) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error {
+func (_m *MockIMainStorage) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error) {
 	ret := _m.Called(chainId, blockNumbers)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteBlockData")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) error); ok {
+	var r0 []common.BlockData
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) ([]common.BlockData, error)); ok {
+		return rf(chainId, blockNumbers)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) []common.BlockData); ok {
 		r0 = rf(chainId, blockNumbers)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]common.BlockData)
+		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(*big.Int, []*big.Int) error); ok {
+		r1 = rf(chainId, blockNumbers)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockIMainStorage_DeleteBlockData_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteBlockData'
@@ -63,12 +75,12 @@ func (_c *MockIMainStorage_DeleteBlockData_Call) Run(run func(chainId *big.Int, 
 	return _c
 }
 
-func (_c *MockIMainStorage_DeleteBlockData_Call) Return(_a0 error) *MockIMainStorage_DeleteBlockData_Call {
-	_c.Call.Return(_a0)
+func (_c *MockIMainStorage_DeleteBlockData_Call) Return(_a0 []common.BlockData, _a1 error) *MockIMainStorage_DeleteBlockData_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockIMainStorage_DeleteBlockData_Call) RunAndReturn(run func(*big.Int, []*big.Int) error) *MockIMainStorage_DeleteBlockData_Call {
+func (_c *MockIMainStorage_DeleteBlockData_Call) RunAndReturn(run func(*big.Int, []*big.Int) ([]common.BlockData, error)) *MockIMainStorage_DeleteBlockData_Call {
 	_c.Call.Return(run)
 	return _c
 }

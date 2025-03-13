@@ -97,7 +97,7 @@ type IMainStorage interface {
 	 * Get block headers ordered from latest to oldest.
 	 */
 	GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error)
-	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error
+	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error)
 
 	GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error)
 	GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error)

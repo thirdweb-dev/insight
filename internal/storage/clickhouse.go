@@ -987,122 +987,168 @@ func (c *ClickHouseConnector) GetBlockHeadersDescending(chainId *big.Int, from *
 	return blockHeaders, nil
 }
 
-func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error {
+func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error) {
 	var deleteErr error
 	var deleteErrMutex sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(4)
 
+	// Create a map to store block data that will be deleted
+	deletedBlockDataByNumber := make(map[*big.Int]common.BlockData)
 	go func() {
 		defer wg.Done()
-		if err := c.deleteBlocks(chainId, blockNumbers); err != nil {
+		deletedBlocks, err := c.deleteBlocks(chainId, blockNumbers)
+		if err != nil {
 			deleteErrMutex.Lock()
 			deleteErr = fmt.Errorf("error deleting blocks: %v", err)
 			deleteErrMutex.Unlock()
 		}
+		for _, block := range deletedBlocks {
+			data := deletedBlockDataByNumber[block.Number]
+			data.Block = block
+			deletedBlockDataByNumber[block.Number] = data
+		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if err := c.deleteLogs(chainId, blockNumbers); err != nil {
+		deletedLogs, err := c.deleteLogs(chainId, blockNumbers)
+		if err != nil {
 			deleteErrMutex.Lock()
 			deleteErr = fmt.Errorf("error deleting logs: %v", err)
 			deleteErrMutex.Unlock()
 		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		if err := c.deleteTransactions(chainId, blockNumbers); err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting transactions: %v", err)
-			deleteErrMutex.Unlock()
+		for _, log := range deletedLogs {
+			data := deletedBlockDataByNumber[log.BlockNumber]
+			data.Logs = append(data.Logs, log)
+			deletedBlockDataByNumber[log.BlockNumber] = data
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if err := c.deleteTraces(chainId, blockNumbers); err != nil {
+		deletedTransactions, err := c.deleteTransactions(chainId, blockNumbers)
+		if err != nil {
+			deleteErrMutex.Lock()
+			deleteErr = fmt.Errorf("error deleting transactions: %v", err)
+			deleteErrMutex.Unlock()
+		}
+		for _, tx := range deletedTransactions {
+			data := deletedBlockDataByNumber[tx.BlockNumber]
+			data.Transactions = append(data.Transactions, tx)
+			deletedBlockDataByNumber[tx.BlockNumber] = data
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		deletedTraces, err := c.deleteTraces(chainId, blockNumbers)
+		if err != nil {
 			deleteErrMutex.Lock()
 			deleteErr = fmt.Errorf("error deleting traces: %v", err)
 			deleteErrMutex.Unlock()
+		}
+		for _, trace := range deletedTraces {
+			data := deletedBlockDataByNumber[trace.BlockNumber]
+			data.Traces = append(data.Traces, trace)
+			deletedBlockDataByNumber[trace.BlockNumber] = data
 		}
 	}()
 
 	wg.Wait()
 
 	if deleteErr != nil {
-		return deleteErr
+		return nil, deleteErr
 	}
-	return nil
+	deletedBlockData := make([]common.BlockData, 0, len(deletedBlockDataByNumber))
+	for _, data := range deletedBlockDataByNumber {
+		deletedBlockData = append(deletedBlockData, data)
+	}
+	return deletedBlockData, nil
 }
 
-func (c *ClickHouseConnector) deleteBlocks(chainId *big.Int, blockNumbers []*big.Int) error {
+func (c *ClickHouseConnector) deleteBlocks(chainId *big.Int, blockNumbers []*big.Int) ([]common.Block, error) {
 	blocksQueryResult, err := c.GetBlocks(QueryFilter{
 		ChainId:             chainId,
 		BlockNumbers:        blockNumbers,
 		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(blocksQueryResult.Data) == 0 {
-		return nil // No blocks to delete
+		return nil, nil // No blocks to delete
 	}
-	return c.insertBlocks(blocksQueryResult.Data, InsertOptions{
+	err = c.insertBlocks(blocksQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return blocksQueryResult.Data, nil
 }
 
-func (c *ClickHouseConnector) deleteLogs(chainId *big.Int, blockNumbers []*big.Int) error {
+func (c *ClickHouseConnector) deleteLogs(chainId *big.Int, blockNumbers []*big.Int) ([]common.Log, error) {
 	logsQueryResult, err := c.GetLogs(QueryFilter{
 		ChainId:             chainId,
 		BlockNumbers:        blockNumbers,
 		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(logsQueryResult.Data) == 0 {
-		return nil // No logs to delete
+		return nil, nil // No logs to delete
 	}
-	return c.insertLogs(logsQueryResult.Data, InsertOptions{
+	err = c.insertLogs(logsQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return logsQueryResult.Data, nil
 }
 
-func (c *ClickHouseConnector) deleteTransactions(chainId *big.Int, blockNumbers []*big.Int) error {
+func (c *ClickHouseConnector) deleteTransactions(chainId *big.Int, blockNumbers []*big.Int) ([]common.Transaction, error) {
 	txsQueryResult, err := c.GetTransactions(QueryFilter{
 		ChainId:             chainId,
 		BlockNumbers:        blockNumbers,
 		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(txsQueryResult.Data) == 0 {
-		return nil // No transactions to delete
+		return nil, nil // No transactions to delete
 	}
-	return c.insertTransactions(txsQueryResult.Data, InsertOptions{
+	err = c.insertTransactions(txsQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return txsQueryResult.Data, nil
 }
 
-func (c *ClickHouseConnector) deleteTraces(chainId *big.Int, blockNumbers []*big.Int) error {
+func (c *ClickHouseConnector) deleteTraces(chainId *big.Int, blockNumbers []*big.Int) ([]common.Trace, error) {
 	tracesQueryResult, err := c.GetTraces(QueryFilter{
 		ChainId:             chainId,
 		BlockNumbers:        blockNumbers,
 		ForceConsistentData: true,
 	}, "*")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(tracesQueryResult.Data) == 0 {
-		return nil // No traces to delete
+		return nil, nil // No traces to delete
 	}
-	return c.insertTraces(tracesQueryResult.Data, InsertOptions{
+	err = c.insertTraces(tracesQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return tracesQueryResult.Data, nil
 }
 
 // TODO make this atomic
