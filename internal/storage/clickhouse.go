@@ -114,11 +114,11 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	return conn, nil
 }
 
-func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOptions) error {
-	if len(*blocks) == 0 {
+func (c *ClickHouseConnector) insertBlocks(blocks []common.Block, opt InsertOptions) error {
+	if len(blocks) == 0 {
 		return nil
 	}
-	tableName := c.getTableName((*blocks)[0].ChainId, "blocks")
+	tableName := c.getTableName(blocks[0].ChainId, "blocks")
 	columns := []string{
 		"chain_id", "block_number", "block_timestamp", "hash", "parent_hash", "sha3_uncles", "nonce",
 		"mix_hash", "miner", "state_root", "transactions_root", "receipts_root", "size", "logs_bloom",
@@ -129,10 +129,10 @@ func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOpt
 		columns = append(columns, "insert_timestamp")
 	}
 	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(*blocks); i += c.cfg.MaxRowsPerInsert {
+	for i := 0; i < len(blocks); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(*blocks) {
-			end = len(*blocks)
+		if end > len(blocks) {
+			end = len(blocks)
 		}
 
 		batch, err := c.conn.PrepareBatch(context.Background(), query)
@@ -140,7 +140,7 @@ func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOpt
 			return err
 		}
 
-		for _, block := range (*blocks)[i:end] {
+		for _, block := range blocks[i:end] {
 			args := []interface{}{
 				block.ChainId,
 				block.Number,
@@ -185,11 +185,11 @@ func (c *ClickHouseConnector) insertBlocks(blocks *[]common.Block, opt InsertOpt
 	return nil
 }
 
-func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt InsertOptions) error {
-	if len(*txs) == 0 {
+func (c *ClickHouseConnector) insertTransactions(txs []common.Transaction, opt InsertOptions) error {
+	if len(txs) == 0 {
 		return nil
 	}
-	tableName := c.getTableName((*txs)[0].ChainId, "transactions")
+	tableName := c.getTableName(txs[0].ChainId, "transactions")
 	columns := []string{
 		"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp", "transaction_index", "from_address", "to_address", "value", "gas",
 		"gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "transaction_type", "r", "s", "v", "access_list",
@@ -199,10 +199,10 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt 
 		columns = append(columns, "insert_timestamp")
 	}
 	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(*txs); i += c.cfg.MaxRowsPerInsert {
+	for i := 0; i < len(txs); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(*txs) {
-			end = len(*txs)
+		if end > len(txs) {
+			end = len(txs)
 		}
 
 		batch, err := c.conn.PrepareBatch(context.Background(), query)
@@ -210,7 +210,7 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt 
 			return err
 		}
 
-		for _, tx := range (*txs)[i:end] {
+		for _, tx := range txs[i:end] {
 			args := []interface{}{
 				tx.ChainId,
 				tx.Hash,
@@ -264,11 +264,11 @@ func (c *ClickHouseConnector) insertTransactions(txs *[]common.Transaction, opt 
 	return nil
 }
 
-func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) error {
-	if len(*logs) == 0 {
+func (c *ClickHouseConnector) insertLogs(logs []common.Log, opt InsertOptions) error {
+	if len(logs) == 0 {
 		return nil
 	}
-	tableName := c.getTableName((*logs)[0].ChainId, "logs")
+	tableName := c.getTableName(logs[0].ChainId, "logs")
 	columns := []string{
 		"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index",
 		"log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3", "sign",
@@ -277,10 +277,10 @@ func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) 
 		columns = append(columns, "insert_timestamp")
 	}
 	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(*logs); i += c.cfg.MaxRowsPerInsert {
+	for i := 0; i < len(logs); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(*logs) {
-			end = len(*logs)
+		if end > len(logs) {
+			end = len(logs)
 		}
 
 		batch, err := c.conn.PrepareBatch(context.Background(), query)
@@ -288,7 +288,7 @@ func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) 
 			return err
 		}
 
-		for _, log := range (*logs)[i:end] {
+		for _, log := range logs[i:end] {
 			args := []interface{}{
 				log.ChainId,
 				log.BlockNumber,
@@ -326,11 +326,11 @@ func (c *ClickHouseConnector) insertLogs(logs *[]common.Log, opt InsertOptions) 
 	return nil
 }
 
-func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace, opt InsertOptions) error {
-	if len(*traces) == 0 {
+func (c *ClickHouseConnector) insertTraces(traces []common.Trace, opt InsertOptions) error {
+	if len(traces) == 0 {
 		return nil
 	}
-	tableName := c.getTableName((*traces)[0].ChainID, "traces")
+	tableName := c.getTableName(traces[0].ChainID, "traces")
 	columns := []string{
 		"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index",
 		"subtraces", "trace_address", "type", "call_type", "error", "from_address", "to_address", "gas", "gas_used",
@@ -340,10 +340,10 @@ func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace, opt InsertOpt
 		columns = append(columns, "insert_timestamp")
 	}
 	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(*traces); i += c.cfg.MaxRowsPerInsert {
+	for i := 0; i < len(traces); i += c.cfg.MaxRowsPerInsert {
 		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(*traces) {
-			end = len(*traces)
+		if end > len(traces) {
+			end = len(traces)
 		}
 
 		batch, err := c.conn.PrepareBatch(context.Background(), query)
@@ -351,7 +351,7 @@ func (c *ClickHouseConnector) insertTraces(traces *[]common.Trace, opt InsertOpt
 			return err
 		}
 
-		for _, trace := range (*traces)[i:end] {
+		for _, trace := range traces[i:end] {
 			args := []interface{}{
 				trace.ChainID,
 				trace.BlockNumber,
@@ -882,7 +882,7 @@ func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 	return batch.Send()
 }
 
-func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (*[]common.BlockData, error) {
+func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
 	query := fmt.Sprintf("SELECT data FROM %s.block_data WHERE block_number IN (%s) AND is_deleted = 0",
 		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
@@ -915,10 +915,10 @@ func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) (*[]common.BlockDat
 		}
 		blockDataList = append(blockDataList, blockData)
 	}
-	return &blockDataList, nil
+	return blockDataList, nil
 }
 
-func (c *ClickHouseConnector) DeleteStagingData(data *[]common.BlockData) error {
+func (c *ClickHouseConnector) DeleteStagingData(data []common.BlockData) error {
 	query := fmt.Sprintf(`
         INSERT INTO %s.block_data (
             chain_id, block_number, is_deleted
@@ -930,7 +930,7 @@ func (c *ClickHouseConnector) DeleteStagingData(data *[]common.BlockData) error 
 		return err
 	}
 
-	for _, blockData := range *data {
+	for _, blockData := range data {
 		err := batch.Append(
 			blockData.Block.ChainId,
 			blockData.Block.Number,
@@ -1049,7 +1049,7 @@ func (c *ClickHouseConnector) deleteBlocks(chainId *big.Int, blockNumbers []*big
 	if len(blocksQueryResult.Data) == 0 {
 		return nil // No blocks to delete
 	}
-	return c.insertBlocks(&blocksQueryResult.Data, InsertOptions{
+	return c.insertBlocks(blocksQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
 }
@@ -1066,7 +1066,7 @@ func (c *ClickHouseConnector) deleteLogs(chainId *big.Int, blockNumbers []*big.I
 	if len(logsQueryResult.Data) == 0 {
 		return nil // No logs to delete
 	}
-	return c.insertLogs(&logsQueryResult.Data, InsertOptions{
+	return c.insertLogs(logsQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
 }
@@ -1083,7 +1083,7 @@ func (c *ClickHouseConnector) deleteTransactions(chainId *big.Int, blockNumbers 
 	if len(txsQueryResult.Data) == 0 {
 		return nil // No transactions to delete
 	}
-	return c.insertTransactions(&txsQueryResult.Data, InsertOptions{
+	return c.insertTransactions(txsQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
 }
@@ -1100,22 +1100,22 @@ func (c *ClickHouseConnector) deleteTraces(chainId *big.Int, blockNumbers []*big
 	if len(tracesQueryResult.Data) == 0 {
 		return nil // No traces to delete
 	}
-	return c.insertTraces(&tracesQueryResult.Data, InsertOptions{
+	return c.insertTraces(tracesQueryResult.Data, InsertOptions{
 		AsDeleted: true,
 	})
 }
 
 // TODO make this atomic
-func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
-	if len(*data) == 0 {
+func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
+	if len(data) == 0 {
 		return nil
 	}
-	blocks := make([]common.Block, 0, len(*data))
+	blocks := make([]common.Block, 0, len(data))
 	logs := make([]common.Log, 0)
 	transactions := make([]common.Transaction, 0)
 	traces := make([]common.Trace, 0)
 
-	for _, blockData := range *data {
+	for _, blockData := range data {
 		blocks = append(blocks, blockData.Block)
 		logs = append(logs, blockData.Logs...)
 		transactions = append(transactions, blockData.Transactions...)
@@ -1130,7 +1130,7 @@ func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := c.insertBlocks(&blocks, InsertOptions{
+			if err := c.insertBlocks(blocks, InsertOptions{
 				AsDeleted: false,
 			}); err != nil {
 				saveErrMutex.Lock()
@@ -1144,7 +1144,7 @@ func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := c.insertLogs(&logs, InsertOptions{
+			if err := c.insertLogs(logs, InsertOptions{
 				AsDeleted: false,
 			}); err != nil {
 				saveErrMutex.Lock()
@@ -1158,7 +1158,7 @@ func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := c.insertTransactions(&transactions, InsertOptions{
+			if err := c.insertTransactions(transactions, InsertOptions{
 				AsDeleted: false,
 			}); err != nil {
 				saveErrMutex.Lock()
@@ -1172,7 +1172,7 @@ func (c *ClickHouseConnector) InsertBlockData(data *[]common.BlockData) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := c.insertTraces(&traces, InsertOptions{
+			if err := c.insertTraces(traces, InsertOptions{
 				AsDeleted: false,
 			}); err != nil {
 				saveErrMutex.Lock()

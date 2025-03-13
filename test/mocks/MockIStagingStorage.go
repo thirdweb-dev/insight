@@ -27,7 +27,7 @@ func (_m *MockIStagingStorage) EXPECT() *MockIStagingStorage_Expecter {
 }
 
 // DeleteStagingData provides a mock function with given fields: data
-func (_m *MockIStagingStorage) DeleteStagingData(data *[]common.BlockData) error {
+func (_m *MockIStagingStorage) DeleteStagingData(data []common.BlockData) error {
 	ret := _m.Called(data)
 
 	if len(ret) == 0 {
@@ -35,7 +35,7 @@ func (_m *MockIStagingStorage) DeleteStagingData(data *[]common.BlockData) error
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*[]common.BlockData) error); ok {
+	if rf, ok := ret.Get(0).(func([]common.BlockData) error); ok {
 		r0 = rf(data)
 	} else {
 		r0 = ret.Error(0)
@@ -50,14 +50,14 @@ type MockIStagingStorage_DeleteStagingData_Call struct {
 }
 
 // DeleteStagingData is a helper method to define mock.On call
-//   - data *[]common.BlockData
+//   - data []common.BlockData
 func (_e *MockIStagingStorage_Expecter) DeleteStagingData(data interface{}) *MockIStagingStorage_DeleteStagingData_Call {
 	return &MockIStagingStorage_DeleteStagingData_Call{Call: _e.mock.On("DeleteStagingData", data)}
 }
 
-func (_c *MockIStagingStorage_DeleteStagingData_Call) Run(run func(data *[]common.BlockData)) *MockIStagingStorage_DeleteStagingData_Call {
+func (_c *MockIStagingStorage_DeleteStagingData_Call) Run(run func(data []common.BlockData)) *MockIStagingStorage_DeleteStagingData_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*[]common.BlockData))
+		run(args[0].([]common.BlockData))
 	})
 	return _c
 }
@@ -67,7 +67,7 @@ func (_c *MockIStagingStorage_DeleteStagingData_Call) Return(_a0 error) *MockISt
 	return _c
 }
 
-func (_c *MockIStagingStorage_DeleteStagingData_Call) RunAndReturn(run func(*[]common.BlockData) error) *MockIStagingStorage_DeleteStagingData_Call {
+func (_c *MockIStagingStorage_DeleteStagingData_Call) RunAndReturn(run func([]common.BlockData) error) *MockIStagingStorage_DeleteStagingData_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -133,23 +133,23 @@ func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) RunAndReturn(run fu
 }
 
 // GetStagingData provides a mock function with given fields: qf
-func (_m *MockIStagingStorage) GetStagingData(qf storage.QueryFilter) (*[]common.BlockData, error) {
+func (_m *MockIStagingStorage) GetStagingData(qf storage.QueryFilter) ([]common.BlockData, error) {
 	ret := _m.Called(qf)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetStagingData")
 	}
 
-	var r0 *[]common.BlockData
+	var r0 []common.BlockData
 	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) (*[]common.BlockData, error)); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) ([]common.BlockData, error)); ok {
 		return rf(qf)
 	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) *[]common.BlockData); ok {
+	if rf, ok := ret.Get(0).(func(storage.QueryFilter) []common.BlockData); ok {
 		r0 = rf(qf)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*[]common.BlockData)
+			r0 = ret.Get(0).([]common.BlockData)
 		}
 	}
 
@@ -180,12 +180,12 @@ func (_c *MockIStagingStorage_GetStagingData_Call) Run(run func(qf storage.Query
 	return _c
 }
 
-func (_c *MockIStagingStorage_GetStagingData_Call) Return(data *[]common.BlockData, err error) *MockIStagingStorage_GetStagingData_Call {
+func (_c *MockIStagingStorage_GetStagingData_Call) Return(data []common.BlockData, err error) *MockIStagingStorage_GetStagingData_Call {
 	_c.Call.Return(data, err)
 	return _c
 }
 
-func (_c *MockIStagingStorage_GetStagingData_Call) RunAndReturn(run func(storage.QueryFilter) (*[]common.BlockData, error)) *MockIStagingStorage_GetStagingData_Call {
+func (_c *MockIStagingStorage_GetStagingData_Call) RunAndReturn(run func(storage.QueryFilter) ([]common.BlockData, error)) *MockIStagingStorage_GetStagingData_Call {
 	_c.Call.Return(run)
 	return _c
 }

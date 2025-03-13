@@ -64,7 +64,7 @@ func (c *Committer) Start(ctx context.Context) {
 				log.Error().Err(err).Msg("Error getting block data to commit")
 				continue
 			}
-			if blockDataToCommit == nil || len(*blockDataToCommit) == 0 {
+			if len(blockDataToCommit) == 0 {
 				log.Debug().Msg("No block data to commit")
 				continue
 			}
@@ -104,7 +104,7 @@ func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 	return blockNumbers, nil
 }
 
-func (c *Committer) getSequentialBlockDataToCommit() (*[]common.BlockData, error) {
+func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error) {
 	blocksToCommit, err := c.getBlockNumbersToCommit()
 	if err != nil {
 		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
@@ -117,49 +117,49 @@ func (c *Committer) getSequentialBlockDataToCommit() (*[]common.BlockData, error
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
 	}
-	if blocksData == nil || len(*blocksData) == 0 {
+	if len(blocksData) == 0 {
 		log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blocksToCommit[0].Int64(), blocksToCommit[len(blocksToCommit)-1].Int64())
 		c.handleMissingStagingData(blocksToCommit)
 		return nil, nil
 	}
 
 	// Sort blocks by block number
-	sort.Slice(*blocksData, func(i, j int) bool {
-		return (*blocksData)[i].Block.Number.Cmp((*blocksData)[j].Block.Number) < 0
+	sort.Slice(blocksData, func(i, j int) bool {
+		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
 	})
 
-	if (*blocksData)[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
-		return nil, c.handleGap(blocksToCommit[0], (*blocksData)[0].Block)
+	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
+		return nil, c.handleGap(blocksToCommit[0], blocksData[0].Block)
 	}
 
 	var sequentialBlockData []common.BlockData
-	sequentialBlockData = append(sequentialBlockData, (*blocksData)[0])
-	expectedBlockNumber := new(big.Int).Add((*blocksData)[0].Block.Number, big.NewInt(1))
+	sequentialBlockData = append(sequentialBlockData, blocksData[0])
+	expectedBlockNumber := new(big.Int).Add(blocksData[0].Block.Number, big.NewInt(1))
 
-	for i := 1; i < len(*blocksData); i++ {
-		if (*blocksData)[i].Block.Number.Cmp((*blocksData)[i-1].Block.Number) == 0 {
+	for i := 1; i < len(blocksData); i++ {
+		if blocksData[i].Block.Number.Cmp(blocksData[i-1].Block.Number) == 0 {
 			// Duplicate block, skip -- might happen if block has been polled multiple times
 			continue
 		}
-		if (*blocksData)[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
+		if blocksData[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
 			// Note: Gap detected, stop here
-			log.Warn().Msgf("Gap detected at block %s, committing until %s", expectedBlockNumber.String(), (*blocksData)[i-1].Block.Number.String())
+			log.Warn().Msgf("Gap detected at block %s, committing until %s", expectedBlockNumber.String(), blocksData[i-1].Block.Number.String())
 			// increment the gap counter in prometheus
 			metrics.GapCounter.Inc()
 			// record the first missed block number in prometheus
-			metrics.MissedBlockNumbers.Set(float64((*blocksData)[0].Block.Number.Int64()))
+			metrics.MissedBlockNumbers.Set(float64(blocksData[0].Block.Number.Int64()))
 			break
 		}
-		sequentialBlockData = append(sequentialBlockData, (*blocksData)[i])
+		sequentialBlockData = append(sequentialBlockData, blocksData[i])
 		expectedBlockNumber.Add(expectedBlockNumber, big.NewInt(1))
 	}
 
-	return &sequentialBlockData, nil
+	return sequentialBlockData, nil
 }
 
-func (c *Committer) commit(blockData *[]common.BlockData) error {
-	blockNumbers := make([]*big.Int, len(*blockData))
-	for i, block := range *blockData {
+func (c *Committer) commit(blockData []common.BlockData) error {
+	blockNumbers := make([]*big.Int, len(blockData))
+	for i, block := range blockData {
 		blockNumbers[i] = block.Block.Number
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
@@ -175,8 +175,8 @@ func (c *Committer) commit(blockData *[]common.BlockData) error {
 	}
 
 	// Find highest block number from committed blocks
-	highestBlockNumber := (*blockData)[0].Block.Number
-	for _, block := range *blockData {
+	highestBlockNumber := blockData[0].Block.Number
+	for _, block := range blockData {
 		if block.Block.Number.Cmp(highestBlockNumber) > 0 {
 			highestBlockNumber = block.Block.Number
 		}
@@ -184,7 +184,7 @@ func (c *Committer) commit(blockData *[]common.BlockData) error {
 	c.lastCommittedBlock = new(big.Int).Set(highestBlockNumber)
 
 	// Update metrics for successful commits
-	metrics.SuccessfulCommits.Add(float64(len(*blockData)))
+	metrics.SuccessfulCommits.Add(float64(len(blockData)))
 	metrics.LastCommittedBlock.Set(float64(highestBlockNumber.Int64()))
 	return nil
 }

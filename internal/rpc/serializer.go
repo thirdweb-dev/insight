@@ -11,17 +11,17 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
-func SerializeFullBlocks(chainId *big.Int, blocks *[]RPCFetchBatchResult[common.RawBlock], logs *[]RPCFetchBatchResult[common.RawLogs], traces *[]RPCFetchBatchResult[common.RawTraces], receipts *[]RPCFetchBatchResult[common.RawReceipts]) []GetFullBlockResult {
+func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock], logs []RPCFetchBatchResult[common.RawLogs], traces []RPCFetchBatchResult[common.RawTraces], receipts []RPCFetchBatchResult[common.RawReceipts]) []GetFullBlockResult {
 	if blocks == nil {
 		return []GetFullBlockResult{}
 	}
-	results := make([]GetFullBlockResult, 0, len(*blocks))
+	results := make([]GetFullBlockResult, 0, len(blocks))
 
 	rawLogsMap := mapBatchResultsByBlockNumber[common.RawLogs](logs)
 	rawReceiptsMap := mapBatchResultsByBlockNumber[common.RawReceipts](receipts)
 	rawTracesMap := mapBatchResultsByBlockNumber[common.RawTraces](traces)
 
-	for _, rawBlock := range *blocks {
+	for _, rawBlock := range blocks {
 		result := GetFullBlockResult{
 			BlockNumber: rawBlock.BlockNumber,
 		}
@@ -45,7 +45,7 @@ func SerializeFullBlocks(chainId *big.Int, blocks *[]RPCFetchBatchResult[common.
 			if rawReceipts.Error != nil {
 				result.Error = rawReceipts.Error
 			} else {
-				result.Data.Logs = serializeLogsFromReceipts(chainId, &rawReceipts.Result, result.Data.Block)
+				result.Data.Logs = serializeLogsFromReceipts(chainId, rawReceipts.Result, result.Data.Block)
 				result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp, &rawReceipts.Result)
 			}
 		} else {
@@ -75,12 +75,12 @@ func SerializeFullBlocks(chainId *big.Int, blocks *[]RPCFetchBatchResult[common.
 	return results
 }
 
-func mapBatchResultsByBlockNumber[T any](results *[]RPCFetchBatchResult[T]) map[string]*RPCFetchBatchResult[T] {
+func mapBatchResultsByBlockNumber[T any](results []RPCFetchBatchResult[T]) map[string]*RPCFetchBatchResult[T] {
 	if results == nil {
 		return make(map[string]*RPCFetchBatchResult[T], 0)
 	}
-	resultsMap := make(map[string]*RPCFetchBatchResult[T], len(*results))
-	for _, result := range *results {
+	resultsMap := make(map[string]*RPCFetchBatchResult[T], len(results))
+	for _, result := range results {
 		resultsMap[result.BlockNumber.String()] = &result
 	}
 	return resultsMap
@@ -278,13 +278,13 @@ func ExtractFunctionSelector(s string) string {
 	return s[0:10]
 }
 
-func serializeLogsFromReceipts(chainId *big.Int, rawReceipts *[]map[string]interface{}, block common.Block) []common.Log {
+func serializeLogsFromReceipts(chainId *big.Int, rawReceipts []map[string]interface{}, block common.Block) []common.Log {
 	logs := make([]common.Log, 0)
 	if rawReceipts == nil {
 		return logs
 	}
 
-	for _, receipt := range *rawReceipts {
+	for _, receipt := range rawReceipts {
 		rawLogs, ok := receipt["logs"].([]interface{})
 		if !ok {
 			log.Debug().Msgf("Failed to serialize logs: %v", receipt["logs"])
