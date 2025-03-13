@@ -49,22 +49,22 @@ func NewReorgHandler(rpc rpc.IRPCClient, storage storage.IStorage) *ReorgHandler
 }
 
 func getInitialCheckedBlockNumber(storage storage.IStorage, chainId *big.Int) *big.Int {
-	bn := big.NewInt(int64(config.Cfg.ReorgHandler.FromBlock))
-	if !config.Cfg.ReorgHandler.ForceFromBlock {
-		storedFromBlock, err := storage.OrchestratorStorage.GetLastReorgCheckedBlockNumber(chainId)
-		if err != nil {
-			log.Debug().Err(err).Msgf("Error getting last reorg checked block number, using configured: %s", bn)
-			return bn
-		}
-		if storedFromBlock.Sign() <= 0 {
-			log.Debug().Msgf("Last reorg checked block number not found, using configured: %s", bn)
-			return bn
-		}
-		log.Debug().Msgf("Last reorg checked block number found, using: %s", storedFromBlock)
-		return storedFromBlock
+	configuredBn := big.NewInt(int64(config.Cfg.ReorgHandler.FromBlock))
+	if config.Cfg.ReorgHandler.ForceFromBlock {
+		log.Debug().Msgf("Force from block reorg check flag set, using configured: %s", configuredBn)
+		return configuredBn
 	}
-	log.Debug().Msgf("Force from block reorg check flag set, using configured: %s", bn)
-	return bn
+	storedBn, err := storage.OrchestratorStorage.GetLastReorgCheckedBlockNumber(chainId)
+	if err != nil {
+		log.Debug().Err(err).Msgf("Error getting last reorg checked block number, using configured: %s", configuredBn)
+		return configuredBn
+	}
+	if storedBn.Sign() <= 0 {
+		log.Debug().Msgf("Last reorg checked block number not found, using configured: %s", configuredBn)
+		return configuredBn
+	}
+	log.Debug().Msgf("Last reorg checked block number found, using: %s", storedBn)
+	return storedBn
 }
 
 func (rh *ReorgHandler) Start(ctx context.Context) {
@@ -148,6 +148,11 @@ func (rh *ReorgHandler) getReorgCheckRange(latestCheckedBlock *big.Int) (*big.In
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting latest committed block: %w", err)
 	}
+	if latestCheckedBlock.Cmp(latestCommittedBlock) > 0 {
+		log.Debug().Msgf("Committing has not reached the configured reorg check start block: %s (reorg start) > %s (last committed)", latestCheckedBlock.String(), latestCommittedBlock.String())
+		return latestCheckedBlock, latestCheckedBlock, nil
+	}
+
 	if new(big.Int).Sub(latestCommittedBlock, latestCheckedBlock).Cmp(big.NewInt(int64(rh.blocksPerScan))) < 0 {
 		// diff between latest committed and latest checked is less than blocksPerScan, so we will look back from the latest committed block
 		fromBlock := new(big.Int).Sub(latestCommittedBlock, big.NewInt(int64(rh.blocksPerScan)))
