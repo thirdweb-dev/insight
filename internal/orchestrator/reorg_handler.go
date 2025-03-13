@@ -12,6 +12,7 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
+	"github.com/thirdweb-dev/indexer/internal/publisher"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
@@ -24,6 +25,7 @@ type ReorgHandler struct {
 	blocksPerScan    int
 	lastCheckedBlock *big.Int
 	worker           *worker.Worker
+	publisher        *publisher.Publisher
 }
 
 const DEFAULT_REORG_HANDLER_INTERVAL = 1000
@@ -45,6 +47,7 @@ func NewReorgHandler(rpc rpc.IRPCClient, storage storage.IStorage) *ReorgHandler
 		triggerInterval:  triggerInterval,
 		blocksPerScan:    blocksPerScan,
 		lastCheckedBlock: getInitialCheckedBlockNumber(storage, rpc.GetChainID()),
+		publisher:        publisher.GetInstance(),
 	}
 }
 
@@ -77,6 +80,7 @@ func (rh *ReorgHandler) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info().Msg("Reorg handler shutting down")
+			rh.publisher.Close()
 			return
 		case <-ticker.C:
 			mostRecentBlockChecked, err := rh.RunFromBlock(rh.lastCheckedBlock)
@@ -278,11 +282,20 @@ func (rh *ReorgHandler) handleReorg(reorgedBlockNumbers []*big.Int) error {
 		blocksToDelete = append(blocksToDelete, result.BlockNumber)
 	}
 	// TODO make delete and insert atomic
-	if _, err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blocksToDelete); err != nil {
+	deletedBlockData, err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blocksToDelete)
+	if err != nil {
 		return fmt.Errorf("error deleting data for blocks %v: %w", blocksToDelete, err)
 	}
 	if err := rh.storage.MainStorage.InsertBlockData(data); err != nil {
 		return fmt.Errorf("error saving data to main storage: %w", err)
+	}
+	if rh.publisher != nil {
+		// Publish block data asynchronously
+		go func() {
+			if err := rh.publisher.PublishReorg(deletedBlockData, data); err != nil {
+				log.Error().Err(err).Msg("Failed to publish reorg data to kafka")
+			}
+		}()
 	}
 	return nil
 }

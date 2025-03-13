@@ -17,6 +17,11 @@ var (
 		Help: "The last successfully committed block number",
 	})
 
+	CommitterLagInSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "committer_lag_seconds",
+		Help: "The lag in seconds between the last committed block and the current timestamp",
+	})
+
 	GapCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "committer_gap_counter",
 		Help: "The number of gaps detected during commits",
@@ -80,5 +85,23 @@ var (
 	ReorgCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "reorg_handler_reorg_counter",
 		Help: "The number of reorgs detected",
+	})
+)
+
+// Publisher Metrics
+var (
+	PublisherBlockCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "publisher_block_counter",
+		Help: "The number of blocks published",
+	})
+
+	PublisherReorgedBlockCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "publisher_reorged_block_counter",
+		Help: "The number of reorged blocks published",
+	})
+
+	LastPublishedBlock = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "last_published_block",
+		Help: "The last block number that was published",
 	})
 )
