@@ -17,12 +17,14 @@ type BalanceModel struct {
 	TokenAddress string `json:"token_address" ch:"address"`
 	TokenId      string `json:"token_id" ch:"token_id"`
 	Balance      string `json:"balance" ch:"balance"`
+	TokenType    string `json:"token_type" ch:"token_type"`
 }
 
 type HolderModel struct {
 	HolderAddress string `json:"holder_address" ch:"owner"`
 	TokenId       string `json:"token_id" ch:"token_id"`
 	Balance       string `json:"balance" ch:"balance"`
+	TokenType     string `json:"token_type" ch:"token_type"`
 }
 
 // @Summary Get token balances of an address by type
@@ -77,8 +79,8 @@ func GetTokenBalancesByType(c *gin.Context) {
 	columns := []string{"address", "sum(balance) as balance"}
 	groupBy := []string{"address"}
 	if !strings.Contains(strings.Join(tokenTypes, ","), "erc20") {
-		columns = []string{"address", "token_id", "sum(balance) as balance"}
-		groupBy = []string{"address", "token_id"}
+		columns = []string{"address", "token_id", "sum(balance) as balance", "token_type"}
+		groupBy = []string{"address", "token_id", "token_type"}
 	}
 
 	qf := storage.BalancesQueryFilter{
@@ -139,6 +141,7 @@ func serializeBalance(balance common.TokenBalance) BalanceModel {
 			}
 			return ""
 		}(),
+		TokenType: balance.TokenType,
 	}
 }
 
@@ -220,8 +223,8 @@ func GetTokenHoldersByType(c *gin.Context) {
 	groupBy := []string{"owner"}
 
 	if !strings.Contains(strings.Join(tokenTypes, ","), "erc20") {
-		columns = []string{"owner", "token_id", "sum(balance) as balance"}
-		groupBy = []string{"owner", "token_id"}
+		columns = []string{"owner", "token_id", "sum(balance) as balance", "token_type"}
+		groupBy = []string{"owner", "token_id", "token_type"}
 	}
 
 	tokenIds, err := getTokenIdsFromReq(c)
@@ -286,5 +289,6 @@ func serializeHolder(holder common.TokenBalance) HolderModel {
 			}
 			return ""
 		}(),
+		TokenType: holder.TokenType,
 	}
 }
