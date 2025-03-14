@@ -1396,6 +1396,88 @@ func (c *ClickHouseConnector) getTableName(chainId *big.Int, defaultTable string
 	return defaultTable
 }
 
+func (c *ClickHouseConnector) GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error) {
+	columns := "token_type, chain_id, token_address, from_address, to_address, block_number, block_timestamp, transaction_hash, token_id, amount, log_index, sign, insert_timestamp"
+	if len(fields) > 0 {
+		columns = strings.Join(fields, ", ")
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s.token_transfers WHERE chain_id = ?", columns, c.cfg.Database)
+
+	if len(qf.TokenTypes) > 0 {
+		tokenTypesStr := ""
+		tokenTypesLen := len(qf.TokenTypes)
+		for i := 0; i < tokenTypesLen-1; i++ {
+			tokenTypesStr += fmt.Sprintf("'%s',", qf.TokenTypes[i])
+		}
+		tokenTypesStr += fmt.Sprintf("'%s'", qf.TokenTypes[tokenTypesLen-1])
+		query += fmt.Sprintf(" AND token_type in (%s)", tokenTypesStr)
+	}
+
+	if qf.WalletAddress != "" {
+		query += fmt.Sprintf(" AND (from_address = '%s' OR to_address = '%s')", qf.WalletAddress, qf.WalletAddress)
+	}
+	if qf.TokenAddress != "" {
+		query += fmt.Sprintf(" AND token_address = '%s'", qf.TokenAddress)
+	}
+	if qf.TransactionHash != "" {
+		query += fmt.Sprintf(" AND transaction_hash = '%s'", qf.TransactionHash)
+	}
+
+	if len(qf.TokenIds) > 0 {
+		tokenIdsStr := ""
+		tokenIdsLen := len(qf.TokenIds)
+		for i := 0; i < tokenIdsLen-1; i++ {
+			tokenIdsStr += fmt.Sprintf("%s,", qf.TokenIds[i].String())
+		}
+		tokenIdsStr += qf.TokenIds[tokenIdsLen-1].String()
+		query += fmt.Sprintf(" AND token_id in (%s)", tokenIdsStr)
+	}
+
+	if qf.StartBlockNumber != nil {
+		query += fmt.Sprintf(" AND block_number >= %s", qf.StartBlockNumber.String())
+	}
+	if qf.EndBlockNumber != nil {
+		query += fmt.Sprintf(" AND block_number <= %s", qf.EndBlockNumber.String())
+	}
+
+	if len(qf.GroupBy) > 0 {
+		query += fmt.Sprintf(" GROUP BY %s", strings.Join(qf.GroupBy, ", "))
+	}
+
+	// Add ORDER BY clause
+	if qf.SortBy != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+	}
+
+	// Add limit clause
+	if qf.Page > 0 && qf.Limit > 0 {
+		offset := (qf.Page - 1) * qf.Limit
+		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
+	} else if qf.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
+	}
+	rows, err := c.conn.Query(context.Background(), query, qf.ChainId)
+	if err != nil {
+		return QueryResult[common.TokenTransfer]{}, err
+	}
+	defer rows.Close()
+
+	queryResult := QueryResult[common.TokenTransfer]{
+		Data: []common.TokenTransfer{},
+	}
+
+	for rows.Next() {
+		var tt common.TokenTransfer
+		err := rows.ScanStruct(&tt)
+		if err != nil {
+			return QueryResult[common.TokenTransfer]{}, err
+		}
+		queryResult.Data = append(queryResult.Data, tt)
+	}
+
+	return queryResult, nil
+}
+
 func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error) {
 	columns := "chain_id, token_type, address, owner, token_id, balance"
 	if len(fields) > 0 {
