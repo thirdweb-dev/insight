@@ -747,7 +747,7 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Type of token",
                         "name": "token_type",
-                        "in": "path"
+                        "in": "query"
                     },
                     {
                         "type": "boolean",
@@ -785,6 +785,109 @@ const docTemplate = `{
                                             "type": "array",
                                             "items": {
                                                 "$ref": "#/definitions/handlers.HolderModel"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/api.Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/api.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/{chainId}/tokens/{address}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Retrieve token IDs by type for a specific token address",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tokens"
+                ],
+                "summary": "Get token IDs by type for a specific token address",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Chain ID",
+                        "name": "chainId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Token address",
+                        "name": "address",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Type of token (erc721 or erc1155)",
+                        "name": "token_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Hide zero balances",
+                        "name": "hide_zero_balances",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number for pagination",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Number of items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.QueryResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handlers.TokenIdModel"
                                             }
                                         }
                                     }
@@ -1359,10 +1462,16 @@ const docTemplate = `{
                 "indexedParams": {
                     "type": "object"
                 },
+                "indexed_params": {
+                    "type": "object"
+                },
                 "name": {
                     "type": "string"
                 },
                 "nonIndexedParams": {
+                    "type": "object"
+                },
+                "non_indexed_params": {
                     "type": "object"
                 },
                 "signature": {
@@ -1678,6 +1787,9 @@ const docTemplate = `{
                 },
                 "token_id": {
                     "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
                 }
             }
         },
@@ -1691,6 +1803,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "token_id": {
+                    "type": "string"
+                },
+                "token_type": {
                     "type": "string"
                 }
             }
@@ -1739,6 +1854,17 @@ const docTemplate = `{
                 "SearchResultTypeAddress",
                 "SearchResultTypeContract"
             ]
+        },
+        "handlers.TokenIdModel": {
+            "type": "object",
+            "properties": {
+                "token_id": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
         }
     },
     "securityDefinitions": {

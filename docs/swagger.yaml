@@ -103,10 +103,14 @@ definitions:
     type: object
   common.DecodedLogDataModel:
     properties:
+      indexed_params:
+        type: object
       indexedParams:
         type: object
       name:
         type: string
+      non_indexed_params:
+        type: object
       nonIndexedParams:
         type: object
       signature:
@@ -314,6 +318,8 @@ definitions:
         type: string
       token_id:
         type: string
+      token_type:
+        type: string
     type: object
   handlers.HolderModel:
     properties:
@@ -322,6 +328,8 @@ definitions:
       holder_address:
         type: string
       token_id:
+        type: string
+      token_type:
         type: string
     type: object
   handlers.SearchResultModel:
@@ -357,6 +365,13 @@ definitions:
     - SearchResultTypeFunctionSignature
     - SearchResultTypeAddress
     - SearchResultTypeContract
+  handlers.TokenIdModel:
+    properties:
+      token_id:
+        type: string
+      token_type:
+        type: string
+    type: object
 info:
   contact: {}
   description: API for querying blockchain transactions and events
@@ -778,7 +793,7 @@ paths:
         required: true
         type: string
       - description: Type of token
-        in: path
+        in: query
         name: token_type
         type: string
       - description: Hide zero balances
@@ -826,6 +841,71 @@ paths:
       summary: Get holders of a token
       tags:
       - holders
+  /{chainId}/tokens/{address}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve token IDs by type for a specific token address
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - description: Token address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Type of token (erc721 or erc1155)
+        in: query
+        name: token_type
+        type: string
+      - description: Hide zero balances
+        in: query
+        name: hide_zero_balances
+        required: true
+        type: boolean
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - default: 5
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.TokenIdModel'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Get token IDs by type for a specific token address
+      tags:
+      - tokens
   /{chainId}/transactions:
     get:
       consumes:
