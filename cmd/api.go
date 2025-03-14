@@ -92,6 +92,9 @@ func RunApi(cmd *cobra.Command, args []string) {
 		// token holder queries
 		root.GET("/holders/:address", handlers.GetTokenHoldersByType)
 
+		// token transfers queries
+		root.GET("/transfers", handlers.GetTokenTransfers)
+
 		// search
 		root.GET("/search/:input", handlers.Search)
 	}

@@ -25,6 +25,23 @@ type QueryFilter struct {
 	ForceConsistentData bool
 }
 
+type TransfersQueryFilter struct {
+	ChainId          *big.Int
+	TokenTypes       []string
+	TokenAddress     string
+	WalletAddress    string
+	TokenIds         []*big.Int
+	TransactionHash  string
+	StartBlockNumber *big.Int
+	EndBlockNumber   *big.Int
+	GroupBy          []string
+	SortBy           string
+	SortOrder        string // "ASC" or "DESC"
+	Page             int
+	Limit            int
+	Offset           int
+}
+
 type BalancesQueryFilter struct {
 	ChainId      *big.Int
 	TokenTypes   []string
@@ -83,6 +100,7 @@ type IMainStorage interface {
 	DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error
 
 	GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error)
+	GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
