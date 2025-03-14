@@ -1396,25 +1396,6 @@ func (c *ClickHouseConnector) getTableName(chainId *big.Int, defaultTable string
 	return defaultTable
 }
 
-/*
-	type TokenTransfer struct {
-	TokenType       string    `json:"token_type"`
-	ChainID         *big.Int  `json:"chain_id"`
-	TokenAddress    string    `json:"token_address"`
-	FromAddress     string    `json:"from_address"`
-	ToAddress       string    `json:"to_address"`
-	BlockNumber     *big.Int  `json:"block_number"`
-	BlockTimestamp  time.Time `json:"block_timestamp"`
-	TransactionHash string    `json:"transaction_hash"`
-	TokenID         *big.Int  `json:"token_id"`
-	Amount          *big.Int  `json:"amount"`
-	LogIndex        uint64    `json:"log_index"`
-	Sign            int8      `json:"sign"`
-	InsertTimestamp time.Time `json:"insert_timestamp"`
-}
-
-*/
-
 func (c *ClickHouseConnector) GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error) {
 	columns := "token_type, chain_id, token_address, from_address, to_address, block_number, block_timestamp, transaction_hash, token_id, amount, log_index, sign, insert_timestamp"
 	if len(fields) > 0 {
@@ -1475,8 +1456,6 @@ func (c *ClickHouseConnector) GetTokenTransfers(qf TransfersQueryFilter, fields 
 	} else if qf.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
 	}
-	fmt.Println("QUERRRYRYYRY", query)
-	fmt.Println("qf", qf.ChainId)
 	rows, err := c.conn.Query(context.Background(), query, qf.ChainId)
 	if err != nil {
 		return QueryResult[common.TokenTransfer]{}, err
