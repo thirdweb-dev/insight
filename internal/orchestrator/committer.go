@@ -144,7 +144,7 @@ func (c *Committer) getSequentialBlockDataToCommit() (*[]common.BlockData, error
 		if (*blocksData)[i].Block.Number.Cmp(expectedBlockNumber) != 0 {
 			// Note: Gap detected, stop here
 			log.Warn().Msgf("Gap detected at block %s, committing until %s", expectedBlockNumber.String(), (*blocksData)[i-1].Block.Number.String())
-			// increment the a gap counter in prometheus
+			// increment the gap counter in prometheus
 			metrics.GapCounter.Inc()
 			// record the first missed block number in prometheus
 			metrics.MissedBlockNumbers.Set(float64((*blocksData)[0].Block.Number.Int64()))
@@ -190,7 +190,7 @@ func (c *Committer) commit(blockData *[]common.BlockData) error {
 }
 
 func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBlock common.Block) error {
-	// increment the a gap counter in prometheus
+	// increment the gap counter in prometheus
 	metrics.GapCounter.Inc()
 	// record the first missed block number in prometheus
 	metrics.MissedBlockNumbers.Set(float64(expectedStartBlockNumber.Int64()))
