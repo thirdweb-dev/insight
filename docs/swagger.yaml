@@ -71,9 +71,9 @@ definitions:
       extra_data:
         type: string
       gas_limit:
-        type: integer
+        type: string
       gas_used:
-        type: integer
+        type: string
       logs_bloom:
         type: string
       miner:
@@ -162,7 +162,7 @@ definitions:
       access_list_json:
         type: string
       blob_gas_price:
-        type: integer
+        type: string
       blob_gas_used:
         type: integer
       block_hash:
@@ -186,7 +186,7 @@ definitions:
         - $ref: '#/definitions/common.DecodedTransactionDataModel'
         description: 'Deprecated: Use Decoded field instead'
       effective_gas_price:
-        type: integer
+        type: string
       from_address:
         type: string
       function_selector:
@@ -194,7 +194,7 @@ definitions:
       gas:
         type: integer
       gas_price:
-        type: integer
+        type: string
       gas_used:
         type: integer
       hash:
@@ -202,9 +202,9 @@ definitions:
       logs_bloom:
         type: string
       max_fee_per_gas:
-        type: integer
+        type: string
       max_priority_fee_per_gas:
-        type: integer
+        type: string
       nonce:
         type: integer
       r:
@@ -222,7 +222,7 @@ definitions:
       v:
         type: string
       value:
-        type: integer
+        type: string
     type: object
   common.LogModel:
     properties:
@@ -254,7 +254,7 @@ definitions:
       access_list_json:
         type: string
       blob_gas_price:
-        type: integer
+        type: string
       blob_gas_used:
         type: integer
       block_hash:
@@ -272,7 +272,7 @@ definitions:
       data:
         type: string
       effective_gas_price:
-        type: integer
+        type: string
       from_address:
         type: string
       function_selector:
@@ -280,7 +280,7 @@ definitions:
       gas:
         type: integer
       gas_price:
-        type: integer
+        type: string
       gas_used:
         type: integer
       hash:
@@ -288,9 +288,9 @@ definitions:
       logs_bloom:
         type: string
       max_fee_per_gas:
-        type: integer
+        type: string
       max_priority_fee_per_gas:
-        type: integer
+        type: string
       nonce:
         type: integer
       r:
@@ -308,7 +308,7 @@ definitions:
       v:
         type: string
       value:
-        type: integer
+        type: string
     type: object
   handlers.BalanceModel:
     properties:
@@ -370,6 +370,29 @@ definitions:
       token_id:
         type: string
       token_type:
+        type: string
+    type: object
+  handlers.TransferModel:
+    properties:
+      amount:
+        type: string
+      block_number:
+        type: string
+      block_timestamp:
+        type: string
+      from_address:
+        type: string
+      log_index:
+        type: integer
+      to_address:
+        type: string
+      token_address:
+        type: string
+      token_id:
+        type: string
+      token_type:
+        type: string
+      transaction_hash:
         type: string
     type: object
 info:
@@ -1157,6 +1180,99 @@ paths:
       summary: Get transactions by contract and signature
       tags:
       - transactions
+  /{chainId}/transfers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve token transfers by various filters
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: Token types (erc721, erc1155, erc20)
+        in: query
+        items:
+          type: string
+        name: token_type
+        type: array
+      - description: Token contract address
+        in: query
+        name: token_address
+        type: string
+      - description: Wallet address
+        in: query
+        name: wallet
+        type: string
+      - description: Start block number
+        in: query
+        name: start_block
+        type: string
+      - description: End block number
+        in: query
+        name: end_block
+        type: string
+      - description: Start timestamp (RFC3339 format)
+        in: query
+        name: start_timestamp
+        type: string
+      - description: End timestamp (RFC3339 format)
+        in: query
+        name: end_timestamp
+        type: string
+      - collectionFormat: csv
+        description: Token IDs
+        in: query
+        items:
+          type: string
+        name: token_id
+        type: array
+      - description: Transaction hash
+        in: query
+        name: transaction_hash
+        type: string
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.TransferModel'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Get token transfers
+      tags:
+      - transfers
   /search/:input:
     get:
       consumes:

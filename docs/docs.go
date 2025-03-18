@@ -1305,6 +1305,151 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/{chainId}/transfers": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Retrieve token transfers by various filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfers"
+                ],
+                "summary": "Get token transfers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Chain ID",
+                        "name": "chainId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Token types (erc721, erc1155, erc20)",
+                        "name": "token_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Token contract address",
+                        "name": "token_address",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Wallet address",
+                        "name": "wallet",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start block number",
+                        "name": "start_block",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End block number",
+                        "name": "end_block",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start timestamp (RFC3339 format)",
+                        "name": "start_timestamp",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End timestamp (RFC3339 format)",
+                        "name": "end_timestamp",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Token IDs",
+                        "name": "token_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Transaction hash",
+                        "name": "transaction_hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number for pagination",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Number of items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/api.QueryResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handlers.TransferModel"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/api.Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/api.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/api.Error"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1410,10 +1555,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "gas_limit": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "gas_used": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "logs_bloom": {
                     "type": "string"
@@ -1550,7 +1695,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "blob_gas_price": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "blob_gas_used": {
                     "type": "integer"
@@ -1588,7 +1733,7 @@ const docTemplate = `{
                     ]
                 },
                 "effective_gas_price": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "from_address": {
                     "type": "string"
@@ -1600,7 +1745,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "gas_price": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "gas_used": {
                     "type": "integer"
@@ -1612,10 +1757,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "max_fee_per_gas": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "max_priority_fee_per_gas": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "nonce": {
                     "type": "integer"
@@ -1642,7 +1787,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value": {
-                    "type": "integer"
+                    "type": "string"
                 }
             }
         },
@@ -1691,7 +1836,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "blob_gas_price": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "blob_gas_used": {
                     "type": "integer"
@@ -1718,7 +1863,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "effective_gas_price": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "from_address": {
                     "type": "string"
@@ -1730,7 +1875,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "gas_price": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "gas_used": {
                     "type": "integer"
@@ -1742,10 +1887,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "max_fee_per_gas": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "max_priority_fee_per_gas": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "nonce": {
                     "type": "integer"
@@ -1772,7 +1917,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value": {
-                    "type": "integer"
+                    "type": "string"
                 }
             }
         },
@@ -1862,6 +2007,41 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TransferModel": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "block_number": {
+                    "type": "string"
+                },
+                "block_timestamp": {
+                    "type": "string"
+                },
+                "from_address": {
+                    "type": "string"
+                },
+                "log_index": {
+                    "type": "integer"
+                },
+                "to_address": {
+                    "type": "string"
+                },
+                "token_address": {
+                    "type": "string"
+                },
+                "token_id": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "transaction_hash": {
                     "type": "string"
                 }
             }
