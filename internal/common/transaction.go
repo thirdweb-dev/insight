@@ -67,13 +67,13 @@ type TransactionModel struct {
 	TransactionIndex     uint64  `json:"transaction_index"`
 	FromAddress          string  `json:"from_address"`
 	ToAddress            string  `json:"to_address"`
-	Value                uint64  `json:"value"`
+	Value                string  `json:"value"`
 	Gas                  uint64  `json:"gas"`
-	GasPrice             uint64  `json:"gas_price"`
+	GasPrice             string  `json:"gas_price"`
 	Data                 string  `json:"data"`
 	FunctionSelector     string  `json:"function_selector"`
-	MaxFeePerGas         uint64  `json:"max_fee_per_gas"`
-	MaxPriorityFeePerGas uint64  `json:"max_priority_fee_per_gas"`
+	MaxFeePerGas         string  `json:"max_fee_per_gas"`
+	MaxPriorityFeePerGas string  `json:"max_priority_fee_per_gas"`
 	TransactionType      uint8   `json:"transaction_type"`
 	R                    string  `json:"r"`
 	S                    string  `json:"s"`
@@ -82,9 +82,9 @@ type TransactionModel struct {
 	ContractAddress      *string `json:"contract_address"`
 	GasUsed              *uint64 `json:"gas_used"`
 	CumulativeGasUsed    *uint64 `json:"cumulative_gas_used"`
-	EffectiveGasPrice    *uint64 `json:"effective_gas_price"`
+	EffectiveGasPrice    *string `json:"effective_gas_price"`
 	BlobGasUsed          *uint64 `json:"blob_gas_used"`
-	BlobGasPrice         *uint64 `json:"blob_gas_price"`
+	BlobGasPrice         *string `json:"blob_gas_price"`
 	LogsBloom            *string `json:"logs_bloom"`
 	Status               *uint64 `json:"status"`
 }
@@ -182,13 +182,13 @@ func (t *Transaction) Serialize() TransactionModel {
 		TransactionIndex:     t.TransactionIndex,
 		FromAddress:          t.FromAddress,
 		ToAddress:            t.ToAddress,
-		Value:                t.Value.Uint64(),
+		Value:                t.Value.String(),
 		Gas:                  t.Gas,
-		GasPrice:             t.GasPrice.Uint64(),
+		GasPrice:             t.GasPrice.String(),
 		Data:                 t.Data,
 		FunctionSelector:     t.FunctionSelector,
-		MaxFeePerGas:         t.MaxFeePerGas.Uint64(),
-		MaxPriorityFeePerGas: t.MaxPriorityFeePerGas.Uint64(),
+		MaxFeePerGas:         t.MaxFeePerGas.String(),
+		MaxPriorityFeePerGas: t.MaxPriorityFeePerGas.String(),
 		TransactionType:      t.TransactionType,
 		R:                    t.R.String(),
 		S:                    t.S.String(),
@@ -197,19 +197,19 @@ func (t *Transaction) Serialize() TransactionModel {
 		ContractAddress:      t.ContractAddress,
 		GasUsed:              t.GasUsed,
 		CumulativeGasUsed:    t.CumulativeGasUsed,
-		EffectiveGasPrice: func() *uint64 {
+		EffectiveGasPrice: func() *string {
 			if t.EffectiveGasPrice == nil {
 				return nil
 			}
-			v := t.EffectiveGasPrice.Uint64()
+			v := t.EffectiveGasPrice.String()
 			return &v
 		}(),
 		BlobGasUsed: t.BlobGasUsed,
-		BlobGasPrice: func() *uint64 {
+		BlobGasPrice: func() *string {
 			if t.BlobGasPrice == nil {
 				return nil
 			}
-			v := t.BlobGasPrice.Uint64()
+			v := t.BlobGasPrice.String()
 			return &v
 		}(),
 		LogsBloom: t.LogsBloom,

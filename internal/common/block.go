@@ -52,8 +52,8 @@ type BlockModel struct {
 	Difficulty       string `json:"difficulty"`
 	TotalDifficulty  string `json:"total_difficulty"`
 	TransactionCount uint64 `json:"transaction_count"`
-	GasLimit         uint64 `json:"gas_limit"`
-	GasUsed          uint64 `json:"gas_used"`
+	GasLimit         string `json:"gas_limit"`
+	GasUsed          string `json:"gas_used"`
 	WithdrawalsRoot  string `json:"withdrawals_root"`
 	BaseFeePerGas    uint64 `json:"base_fee_per_gas"`
 }
@@ -93,8 +93,8 @@ func (b *Block) Serialize() BlockModel {
 		Difficulty:       b.Difficulty.String(),
 		TotalDifficulty:  b.TotalDifficulty.String(),
 		TransactionCount: b.TransactionCount,
-		GasLimit:         b.GasLimit.Uint64(),
-		GasUsed:          b.GasUsed.Uint64(),
+		GasLimit:         b.GasLimit.String(),
+		GasUsed:          b.GasUsed.String(),
 		WithdrawalsRoot:  b.WithdrawalsRoot,
 		BaseFeePerGas:    b.BaseFeePerGas,
 	}
