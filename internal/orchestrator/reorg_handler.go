@@ -278,7 +278,7 @@ func (rh *ReorgHandler) handleReorg(reorgedBlockNumbers []*big.Int) error {
 		blocksToDelete = append(blocksToDelete, result.BlockNumber)
 	}
 	// TODO make delete and insert atomic
-	if err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blocksToDelete); err != nil {
+	if _, err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blocksToDelete); err != nil {
 		return fmt.Errorf("error deleting data for blocks %v: %w", blocksToDelete, err)
 	}
 	if err := rh.storage.MainStorage.InsertBlockData(data); err != nil {

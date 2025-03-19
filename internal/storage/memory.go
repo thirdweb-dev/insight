@@ -435,7 +435,7 @@ func (m *MemoryConnector) InsertBlockData(data []common.BlockData) error {
 	return nil
 }
 
-func (m *MemoryConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) error {
+func (m *MemoryConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error) {
 	blockNumbersToCheck := getBlockNumbersToCheck(QueryFilter{BlockNumbers: blockNumbers})
 	for _, key := range m.cache.Keys() {
 		prefixes := []string{fmt.Sprintf("block:%s:", chainId.String()), fmt.Sprintf("log:%s:", chainId.String()), fmt.Sprintf("transaction:%s:", chainId.String()), fmt.Sprintf("trace:%s:", chainId.String())}
@@ -444,7 +444,7 @@ func (m *MemoryConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.
 			m.cache.Remove(key)
 		}
 	}
-	return nil
+	return []common.BlockData{}, nil // TODO implement
 }
 
 func (m *MemoryConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) ([]common.BlockHeader, error) {

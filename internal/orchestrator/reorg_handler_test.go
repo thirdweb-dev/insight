@@ -504,7 +504,7 @@ func TestHandleReorg(t *testing.T) {
 	})
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(3), nil)
 
-	mockMainStorage.EXPECT().DeleteBlockData(big.NewInt(1), mock.Anything).Return(nil)
+	mockMainStorage.EXPECT().DeleteBlockData(big.NewInt(1), mock.Anything).Return([]common.BlockData{}, nil)
 	mockMainStorage.EXPECT().InsertBlockData(mock.Anything).Return(nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
@@ -613,7 +613,7 @@ func TestHandleReorgWithSingleBlockReorg(t *testing.T) {
 
 	mockMainStorage.EXPECT().DeleteBlockData(big.NewInt(1), mock.MatchedBy(func(blocks []*big.Int) bool {
 		return len(blocks) == 1
-	})).Return(nil)
+	})).Return([]common.BlockData{}, nil)
 	mockMainStorage.EXPECT().InsertBlockData(mock.MatchedBy(func(data []common.BlockData) bool {
 		return len(data) == 1
 	})).Return(nil)
@@ -681,7 +681,7 @@ func TestHandleReorgWithLatestBlockReorged(t *testing.T) {
 
 	mockMainStorage.EXPECT().DeleteBlockData(big.NewInt(1), mock.MatchedBy(func(blocks []*big.Int) bool {
 		return len(blocks) == 8
-	})).Return(nil)
+	})).Return([]common.BlockData{}, nil)
 	mockMainStorage.EXPECT().InsertBlockData(mock.MatchedBy(func(data []common.BlockData) bool {
 		return len(data) == 8
 	})).Return(nil)
@@ -745,7 +745,7 @@ func TestHandleReorgWithManyBlocks(t *testing.T) {
 
 	mockMainStorage.EXPECT().DeleteBlockData(big.NewInt(1), mock.MatchedBy(func(blocks []*big.Int) bool {
 		return len(blocks) == 5
-	})).Return(nil)
+	})).Return([]common.BlockData{}, nil)
 	mockMainStorage.EXPECT().InsertBlockData(mock.MatchedBy(func(data []common.BlockData) bool {
 		return len(data) == 5
 	})).Return(nil)
