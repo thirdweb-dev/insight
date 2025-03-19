@@ -11,6 +11,7 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
+	"github.com/thirdweb-dev/indexer/internal/publisher"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 )
@@ -25,6 +26,7 @@ type Committer struct {
 	commitFromBlock    *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock *big.Int
+	publisher          *publisher.Publisher
 }
 
 func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
@@ -45,6 +47,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 		commitFromBlock:    commitFromBlock,
 		rpc:                rpc,
 		lastCommittedBlock: commitFromBlock,
+		publisher:          publisher.GetInstance(),
 	}
 }
 
@@ -56,6 +59,7 @@ func (c *Committer) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info().Msg("Committer shutting down")
+			c.publisher.Close()
 			return
 		default:
 			time.Sleep(interval)
@@ -164,6 +168,12 @@ func (c *Committer) commit(blockData []common.BlockData) error {
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
 
+	go func() {
+		if err := c.publisher.PublishBlockData(blockData); err != nil {
+			log.Error().Err(err).Msg("Failed to publish block data to kafka")
+		}
+	}()
+
 	// TODO if next parts (saving or deleting) fail, we'll have to do a rollback
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
 		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
@@ -175,17 +185,18 @@ func (c *Committer) commit(blockData []common.BlockData) error {
 	}
 
 	// Find highest block number from committed blocks
-	highestBlockNumber := blockData[0].Block.Number
+	highestBlock := blockData[0].Block
 	for _, block := range blockData {
-		if block.Block.Number.Cmp(highestBlockNumber) > 0 {
-			highestBlockNumber = block.Block.Number
+		if block.Block.Number.Cmp(highestBlock.Number) > 0 {
+			highestBlock = block.Block
 		}
 	}
-	c.lastCommittedBlock = new(big.Int).Set(highestBlockNumber)
+	c.lastCommittedBlock = new(big.Int).Set(highestBlock.Number)
 
 	// Update metrics for successful commits
 	metrics.SuccessfulCommits.Add(float64(len(blockData)))
-	metrics.LastCommittedBlock.Set(float64(highestBlockNumber.Int64()))
+	metrics.LastCommittedBlock.Set(float64(highestBlock.Number.Int64()))
+	metrics.CommitterLagInSeconds.Set(float64(time.Since(highestBlock.Timestamp).Seconds()))
 	return nil
 }
 

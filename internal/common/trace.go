@@ -32,3 +32,52 @@ type Trace struct {
 }
 
 type RawTraces = []map[string]interface{}
+
+type TraceModel struct {
+	ChainId          string   `json:"chain_id"`
+	BlockNumber      uint64   `json:"block_number"`
+	BlockHash        string   `json:"block_hash"`
+	BlockTimestamp   uint64   `json:"block_timestamp"`
+	TransactionHash  string   `json:"transaction_hash"`
+	TransactionIndex uint64   `json:"transaction_index"`
+	Subtraces        int64    `json:"subtraces"`
+	TraceAddress     []uint64 `json:"trace_address"`
+	TraceType        string   `json:"trace_type"`
+	CallType         string   `json:"call_type"`
+	Error            string   `json:"error"`
+	FromAddress      string   `json:"from_address"`
+	ToAddress        string   `json:"to_address"`
+	Gas              uint64   `json:"gas"`
+	GasUsed          uint64   `json:"gas_used"`
+	Input            string   `json:"input"`
+	Output           string   `json:"output"`
+	Value            uint64   `json:"value"`
+	Author           string   `json:"author"`
+	RewardType       string   `json:"reward_type"`
+	RefundAddress    string   `json:"refund_address"`
+}
+
+func (t *Trace) Serialize() TraceModel {
+	return TraceModel{
+		ChainId:          t.ChainID.String(),
+		BlockNumber:      t.BlockNumber.Uint64(),
+		BlockHash:        t.BlockHash,
+		TransactionHash:  t.TransactionHash,
+		TransactionIndex: t.TransactionIndex,
+		Subtraces:        t.Subtraces,
+		TraceAddress:     t.TraceAddress,
+		TraceType:        t.TraceType,
+		CallType:         t.CallType,
+		Error:            t.Error,
+		FromAddress:      t.FromAddress,
+		ToAddress:        t.ToAddress,
+		Gas:              t.Gas.Uint64(),
+		GasUsed:          t.GasUsed.Uint64(),
+		Input:            t.Input,
+		Output:           t.Output,
+		Value:            t.Value.Uint64(),
+		Author:           t.Author,
+		RewardType:       t.RewardType,
+		RefundAddress:    t.RefundAddress,
+	}
+}

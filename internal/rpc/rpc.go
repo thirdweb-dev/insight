@@ -207,6 +207,7 @@ func (rpc *Client) setChainID() error {
 		return fmt.Errorf("failed to get chain ID: %v", err)
 	}
 	rpc.chainID = chainID
+	config.Cfg.RPC.ChainID = chainID.String()
 	return nil
 }
 

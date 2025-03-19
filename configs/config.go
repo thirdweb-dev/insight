@@ -111,6 +111,7 @@ type RPCConfig struct {
 	Logs          RPCBatchRequestConfig           `mapstructure:"logs"`
 	BlockReceipts ToggleableRPCBatchRequestConfig `mapstructure:"blockReceipts"`
 	Traces        ToggleableRPCBatchRequestConfig `mapstructure:"traces"`
+	ChainID       string                          `mapstructure:"chainId"`
 }
 
 type BasicAuthConfig struct {
@@ -130,6 +131,41 @@ type APIConfig struct {
 	Thirdweb            ThirdwebConfig  `mapstructure:"thirdweb"`
 }
 
+type BlockPublisherConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	TopicName string `mapstructure:"topicName"`
+}
+
+type TransactionPublisherConfig struct {
+	Enabled    bool     `mapstructure:"enabled"`
+	TopicName  string   `mapstructure:"topicName"`
+	ToFilter   []string `mapstructure:"toFilter"`
+	FromFilter []string `mapstructure:"fromFilter"`
+}
+
+type TracePublisherConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	TopicName string `mapstructure:"topicName"`
+}
+
+type EventPublisherConfig struct {
+	Enabled       bool     `mapstructure:"enabled"`
+	TopicName     string   `mapstructure:"topicName"`
+	AddressFilter []string `mapstructure:"addressFilter"`
+	Topic0Filter  []string `mapstructure:"topic0Filter"`
+}
+
+type PublisherConfig struct {
+	Enabled      bool                       `mapstructure:"enabled"`
+	Brokers      string                     `mapstructure:"brokers"`
+	Username     string                     `mapstructure:"username"`
+	Password     string                     `mapstructure:"password"`
+	Blocks       BlockPublisherConfig       `mapstructure:"blocks"`
+	Transactions TransactionPublisherConfig `mapstructure:"transactions"`
+	Traces       TracePublisherConfig       `mapstructure:"traces"`
+	Events       EventPublisherConfig       `mapstructure:"events"`
+}
+
 type Config struct {
 	RPC              RPCConfig              `mapstructure:"rpc"`
 	Log              LogConfig              `mapstructure:"log"`
@@ -139,6 +175,7 @@ type Config struct {
 	ReorgHandler     ReorgHandlerConfig     `mapstructure:"reorgHandler"`
 	Storage          StorageConfig          `mapstructure:"storage"`
 	API              APIConfig              `mapstructure:"api"`
+	Publisher        PublisherConfig        `mapstructure:"publisher"`
 }
 
 var Cfg Config
