@@ -194,7 +194,7 @@ func (rh *ReorgHandler) findReorgedBlockNumbers(blockHeadersDescending []common.
 	continueCheckingForReorgs := false
 	for i := 0; i < len(blockHeadersDescending); i++ {
 		blockHeader := blockHeadersDescending[i]
-		fetchedBlock, ok := (*newBlocksByNumber)[blockHeader.Number.String()]
+		fetchedBlock, ok := newBlocksByNumber[blockHeader.Number.String()]
 		if !ok {
 			return fmt.Errorf("block not found: %s", blockHeader.Number.String())
 		}
@@ -220,7 +220,7 @@ func (rh *ReorgHandler) findReorgedBlockNumbers(blockHeadersDescending []common.
 	return nil
 }
 
-func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) (*map[string]common.Block, error) {
+func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) (map[string]common.Block, error) {
 	blockNumbers := make([]*big.Int, 0, len(blockHeaders))
 	for _, header := range blockHeaders {
 		blockNumbers = append(blockNumbers, header.Number)
@@ -257,7 +257,7 @@ func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) 
 			fetchedBlocksByNumber[blockResult.BlockNumber.String()] = blockResult.Data
 		}
 	}
-	return &fetchedBlocksByNumber, nil
+	return fetchedBlocksByNumber, nil
 }
 
 func (rh *ReorgHandler) handleReorg(reorgedBlockNumbers []*big.Int) error {
@@ -281,7 +281,7 @@ func (rh *ReorgHandler) handleReorg(reorgedBlockNumbers []*big.Int) error {
 	if err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blocksToDelete); err != nil {
 		return fmt.Errorf("error deleting data for blocks %v: %w", blocksToDelete, err)
 	}
-	if err := rh.storage.MainStorage.InsertBlockData(&data); err != nil {
+	if err := rh.storage.MainStorage.InsertBlockData(data); err != nil {
 		return fmt.Errorf("error saving data to main storage: %w", err)
 	}
 	return nil

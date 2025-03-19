@@ -252,13 +252,13 @@ func TestGetSequentialBlockDataToCommit(t *testing.T) {
 	mockStagingStorage.EXPECT().GetStagingData(storage.QueryFilter{
 		ChainId:      chainID,
 		BlockNumbers: []*big.Int{big.NewInt(101), big.NewInt(102), big.NewInt(103)},
-	}).Return(&blockData, nil)
+	}).Return(blockData, nil)
 
 	result, err := committer.getSequentialBlockDataToCommit()
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, 3, len(*result))
+	assert.Equal(t, 3, len(result))
 }
 
 func TestGetSequentialBlockDataToCommitWithDuplicateBlocks(t *testing.T) {
@@ -288,16 +288,16 @@ func TestGetSequentialBlockDataToCommitWithDuplicateBlocks(t *testing.T) {
 	mockStagingStorage.EXPECT().GetStagingData(storage.QueryFilter{
 		ChainId:      chainID,
 		BlockNumbers: []*big.Int{big.NewInt(101), big.NewInt(102), big.NewInt(103)},
-	}).Return(&blockData, nil)
+	}).Return(blockData, nil)
 
 	result, err := committer.getSequentialBlockDataToCommit()
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, 3, len(*result))
-	assert.Equal(t, big.NewInt(101), (*result)[0].Block.Number)
-	assert.Equal(t, big.NewInt(102), (*result)[1].Block.Number)
-	assert.Equal(t, big.NewInt(103), (*result)[2].Block.Number)
+	assert.Equal(t, 3, len(result))
+	assert.Equal(t, big.NewInt(101), result[0].Block.Number)
+	assert.Equal(t, big.NewInt(102), result[1].Block.Number)
+	assert.Equal(t, big.NewInt(103), result[2].Block.Number)
 }
 
 func TestCommit(t *testing.T) {
@@ -317,10 +317,10 @@ func TestCommit(t *testing.T) {
 		{Block: common.Block{Number: big.NewInt(102)}},
 	}
 
-	mockMainStorage.EXPECT().InsertBlockData(&blockData).Return(nil)
-	mockStagingStorage.EXPECT().DeleteStagingData(&blockData).Return(nil)
+	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
+	mockStagingStorage.EXPECT().DeleteStagingData(blockData).Return(nil)
 
-	err := committer.commit(&blockData)
+	err := committer.commit(blockData)
 
 	assert.NoError(t, err)
 }
@@ -381,9 +381,9 @@ func TestStartCommitter(t *testing.T) {
 		{Block: common.Block{Number: big.NewInt(101)}},
 		{Block: common.Block{Number: big.NewInt(102)}},
 	}
-	mockStagingStorage.On("GetStagingData", mock.Anything).Return(&blockData, nil)
-	mockMainStorage.On("InsertBlockData", &blockData).Return(nil)
-	mockStagingStorage.On("DeleteStagingData", &blockData).Return(nil)
+	mockStagingStorage.On("GetStagingData", mock.Anything).Return(blockData, nil)
+	mockMainStorage.On("InsertBlockData", blockData).Return(nil)
+	mockStagingStorage.On("DeleteStagingData", blockData).Return(nil)
 
 	// Start the committer in a goroutine
 	go committer.Start(context.Background())
@@ -414,9 +414,9 @@ func TestCommitterRespectsSIGTERM(t *testing.T) {
 		{Block: common.Block{Number: big.NewInt(101)}},
 		{Block: common.Block{Number: big.NewInt(102)}},
 	}
-	mockStagingStorage.On("GetStagingData", mock.Anything).Return(&blockData, nil)
-	mockMainStorage.On("InsertBlockData", &blockData).Return(nil)
-	mockStagingStorage.On("DeleteStagingData", &blockData).Return(nil)
+	mockStagingStorage.On("GetStagingData", mock.Anything).Return(blockData, nil)
+	mockMainStorage.On("InsertBlockData", blockData).Return(nil)
+	mockStagingStorage.On("DeleteStagingData", blockData).Return(nil)
 
 	// Create a context that we can cancel
 	ctx, cancel := context.WithCancel(context.Background())
@@ -480,7 +480,7 @@ func TestHandleMissingStagingData(t *testing.T) {
 	mockStagingStorage.EXPECT().GetStagingData(storage.QueryFilter{
 		ChainId:      chainID,
 		BlockNumbers: []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)},
-	}).Return(&blockData, nil)
+	}).Return(blockData, nil)
 
 	result, err := committer.getSequentialBlockDataToCommit()
 
@@ -524,7 +524,7 @@ func TestHandleMissingStagingDataIsPolledWithCorrectBatchSize(t *testing.T) {
 	mockStagingStorage.EXPECT().GetStagingData(storage.QueryFilter{
 		ChainId:      chainID,
 		BlockNumbers: []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)},
-	}).Return(&blockData, nil)
+	}).Return(blockData, nil)
 
 	result, err := committer.getSequentialBlockDataToCommit()
 

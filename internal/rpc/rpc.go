@@ -212,29 +212,29 @@ func (rpc *Client) setChainID() error {
 
 func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 	var wg sync.WaitGroup
-	var blocks *[]RPCFetchBatchResult[common.RawBlock]
-	var logs *[]RPCFetchBatchResult[common.RawLogs]
-	var traces *[]RPCFetchBatchResult[common.RawTraces]
-	var receipts *[]RPCFetchBatchResult[common.RawReceipts]
+	var blocks []RPCFetchBatchResult[common.RawBlock]
+	var logs []RPCFetchBatchResult[common.RawLogs]
+	var traces []RPCFetchBatchResult[common.RawTraces]
+	var receipts []RPCFetchBatchResult[common.RawReceipts]
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
 		result := RPCFetchBatch[common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithTransactionsParams)
-		blocks = &result
+		blocks = result
 	}()
 
 	if rpc.supportsBlockReceipts {
 		go func() {
 			defer wg.Done()
 			result := RPCFetchInBatches[common.RawReceipts](rpc, blockNumbers, rpc.blocksPerRequest.Receipts, config.Cfg.RPC.BlockReceipts.BatchDelay, "eth_getBlockReceipts", GetBlockReceiptsParams)
-			receipts = &result
+			receipts = result
 		}()
 	} else {
 		go func() {
 			defer wg.Done()
 			result := RPCFetchInBatches[common.RawLogs](rpc, blockNumbers, rpc.blocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
-			logs = &result
+			logs = result
 		}()
 	}
 
@@ -243,7 +243,7 @@ func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 		go func() {
 			defer wg.Done()
 			result := RPCFetchInBatches[common.RawTraces](rpc, blockNumbers, rpc.blocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
-			traces = &result
+			traces = result
 		}()
 	}
 

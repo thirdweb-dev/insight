@@ -675,7 +675,7 @@ func (_c *MockIMainStorage_GetTransactions_Call) RunAndReturn(run func(storage.Q
 }
 
 // InsertBlockData provides a mock function with given fields: data
-func (_m *MockIMainStorage) InsertBlockData(data *[]common.BlockData) error {
+func (_m *MockIMainStorage) InsertBlockData(data []common.BlockData) error {
 	ret := _m.Called(data)
 
 	if len(ret) == 0 {
@@ -683,7 +683,7 @@ func (_m *MockIMainStorage) InsertBlockData(data *[]common.BlockData) error {
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*[]common.BlockData) error); ok {
+	if rf, ok := ret.Get(0).(func([]common.BlockData) error); ok {
 		r0 = rf(data)
 	} else {
 		r0 = ret.Error(0)
@@ -698,14 +698,14 @@ type MockIMainStorage_InsertBlockData_Call struct {
 }
 
 // InsertBlockData is a helper method to define mock.On call
-//   - data *[]common.BlockData
+//   - data []common.BlockData
 func (_e *MockIMainStorage_Expecter) InsertBlockData(data interface{}) *MockIMainStorage_InsertBlockData_Call {
 	return &MockIMainStorage_InsertBlockData_Call{Call: _e.mock.On("InsertBlockData", data)}
 }
 
-func (_c *MockIMainStorage_InsertBlockData_Call) Run(run func(data *[]common.BlockData)) *MockIMainStorage_InsertBlockData_Call {
+func (_c *MockIMainStorage_InsertBlockData_Call) Run(run func(data []common.BlockData)) *MockIMainStorage_InsertBlockData_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*[]common.BlockData))
+		run(args[0].([]common.BlockData))
 	})
 	return _c
 }
@@ -715,7 +715,7 @@ func (_c *MockIMainStorage_InsertBlockData_Call) Return(_a0 error) *MockIMainSto
 	return _c
 }
 
-func (_c *MockIMainStorage_InsertBlockData_Call) RunAndReturn(run func(*[]common.BlockData) error) *MockIMainStorage_InsertBlockData_Call {
+func (_c *MockIMainStorage_InsertBlockData_Call) RunAndReturn(run func([]common.BlockData) error) *MockIMainStorage_InsertBlockData_Call {
 	_c.Call.Return(run)
 	return _c
 }
