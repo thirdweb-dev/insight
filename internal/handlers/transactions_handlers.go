@@ -157,8 +157,7 @@ func handleTransactionsRequest(c *gin.Context) {
 		aggregatesResult, err := mainStorage.GetAggregations("transactions", qf)
 		if err != nil {
 			log.Error().Err(err).Msg("Error querying aggregates")
-			// TODO: might want to choose BadRequestError if it's due to not-allowed functions
-			api.InternalErrorHandler(c)
+			api.BadRequestErrorHandler(c, err)
 			return
 		}
 		queryResult.Aggregations = aggregatesResult.Aggregates
