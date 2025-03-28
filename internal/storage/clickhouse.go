@@ -678,7 +678,7 @@ func createContractAddressClause(table, contractAddress string) string {
 
 func createWalletAddressClause(table, walletAddress string) string {
 	walletAddress = strings.ToLower(walletAddress)
-	if table != "transactions" {
+	if table != "transactions" || walletAddress == "" {
 		return ""
 	}
 	return fmt.Sprintf("(from_address = '%s' OR to_address = '%s')", walletAddress, walletAddress)
