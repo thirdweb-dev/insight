@@ -21,6 +21,7 @@ type QueryFilter struct {
 	Aggregates          []string // e.g., ["COUNT(*) AS count", "SUM(amount) AS total_amount"]
 	FromAddress         string
 	ContractAddress     string
+	WalletAddress       string
 	Signature           string
 	ForceConsistentData bool
 }

@@ -37,6 +37,31 @@ func GetTransactions(c *gin.Context) {
 	handleTransactionsRequest(c)
 }
 
+// @Summary Get wallet transactions
+// @Description Retrieve all incoming and outgoing transactions for a specific wallet address
+// @Tags wallet
+// @Accept json
+// @Produce json
+// @Security BasicAuth
+// @Param chainId path string true "Chain ID"
+// @Param wallet_address path string true "Wallet address"
+// @Param filter query string false "Filter parameters"
+// @Param group_by query string false "Field to group results by"
+// @Param sort_by query string false "Field to sort results by"
+// @Param sort_order query string false "Sort order (asc or desc)"
+// @Param page query int false "Page number for pagination"
+// @Param limit query int false "Number of items per page" default(5)
+// @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
+// @Param decode query bool false "Decode transaction data"
+// @Success 200 {object} api.QueryResponse{data=[]common.DecodedTransactionModel}
+// @Failure 400 {object} api.Error
+// @Failure 401 {object} api.Error
+// @Failure 500 {object} api.Error
+// @Router /{chainId}/wallet-transactions [get]
+func GetWalletTransactions(c *gin.Context) {
+	handleTransactionsRequest(c)
+}
+
 // @Summary Get transactions by contract
 // @Description Retrieve transactions for a specific contract
 // @Tags transactions
@@ -97,7 +122,7 @@ func handleTransactionsRequest(c *gin.Context) {
 
 	contractAddress := c.Param("to")
 	signature := c.Param("signature")
-
+	walletAddress := c.Param("wallet_address")
 	queryParams, err := api.ParseQueryParams(c.Request)
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
@@ -125,6 +150,7 @@ func handleTransactionsRequest(c *gin.Context) {
 	qf := storage.QueryFilter{
 		FilterParams:        queryParams.FilterParams,
 		ContractAddress:     contractAddress,
+		WalletAddress:       walletAddress,
 		Signature:           signatureHash,
 		ChainId:             chainId,
 		SortBy:              queryParams.SortBy,

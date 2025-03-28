@@ -178,6 +178,8 @@ var allowedFunctions = map[string]struct{}{
 	"todatetime":           {},
 	"concat":               {},
 	"in":                   {},
+	"and":                  {},
+	"or":                   {},
 }
 
 var disallowedPatterns = []string{
