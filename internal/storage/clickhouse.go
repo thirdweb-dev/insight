@@ -469,6 +469,10 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	if contractAddressClause != "" {
 		whereClauses = append(whereClauses, contractAddressClause)
 	}
+	walletAddressClause := createWalletAddressClause(table, qf.WalletAddress)
+	if walletAddressClause != "" {
+		whereClauses = append(whereClauses, walletAddressClause)
+	}
 	fromAddressClause := createFromAddressClause(table, qf.FromAddress)
 	if fromAddressClause != "" {
 		whereClauses = append(whereClauses, fromAddressClause)
@@ -594,6 +598,10 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 	if contractAddressClause != "" {
 		whereClauses = append(whereClauses, contractAddressClause)
 	}
+	walletAddressClause := createWalletAddressClause(table, qf.WalletAddress)
+	if walletAddressClause != "" {
+		whereClauses = append(whereClauses, walletAddressClause)
+	}
 	fromAddressClause := createFromAddressClause(table, qf.FromAddress)
 	if fromAddressClause != "" {
 		whereClauses = append(whereClauses, fromAddressClause)
@@ -666,6 +674,14 @@ func createContractAddressClause(table, contractAddress string) string {
 		}
 	}
 	return ""
+}
+
+func createWalletAddressClause(table, walletAddress string) string {
+	walletAddress = strings.ToLower(walletAddress)
+	if table != "transactions" {
+		return ""
+	}
+	return fmt.Sprintf("(from_address = '%s' OR to_address = '%s')", walletAddress, walletAddress)
 }
 
 func createFromAddressClause(table, fromAddress string) string {

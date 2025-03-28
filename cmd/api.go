@@ -72,6 +72,7 @@ func RunApi(cmd *cobra.Command, args []string) {
 		// wildcard queries
 		root.GET("/transactions", handlers.GetTransactions)
 		root.GET("/events", handlers.GetLogs)
+		root.GET("/wallet-transactions/:wallet_address", handlers.GetWalletTransactions)
 
 		// contract scoped queries
 		root.GET("/transactions/:to", handlers.GetTransactionsByContract)
