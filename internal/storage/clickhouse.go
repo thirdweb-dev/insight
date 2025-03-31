@@ -1604,7 +1604,7 @@ func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ..
 
 	// Add limit clause
 	if qf.Page > 0 && qf.Limit > 0 {
-		offset := (qf.Page - 1) * qf.Limit
+		offset := qf.Page * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else if qf.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
