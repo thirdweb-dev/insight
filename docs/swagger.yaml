@@ -105,13 +105,9 @@ definitions:
     properties:
       indexed_params:
         type: object
-      indexedParams:
-        type: object
       name:
         type: string
       non_indexed_params:
-        type: object
-      nonIndexedParams:
         type: object
       signature:
         type: string
@@ -132,10 +128,6 @@ definitions:
         type: string
       decoded:
         $ref: '#/definitions/common.DecodedLogDataModel'
-      decodedData:
-        allOf:
-        - $ref: '#/definitions/common.DecodedLogDataModel'
-        description: 'Deprecated: Use Decoded field instead'
       log_index:
         type: integer
       topics:
@@ -181,10 +173,6 @@ definitions:
         type: string
       decoded:
         $ref: '#/definitions/common.DecodedTransactionDataModel'
-      decodedData:
-        allOf:
-        - $ref: '#/definitions/common.DecodedTransactionDataModel'
-        description: 'Deprecated: Use Decoded field instead'
       effective_gas_price:
         type: string
       from_address:
@@ -1273,6 +1261,87 @@ paths:
       summary: Get token transfers
       tags:
       - transfers
+  /{chainId}/wallet-transactions:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all incoming and outgoing transactions for a specific
+        wallet address
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chainId
+        required: true
+        type: string
+      - description: Wallet address
+        in: path
+        name: wallet_address
+        required: true
+        type: string
+      - description: Filter parameters
+        in: query
+        name: filter
+        type: string
+      - description: Field to group results by
+        in: query
+        name: group_by
+        type: string
+      - description: Field to sort results by
+        in: query
+        name: sort_by
+        type: string
+      - description: Sort order (asc or desc)
+        in: query
+        name: sort_order
+        type: string
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - default: 5
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Force consistent data at the expense of query speed
+        in: query
+        name: force_consistent_data
+        type: boolean
+      - description: Decode transaction data
+        in: query
+        name: decode
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/api.QueryResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/common.DecodedTransactionModel'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.Error'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.Error'
+      security:
+      - BasicAuth: []
+      summary: Get wallet transactions
+      tags:
+      - wallet
   /search/:input:
     get:
       consumes:
