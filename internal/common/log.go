@@ -58,18 +58,15 @@ type LogModel struct {
 }
 
 type DecodedLogDataModel struct {
-	Name                       string                 `json:"name"`
-	Signature                  string                 `json:"signature"`
-	IndexedParamsDeprecated    map[string]interface{} `json:"indexedParams" swaggertype:"object" deprecated:"true"`
-	IndexedParams              map[string]interface{} `json:"indexed_params" swaggertype:"object"`
-	NonIndexedParamsDeprecated map[string]interface{} `json:"nonIndexedParams" swaggertype:"object" deprecated:"true"`
-	NonIndexedParams           map[string]interface{} `json:"non_indexed_params" swaggertype:"object"`
+	Name             string                 `json:"name"`
+	Signature        string                 `json:"signature"`
+	IndexedParams    map[string]interface{} `json:"indexed_params" swaggertype:"object"`
+	NonIndexedParams map[string]interface{} `json:"non_indexed_params" swaggertype:"object"`
 }
 
 type DecodedLogModel struct {
 	LogModel
-	Decoded     DecodedLogDataModel `json:"decoded"`
-	DecodedData DecodedLogDataModel `json:"decodedData" deprecated:"true"` // Deprecated: Use Decoded field instead
+	Decoded DecodedLogDataModel `json:"decoded"`
 }
 
 type RawLogs = []map[string]interface{}
@@ -252,17 +249,13 @@ func (l *Log) Serialize() LogModel {
 }
 
 func (l *DecodedLog) Serialize() DecodedLogModel {
-	decodedData := DecodedLogDataModel{
-		Name:                       l.Decoded.Name,
-		Signature:                  l.Decoded.Signature,
-		IndexedParams:              l.Decoded.IndexedParams,
-		IndexedParamsDeprecated:    l.Decoded.IndexedParams,
-		NonIndexedParams:           l.Decoded.NonIndexedParams,
-		NonIndexedParamsDeprecated: l.Decoded.NonIndexedParams,
-	}
 	return DecodedLogModel{
-		LogModel:    l.Log.Serialize(),
-		Decoded:     decodedData,
-		DecodedData: decodedData,
+		LogModel: l.Log.Serialize(),
+		Decoded: DecodedLogDataModel{
+			Name:             l.Decoded.Name,
+			Signature:        l.Decoded.Signature,
+			IndexedParams:    l.Decoded.IndexedParams,
+			NonIndexedParams: l.Decoded.NonIndexedParams,
+		},
 	}
 }

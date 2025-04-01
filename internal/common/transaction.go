@@ -97,8 +97,7 @@ type DecodedTransactionDataModel struct {
 
 type DecodedTransactionModel struct {
 	TransactionModel
-	Decoded     DecodedTransactionDataModel `json:"decoded"`
-	DecodedData DecodedTransactionDataModel `json:"decodedData" deprecated:"true"` // Deprecated: Use Decoded field instead
+	Decoded DecodedTransactionDataModel `json:"decoded"`
 }
 
 func DecodeTransactions(chainId string, txs []Transaction) []*DecodedTransaction {
@@ -218,14 +217,12 @@ func (t *Transaction) Serialize() TransactionModel {
 }
 
 func (t *DecodedTransaction) Serialize() DecodedTransactionModel {
-	decodedData := DecodedTransactionDataModel{
-		Name:      t.Decoded.Name,
-		Signature: t.Decoded.Signature,
-		Inputs:    t.Decoded.Inputs,
-	}
 	return DecodedTransactionModel{
 		TransactionModel: t.Transaction.Serialize(),
-		Decoded:          decodedData,
-		DecodedData:      decodedData,
+		Decoded: DecodedTransactionDataModel{
+			Name:      t.Decoded.Name,
+			Signature: t.Decoded.Signature,
+			Inputs:    t.Decoded.Inputs,
+		},
 	}
 }
