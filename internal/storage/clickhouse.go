@@ -95,6 +95,8 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 			Username: cfg.Username,
 			Password: cfg.Password,
 		},
+		MaxOpenConns: 500,
+		MaxIdleConns: 500,
 		Settings: func() clickhouse.Settings {
 			settings := clickhouse.Settings{
 				"do_not_merge_across_partitions_select_final": "1",
