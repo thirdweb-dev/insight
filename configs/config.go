@@ -81,6 +81,8 @@ type ClickhouseConfig struct {
 	DisableTLS       bool                           `mapstructure:"disableTLS"`
 	AsyncInsert      bool                           `mapstructure:"asyncInsert"`
 	MaxRowsPerInsert int                            `mapstructure:"maxRowsPerInsert"`
+	MaxOpenConns     int                            `mapstructure:"maxOpenConns"`
+	MaxIdleConns     int                            `mapstructure:"maxIdleConns"`
 	ChainBasedConfig map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
 }
 
