@@ -82,6 +82,7 @@ type ClickhouseConfig struct {
 	AsyncInsert      bool                           `mapstructure:"asyncInsert"`
 	MaxRowsPerInsert int                            `mapstructure:"maxRowsPerInsert"`
 	ChainBasedConfig map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
+	MaxOpenConns     int                            `mapstructure:"maxOpenConns"`
 }
 
 type MemoryConfig struct {

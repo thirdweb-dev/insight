@@ -82,7 +82,7 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 		return nil, fmt.Errorf("invalid CLICKHOUSE_PORT: %d", port)
 	}
 
-	conn, err := clickhouse.Open(&clickhouse.Options{
+	options := &clickhouse.Options{
 		Addr:     []string{fmt.Sprintf("%s:%d", cfg.Host, port)},
 		Protocol: clickhouse.Native,
 		TLS: func() *tls.Config {
@@ -107,7 +107,12 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 			}
 			return settings
 		}(),
-	})
+	}
+	if cfg.MaxOpenConns > 0 {
+		options.MaxOpenConns = cfg.MaxOpenConns
+	}
+
+	conn, err := clickhouse.Open(options)
 	if err != nil {
 		return nil, err
 	}
