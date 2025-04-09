@@ -165,6 +165,9 @@ func (l *Log) Decode(eventABI *abi.Event) *DecodedLog {
 }
 
 func decodeIndexedArgument(argType abi.Type, topic string) (interface{}, error) {
+	if len(topic) < 3 {
+		return nil, fmt.Errorf("invalid topic %s", topic)
+	}
 	topicBytes := gethCommon.Hex2Bytes(topic[2:]) // Remove "0x" prefix
 	switch argType.T {
 	case abi.AddressTy:
