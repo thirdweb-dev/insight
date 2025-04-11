@@ -189,6 +189,8 @@ func serializeTransaction(chainId *big.Int, tx map[string]interface{}, blockTime
 		FunctionSelector:     ExtractFunctionSelector(interfaceToString(tx["input"])),
 		MaxFeePerGas:         hexToBigInt(tx["maxFeePerGas"]),
 		MaxPriorityFeePerGas: hexToBigInt(tx["maxPriorityFeePerGas"]),
+		MaxFeePerBlobGas:     hexToBigInt(tx["maxFeePerBlobGas"]),
+		BlobVersionedHashes:  interfaceToStringSlice(tx["blobVersionedHashes"]),
 		TransactionType:      uint8(hexToUint64(tx["type"])),
 		R:                    hexToBigInt(tx["r"]),
 		S:                    hexToBigInt(tx["s"]),
@@ -427,6 +429,28 @@ func interfaceToString(value interface{}) string {
 		return ""
 	}
 	return res
+}
+
+func interfaceToStringSlice(value interface{}) []string {
+	if value == nil {
+		return []string{}
+	}
+
+	// Handle []string case
+	if res, ok := value.([]string); ok {
+		return res
+	}
+
+	// Handle []interface{} case
+	if res, ok := value.([]interface{}); ok {
+		strings := make([]string, len(res))
+		for i, v := range res {
+			strings[i] = interfaceToString(v)
+		}
+		return strings
+	}
+
+	return []string{}
 }
 
 func interfaceToJsonString(value interface{}) string {

@@ -44,9 +44,9 @@ var defaultTransactionFields = []string{
 	"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp",
 	"transaction_index", "from_address", "to_address", "value", "gas", "gas_price",
 	"data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas",
-	"transaction_type", "r", "s", "v", "access_list", "contract_address", "gas_used",
-	"cumulative_gas_used", "effective_gas_price", "blob_gas_used", "blob_gas_price",
-	"logs_bloom", "status",
+	"max_fee_per_blob_gas", "blob_versioned_hashes", "transaction_type", "r", "s", "v",
+	"access_list", "contract_address", "gas_used", "cumulative_gas_used",
+	"effective_gas_price", "blob_gas_used", "blob_gas_price", "logs_bloom", "status",
 }
 
 var defaultLogFields = []string{
@@ -194,7 +194,7 @@ func (c *ClickHouseConnector) insertTransactions(txs []common.Transaction, opt I
 	tableName := c.getTableName(txs[0].ChainId, "transactions")
 	columns := []string{
 		"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp", "transaction_index", "from_address", "to_address", "value", "gas",
-		"gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "transaction_type", "r", "s", "v", "access_list",
+		"gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "max_fee_per_blob_gas", "blob_versioned_hashes", "transaction_type", "r", "s", "v", "access_list",
 		"contract_address", "gas_used", "cumulative_gas_used", "effective_gas_price", "blob_gas_used", "blob_gas_price", "logs_bloom", "status", "sign",
 	}
 	if opt.AsDeleted {
@@ -230,6 +230,8 @@ func (c *ClickHouseConnector) insertTransactions(txs []common.Transaction, opt I
 				tx.FunctionSelector,
 				tx.MaxFeePerGas,
 				tx.MaxPriorityFeePerGas,
+				tx.MaxFeePerBlobGas,
+				tx.BlobVersionedHashes,
 				tx.TransactionType,
 				tx.R,
 				tx.S,
