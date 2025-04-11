@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     `function_selector` FixedString(10),
     `max_fee_per_gas` UInt128,
     `max_priority_fee_per_gas` UInt128,
+    `max_fee_per_blob_gas` UInt256,
+    `blob_versioned_hashes` Array(String),
     `transaction_type` UInt8,
     `r` UInt256,
     `s` UInt256,
