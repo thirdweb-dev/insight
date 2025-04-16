@@ -6,9 +6,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.1
 	github.com/ethereum/go-ethereum v1.14.8
 	github.com/gin-gonic/gin v1.10.0
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gorilla/schema v1.4.1
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/prometheus/client_golang v1.20.4
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.8.1
@@ -40,7 +38,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.7 // indirect

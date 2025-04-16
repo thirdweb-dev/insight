@@ -50,5 +50,7 @@ storage:
       database: "default"
       disableTLS: true
   orchestrator:
-    memory:
-      maxItems: 10000
+    clickhouse:
+      port: 9440
+      database: "default"
+      disableTLS: true
