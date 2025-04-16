@@ -281,13 +281,10 @@ func (rh *ReorgHandler) handleReorg(reorgedBlockNumbers []*big.Int) error {
 		})
 		blocksToDelete = append(blocksToDelete, result.BlockNumber)
 	}
-	// TODO make delete and insert atomic
-	deletedBlockData, err := rh.storage.MainStorage.DeleteBlockData(rh.rpc.GetChainID(), blocksToDelete)
+
+	deletedBlockData, err := rh.storage.MainStorage.ReplaceBlockData(data)
 	if err != nil {
-		return fmt.Errorf("error deleting data for blocks %v: %w", blocksToDelete, err)
-	}
-	if err := rh.storage.MainStorage.InsertBlockData(data); err != nil {
-		return fmt.Errorf("error saving data to main storage: %w", err)
+		return fmt.Errorf("error replacing reorged data for blocks %v: %w", blocksToDelete, err)
 	}
 	if rh.publisher != nil {
 		// Publish block data asynchronously
