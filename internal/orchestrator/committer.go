@@ -168,17 +168,16 @@ func (c *Committer) commit(blockData []common.BlockData) error {
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
 
+	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
+		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
+		return fmt.Errorf("error saving data to main storage: %v", err)
+	}
+
 	go func() {
 		if err := c.publisher.PublishBlockData(blockData); err != nil {
 			log.Error().Err(err).Msg("Failed to publish block data to kafka")
 		}
 	}()
-
-	// TODO if next parts (saving or deleting) fail, we'll have to do a rollback
-	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
-		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
-		return fmt.Errorf("error saving data to main storage: %v", err)
-	}
 
 	if err := c.storage.StagingStorage.DeleteStagingData(blockData); err != nil {
 		return fmt.Errorf("error deleting data from staging storage: %v", err)

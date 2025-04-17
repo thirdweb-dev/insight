@@ -1007,252 +1007,289 @@ func (c *ClickHouseConnector) GetBlockHeadersDescending(chainId *big.Int, from *
 	return blockHeaders, nil
 }
 
-func (c *ClickHouseConnector) DeleteBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error) {
-	var deleteErr error
-	var deleteErrMutex sync.Mutex
+func (c *ClickHouseConnector) ReplaceBlockData(data []common.BlockData) ([]common.BlockData, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	chainId := data[0].Block.ChainId
+
+	var fetchErr error
+	var fetchErrMutex sync.Mutex
+	var deletedDataMutex sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(4)
-
 	// Create a map to store block data that will be deleted
 	deletedBlockDataByNumber := make(map[*big.Int]common.BlockData)
+
+	blockNumbers := make([]*big.Int, len(data))
+	for i, blockData := range data {
+		blockNumbers[i] = blockData.Block.Number
+	}
 	go func() {
 		defer wg.Done()
-		deletedBlocks, err := c.deleteBlocks(chainId, blockNumbers)
+		blocksQueryResult, err := c.GetBlocks(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "*")
 		if err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting blocks: %v", err)
-			deleteErrMutex.Unlock()
+			fetchErrMutex.Lock()
+			fetchErr = fmt.Errorf("error fetching blocks: %v", err)
+			fetchErrMutex.Unlock()
 		}
-		for _, block := range deletedBlocks {
-			data := deletedBlockDataByNumber[block.Number]
-			data.Block = block
-			deletedBlockDataByNumber[block.Number] = data
+		for _, block := range blocksQueryResult.Data {
+			deletedDataMutex.Lock()
+			deletedData := deletedBlockDataByNumber[block.Number]
+			block.Sign = -1
+			deletedData.Block = block
+			deletedBlockDataByNumber[block.Number] = deletedData
+			deletedDataMutex.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		deletedLogs, err := c.deleteLogs(chainId, blockNumbers)
+		logsQueryResult, err := c.GetLogs(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "*")
 		if err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting logs: %v", err)
-			deleteErrMutex.Unlock()
+			fetchErrMutex.Lock()
+			fetchErr = fmt.Errorf("error fetching logs: %v", err)
+			fetchErrMutex.Unlock()
 		}
-		for _, log := range deletedLogs {
-			data := deletedBlockDataByNumber[log.BlockNumber]
-			data.Logs = append(data.Logs, log)
-			deletedBlockDataByNumber[log.BlockNumber] = data
+		for _, log := range logsQueryResult.Data {
+			deletedDataMutex.Lock()
+			deletedData := deletedBlockDataByNumber[log.BlockNumber]
+			log.Sign = -1
+			deletedData.Logs = append(deletedData.Logs, log)
+			deletedBlockDataByNumber[log.BlockNumber] = deletedData
+			deletedDataMutex.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		deletedTransactions, err := c.deleteTransactions(chainId, blockNumbers)
+		txsQueryResult, err := c.GetTransactions(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "*")
 		if err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting transactions: %v", err)
-			deleteErrMutex.Unlock()
+			fetchErrMutex.Lock()
+			fetchErr = fmt.Errorf("error fetching transactions: %v", err)
+			fetchErrMutex.Unlock()
 		}
-		for _, tx := range deletedTransactions {
-			data := deletedBlockDataByNumber[tx.BlockNumber]
-			data.Transactions = append(data.Transactions, tx)
-			deletedBlockDataByNumber[tx.BlockNumber] = data
+		for _, tx := range txsQueryResult.Data {
+			deletedDataMutex.Lock()
+			deletedData := deletedBlockDataByNumber[tx.BlockNumber]
+			tx.Sign = -1
+			deletedData.Transactions = append(deletedData.Transactions, tx)
+			deletedBlockDataByNumber[tx.BlockNumber] = deletedData
+			deletedDataMutex.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		deletedTraces, err := c.deleteTraces(chainId, blockNumbers)
+		tracesQueryResult, err := c.GetTraces(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "*")
 		if err != nil {
-			deleteErrMutex.Lock()
-			deleteErr = fmt.Errorf("error deleting traces: %v", err)
-			deleteErrMutex.Unlock()
+			fetchErrMutex.Lock()
+			fetchErr = fmt.Errorf("error fetching traces: %v", err)
+			fetchErrMutex.Unlock()
 		}
-		for _, trace := range deletedTraces {
-			data := deletedBlockDataByNumber[trace.BlockNumber]
-			data.Traces = append(data.Traces, trace)
-			deletedBlockDataByNumber[trace.BlockNumber] = data
+		for _, trace := range tracesQueryResult.Data {
+			deletedDataMutex.Lock()
+			deletedData := deletedBlockDataByNumber[trace.BlockNumber]
+			trace.Sign = -1
+			deletedData.Traces = append(deletedData.Traces, trace)
+			deletedBlockDataByNumber[trace.BlockNumber] = deletedData
+			deletedDataMutex.Unlock()
 		}
 	}()
 
 	wg.Wait()
 
-	if deleteErr != nil {
-		return nil, deleteErr
+	if fetchErr != nil {
+		return nil, fetchErr
 	}
 	deletedBlockData := make([]common.BlockData, 0, len(deletedBlockDataByNumber))
-	for _, data := range deletedBlockDataByNumber {
-		deletedBlockData = append(deletedBlockData, data)
+	for _, deletedData := range deletedBlockDataByNumber {
+		deletedBlockData = append(deletedBlockData, deletedData)
+		data = append(data, deletedData)
+	}
+
+	insertErr := c.InsertBlockData(data)
+	if insertErr != nil {
+		return nil, insertErr
 	}
 	return deletedBlockData, nil
 }
 
-func (c *ClickHouseConnector) deleteBlocks(chainId *big.Int, blockNumbers []*big.Int) ([]common.Block, error) {
-	blocksQueryResult, err := c.GetBlocks(QueryFilter{
-		ChainId:             chainId,
-		BlockNumbers:        blockNumbers,
-		ForceConsistentData: true,
-	}, "*")
-	if err != nil {
-		return nil, err
-	}
-	if len(blocksQueryResult.Data) == 0 {
-		return nil, nil // No blocks to delete
-	}
-	err = c.insertBlocks(blocksQueryResult.Data, InsertOptions{
-		AsDeleted: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return blocksQueryResult.Data, nil
-}
-
-func (c *ClickHouseConnector) deleteLogs(chainId *big.Int, blockNumbers []*big.Int) ([]common.Log, error) {
-	logsQueryResult, err := c.GetLogs(QueryFilter{
-		ChainId:             chainId,
-		BlockNumbers:        blockNumbers,
-		ForceConsistentData: true,
-	}, "*")
-	if err != nil {
-		return nil, err
-	}
-	if len(logsQueryResult.Data) == 0 {
-		return nil, nil // No logs to delete
-	}
-	err = c.insertLogs(logsQueryResult.Data, InsertOptions{
-		AsDeleted: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return logsQueryResult.Data, nil
-}
-
-func (c *ClickHouseConnector) deleteTransactions(chainId *big.Int, blockNumbers []*big.Int) ([]common.Transaction, error) {
-	txsQueryResult, err := c.GetTransactions(QueryFilter{
-		ChainId:             chainId,
-		BlockNumbers:        blockNumbers,
-		ForceConsistentData: true,
-	}, "*")
-	if err != nil {
-		return nil, err
-	}
-	if len(txsQueryResult.Data) == 0 {
-		return nil, nil // No transactions to delete
-	}
-	err = c.insertTransactions(txsQueryResult.Data, InsertOptions{
-		AsDeleted: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return txsQueryResult.Data, nil
-}
-
-func (c *ClickHouseConnector) deleteTraces(chainId *big.Int, blockNumbers []*big.Int) ([]common.Trace, error) {
-	tracesQueryResult, err := c.GetTraces(QueryFilter{
-		ChainId:             chainId,
-		BlockNumbers:        blockNumbers,
-		ForceConsistentData: true,
-	}, "*")
-	if err != nil {
-		return nil, err
-	}
-	if len(tracesQueryResult.Data) == 0 {
-		return nil, nil // No traces to delete
-	}
-	err = c.insertTraces(tracesQueryResult.Data, InsertOptions{
-		AsDeleted: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return tracesQueryResult.Data, nil
-}
-
-// TODO make this atomic
 func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 	if len(data) == 0 {
 		return nil
 	}
-	blocks := make([]common.Block, 0, len(data))
-	logs := make([]common.Log, 0)
-	transactions := make([]common.Transaction, 0)
-	traces := make([]common.Trace, 0)
 
-	for _, blockData := range data {
-		blocks = append(blocks, blockData.Block)
-		logs = append(logs, blockData.Logs...)
-		transactions = append(transactions, blockData.Transactions...)
-		traces = append(traces, blockData.Traces...)
+	tableName := c.getTableName(data[0].Block.ChainId, "inserts_null_table")
+	columns := []string{
+		"chain_id", "block", "transactions", "logs", "traces", "sign", "insert_timestamp",
 	}
+	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
+	for i := 0; i < len(data); i += c.cfg.MaxRowsPerInsert {
+		end := i + c.cfg.MaxRowsPerInsert
+		if end > len(data) {
+			end = len(data)
+		}
 
-	var saveErr error
-	var saveErrMutex sync.Mutex
-	var wg sync.WaitGroup
+		batch, err := c.conn.PrepareBatch(context.Background(), query)
+		if err != nil {
+			return err
+		}
 
-	if len(blocks) > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := c.insertBlocks(blocks, InsertOptions{
-				AsDeleted: false,
-			}); err != nil {
-				saveErrMutex.Lock()
-				saveErr = fmt.Errorf("error inserting blocks: %v", err)
-				saveErrMutex.Unlock()
+		for _, blockData := range data[i:end] {
+			block := blockData.Block
+
+			// Prepare block tuple
+			blockTuple := []interface{}{
+				block.Number,
+				block.Timestamp,
+				block.Hash,
+				block.ParentHash,
+				block.Sha3Uncles,
+				block.Nonce,
+				block.MixHash,
+				block.Miner,
+				block.StateRoot,
+				block.TransactionsRoot,
+				block.ReceiptsRoot,
+				block.LogsBloom,
+				block.Size,
+				block.ExtraData,
+				block.Difficulty,
+				block.TotalDifficulty,
+				block.TransactionCount,
+				block.GasLimit,
+				block.GasUsed,
+				block.WithdrawalsRoot,
+				block.BaseFeePerGas,
 			}
-		}()
-	}
 
-	if len(logs) > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := c.insertLogs(logs, InsertOptions{
-				AsDeleted: false,
-			}); err != nil {
-				saveErrMutex.Lock()
-				saveErr = fmt.Errorf("error inserting logs: %v", err)
-				saveErrMutex.Unlock()
+			// Prepare transactions array
+			transactions := make([][]interface{}, len(blockData.Transactions))
+			for j, tx := range blockData.Transactions {
+				transactions[j] = []interface{}{
+					tx.Hash,
+					tx.Nonce,
+					tx.BlockHash,
+					tx.BlockNumber,
+					tx.BlockTimestamp,
+					tx.TransactionIndex,
+					tx.FromAddress,
+					tx.ToAddress,
+					tx.Value,
+					tx.Gas,
+					tx.GasPrice,
+					tx.Data,
+					tx.FunctionSelector,
+					tx.MaxFeePerGas,
+					tx.MaxPriorityFeePerGas,
+					tx.MaxFeePerBlobGas,
+					tx.BlobVersionedHashes,
+					tx.TransactionType,
+					tx.R,
+					tx.S,
+					tx.V,
+					tx.AccessListJson,
+					tx.ContractAddress,
+					tx.GasUsed,
+					tx.CumulativeGasUsed,
+					tx.EffectiveGasPrice,
+					tx.BlobGasUsed,
+					tx.BlobGasPrice,
+					tx.LogsBloom,
+					tx.Status,
+				}
 			}
-		}()
-	}
 
-	if len(transactions) > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := c.insertTransactions(transactions, InsertOptions{
-				AsDeleted: false,
-			}); err != nil {
-				saveErrMutex.Lock()
-				saveErr = fmt.Errorf("error inserting transactions: %v", err)
-				saveErrMutex.Unlock()
+			// Prepare logs array
+			logs := make([][]interface{}, len(blockData.Logs))
+			for j, log := range blockData.Logs {
+				logs[j] = []interface{}{
+					log.BlockNumber,
+					log.BlockHash,
+					log.BlockTimestamp,
+					log.TransactionHash,
+					log.TransactionIndex,
+					log.LogIndex,
+					log.Address,
+					log.Data,
+					log.Topic0,
+					log.Topic1,
+					log.Topic2,
+					log.Topic3,
+				}
 			}
-		}()
-	}
 
-	if len(traces) > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := c.insertTraces(traces, InsertOptions{
-				AsDeleted: false,
-			}); err != nil {
-				saveErrMutex.Lock()
-				saveErr = fmt.Errorf("error inserting traces: %v", err)
-				saveErrMutex.Unlock()
+			// Prepare traces array
+			traces := make([][]interface{}, len(blockData.Traces))
+			for j, trace := range blockData.Traces {
+				traces[j] = []interface{}{
+					trace.BlockNumber,
+					trace.BlockHash,
+					trace.BlockTimestamp,
+					trace.TransactionHash,
+					trace.TransactionIndex,
+					trace.Subtraces,
+					trace.TraceAddress,
+					trace.TraceType,
+					trace.CallType,
+					trace.Error,
+					trace.FromAddress,
+					trace.ToAddress,
+					trace.Gas.Uint64(),
+					trace.GasUsed.Uint64(),
+					trace.Input,
+					trace.Output,
+					trace.Value,
+					trace.Author,
+					trace.RewardType,
+					trace.RefundAddress,
+				}
 			}
-		}()
+
+			sign := int8(1)
+			if block.Sign != 1 {
+				sign = block.Sign
+			}
+			insertTimestamp := time.Now()
+			if !block.InsertTimestamp.IsZero() {
+				insertTimestamp = block.InsertTimestamp
+			}
+			// Append the row to the batch
+			if err := batch.Append(
+				block.ChainId,
+				blockTuple,
+				transactions,
+				logs,
+				traces,
+				sign,
+				insertTimestamp,
+			); err != nil {
+				return err
+			}
+		}
+
+		if err := batch.Send(); err != nil {
+			return err
+		}
 	}
 
-	wg.Wait()
-
-	if saveErr != nil {
-		return saveErr
-	}
 	return nil
 }
 
