@@ -447,9 +447,6 @@ storage:
     clickhouse:
       port: 3000
       database: "staging"
-  orchestrator:
-    memory:
-      maxItems: 10000
 ```
 With the corresponding `secrets.yml`:
 ```yaml

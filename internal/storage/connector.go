@@ -131,15 +131,9 @@ func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var err error
 	if cfg.Clickhouse != nil {
 		conn, err = NewClickHouseConnector(cfg.Clickhouse)
-	} else if cfg.Memory != nil {
-		conn, err = NewMemoryConnector(cfg.Memory)
 	} else {
 		return *new(T), fmt.Errorf("no storage driver configured")
 	}
-	/*
-		else if cfg.Redis != nil {
-			conn, err = NewRedisConnector(cfg.Redis)
-		} */
 
 	if err != nil {
 		return *new(T), err

@@ -61,8 +61,6 @@ const (
 
 type StorageConnectionConfig struct {
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
-	Memory     *MemoryConfig     `mapstructure:"memory"`
-	Redis      *RedisConfig      `mapstructure:"redis"`
 }
 
 type TableConfig struct {
@@ -84,17 +82,6 @@ type ClickhouseConfig struct {
 	MaxOpenConns     int                            `mapstructure:"maxOpenConns"`
 	MaxIdleConns     int                            `mapstructure:"maxIdleConns"`
 	ChainBasedConfig map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
-}
-
-type MemoryConfig struct {
-	MaxItems int `mapstructure:"maxItems"`
-}
-
-type RedisConfig struct {
-	PoolSize int    `mapstructure:"poolSize"`
-	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
 }
 
 type RPCBatchRequestConfig struct {
