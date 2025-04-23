@@ -1264,7 +1264,7 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 			}
 
 			sign := int8(1)
-			if block.Sign != 1 {
+			if block.Sign == -1 {
 				sign = block.Sign
 			}
 			insertTimestamp := time.Now()
