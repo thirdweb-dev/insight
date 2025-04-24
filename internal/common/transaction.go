@@ -229,12 +229,15 @@ func (t *Transaction) Serialize() TransactionModel {
 }
 
 func (t *DecodedTransaction) Serialize() DecodedTransactionModel {
+	// Convert big numbers to strings in the decoded inputs
+	decodedInputs := ConvertBigNumbersToString(t.Decoded.Inputs).(map[string]interface{})
+
 	return DecodedTransactionModel{
 		TransactionModel: t.Transaction.Serialize(),
 		Decoded: DecodedTransactionDataModel{
 			Name:      t.Decoded.Name,
 			Signature: t.Decoded.Signature,
-			Inputs:    t.Decoded.Inputs,
+			Inputs:    decodedInputs,
 		},
 	}
 }

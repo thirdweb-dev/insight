@@ -252,13 +252,17 @@ func (l *Log) Serialize() LogModel {
 }
 
 func (l *DecodedLog) Serialize() DecodedLogModel {
+	// Convert big numbers to strings in both indexed and non-indexed parameters
+	indexedParams := ConvertBigNumbersToString(l.Decoded.IndexedParams).(map[string]interface{})
+	nonIndexedParams := ConvertBigNumbersToString(l.Decoded.NonIndexedParams).(map[string]interface{})
+
 	return DecodedLogModel{
 		LogModel: l.Log.Serialize(),
 		Decoded: DecodedLogDataModel{
 			Name:             l.Decoded.Name,
 			Signature:        l.Decoded.Signature,
-			IndexedParams:    l.Decoded.IndexedParams,
-			NonIndexedParams: l.Decoded.NonIndexedParams,
+			IndexedParams:    indexedParams,
+			NonIndexedParams: nonIndexedParams,
 		},
 	}
 }
