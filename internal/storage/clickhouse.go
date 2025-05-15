@@ -1032,7 +1032,7 @@ func (c *ClickHouseConnector) ReplaceBlockData(data []common.BlockData) ([]commo
 	var wg sync.WaitGroup
 	wg.Add(4)
 	// Create a map to store block data that will be deleted
-	deletedBlockDataByNumber := make(map[*big.Int]common.BlockData)
+	deletedBlockDataByNumber := make(map[string]common.BlockData)
 
 	blockNumbers := make([]*big.Int, len(data))
 	for i, blockData := range data {
@@ -1052,10 +1052,10 @@ func (c *ClickHouseConnector) ReplaceBlockData(data []common.BlockData) ([]commo
 		}
 		for _, block := range blocksQueryResult.Data {
 			deletedDataMutex.Lock()
-			deletedData := deletedBlockDataByNumber[block.Number]
+			deletedData := deletedBlockDataByNumber[block.Number.String()]
 			block.Sign = -1
 			deletedData.Block = block
-			deletedBlockDataByNumber[block.Number] = deletedData
+			deletedBlockDataByNumber[block.Number.String()] = deletedData
 			deletedDataMutex.Unlock()
 		}
 	}()
@@ -1074,10 +1074,10 @@ func (c *ClickHouseConnector) ReplaceBlockData(data []common.BlockData) ([]commo
 		}
 		for _, log := range logsQueryResult.Data {
 			deletedDataMutex.Lock()
-			deletedData := deletedBlockDataByNumber[log.BlockNumber]
+			deletedData := deletedBlockDataByNumber[log.BlockNumber.String()]
 			log.Sign = -1
 			deletedData.Logs = append(deletedData.Logs, log)
-			deletedBlockDataByNumber[log.BlockNumber] = deletedData
+			deletedBlockDataByNumber[log.BlockNumber.String()] = deletedData
 			deletedDataMutex.Unlock()
 		}
 	}()
@@ -1096,10 +1096,10 @@ func (c *ClickHouseConnector) ReplaceBlockData(data []common.BlockData) ([]commo
 		}
 		for _, tx := range txsQueryResult.Data {
 			deletedDataMutex.Lock()
-			deletedData := deletedBlockDataByNumber[tx.BlockNumber]
+			deletedData := deletedBlockDataByNumber[tx.BlockNumber.String()]
 			tx.Sign = -1
 			deletedData.Transactions = append(deletedData.Transactions, tx)
-			deletedBlockDataByNumber[tx.BlockNumber] = deletedData
+			deletedBlockDataByNumber[tx.BlockNumber.String()] = deletedData
 			deletedDataMutex.Unlock()
 		}
 	}()
@@ -1118,10 +1118,10 @@ func (c *ClickHouseConnector) ReplaceBlockData(data []common.BlockData) ([]commo
 		}
 		for _, trace := range tracesQueryResult.Data {
 			deletedDataMutex.Lock()
-			deletedData := deletedBlockDataByNumber[trace.BlockNumber]
+			deletedData := deletedBlockDataByNumber[trace.BlockNumber.String()]
 			trace.Sign = -1
 			deletedData.Traces = append(deletedData.Traces, trace)
-			deletedBlockDataByNumber[trace.BlockNumber] = deletedData
+			deletedBlockDataByNumber[trace.BlockNumber.String()] = deletedData
 			deletedDataMutex.Unlock()
 		}
 	}()
