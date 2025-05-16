@@ -107,7 +107,11 @@ func InitializeSimpleRPCWithUrl(url string) (IRPCClient, error) {
 		EthClient: ethClient,
 		url:       url,
 	}
-	rpc.setChainID(context.Background())
+
+	chainIdErr := rpc.setChainID(context.Background())
+	if chainIdErr != nil {
+		return nil, chainIdErr
+	}
 	return IRPCClient(rpc), nil
 }
 

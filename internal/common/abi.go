@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -65,6 +66,7 @@ func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 
 	abi, err := abi.JSON(resp.Body)
 	if err != nil {
+		log.Warn().Err(err).Str("contract", contract).Str("chainId", chainId).Msg("Failed to parse contract ABI")
 		return nil, fmt.Errorf("failed to load contract abi: %v", err)
 	}
 	return &abi, nil

@@ -380,8 +380,8 @@ func (c *ClickHouseConnector) insertTraces(traces []common.Trace, opt InsertOpti
 				trace.Error,
 				trace.FromAddress,
 				trace.ToAddress,
-				trace.Gas.Uint64(),
-				trace.GasUsed.Uint64(),
+				trace.Gas,
+				trace.GasUsed,
 				trace.Input,
 				trace.Output,
 				trace.Value,
@@ -479,6 +479,10 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	// Apply filters
 	if qf.ChainId != nil && qf.ChainId.Sign() > 0 {
 		whereClauses = append(whereClauses, createFilterClause("chain_id", qf.ChainId.String()))
+	}
+	blockNumbersClause := createBlockNumbersClause(qf.BlockNumbers)
+	if blockNumbersClause != "" {
+		whereClauses = append(whereClauses, blockNumbersClause)
 	}
 	contractAddressClause := createContractAddressClause(table, qf.ContractAddress)
 	if contractAddressClause != "" {
@@ -940,7 +944,7 @@ func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 }
 
 func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
-	query := fmt.Sprintf("SELECT data FROM %s.block_data WHERE block_number IN (%s) AND is_deleted = 0",
+	query := fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0",
 		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
 	if qf.ChainId.Sign() != 0 {
@@ -1299,8 +1303,8 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 					trace.Error,
 					trace.FromAddress,
 					trace.ToAddress,
-					trace.Gas.Uint64(),
-					trace.GasUsed.Uint64(),
+					trace.Gas,
+					trace.GasUsed,
 					trace.Input,
 					trace.Output,
 					trace.Value,
@@ -1743,4 +1747,166 @@ func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ..
 	}
 
 	return queryResult, nil
+}
+
+func (c *ClickHouseConnector) GetValidationBlockData(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blocks []common.BlockData, err error) {
+	if startBlock == nil || endBlock == nil {
+		return nil, fmt.Errorf("start block and end block must not be nil")
+	}
+
+	if startBlock.Cmp(endBlock) > 0 {
+		return nil, fmt.Errorf("start block must be less than or equal to end block")
+	}
+
+	blockNumbers := make([]*big.Int, 0)
+	for i := new(big.Int).Set(startBlock); i.Cmp(endBlock) <= 0; i.Add(i, big.NewInt(1)) {
+		blockNumbers = append(blockNumbers, new(big.Int).Set(i))
+	}
+	// Get blocks, logs and transactions concurrently
+	type blockResult struct {
+		blocks []common.Block
+		err    error
+	}
+
+	type logResult struct {
+		logMap map[string][]common.Log // blockNumber -> logs
+		err    error
+	}
+
+	type txResult struct {
+		txMap map[string][]common.Transaction // blockNumber -> transactions
+		err   error
+	}
+
+	blocksChan := make(chan blockResult)
+	logsChan := make(chan logResult)
+	txsChan := make(chan txResult)
+
+	// Launch goroutines for concurrent fetching
+	go func() {
+		blocksResult, err := c.GetBlocks(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "chain_id", "block_number", "transactions_root", "receipts_root", "logs_bloom", "transaction_count")
+		blocksChan <- blockResult{blocks: blocksResult.Data, err: err}
+	}()
+
+	go func() {
+		logsResult, err := c.GetLogs(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "chain_id", "block_number", "address", "log_index", "topic_0", "topic_1", "topic_2", "topic_3")
+		if err != nil {
+			logsChan <- logResult{err: err}
+			return
+		}
+
+		// Pre-organize logs by block number
+		logMap := make(map[string][]common.Log)
+		for _, log := range logsResult.Data {
+			blockNum := log.BlockNumber.String()
+			logMap[blockNum] = append(logMap[blockNum], log)
+		}
+		logsChan <- logResult{logMap: logMap}
+	}()
+
+	go func() {
+		transactionsResult, err := c.GetTransactions(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		}, "chain_id", "block_number", "nonce", "transaction_index", "to_address", "value", "gas", "gas_price", "data", "max_fee_per_gas", "max_priority_fee_per_gas", "max_fee_per_blob_gas", "blob_versioned_hashes", "transaction_type", "r", "s", "v", "access_list", "authorization_list", "blob_gas_used", "blob_gas_price")
+		if err != nil {
+			txsChan <- txResult{err: err}
+			return
+		}
+
+		// Pre-organize transactions by block number
+		txMap := make(map[string][]common.Transaction)
+		for _, tx := range transactionsResult.Data {
+			blockNum := tx.BlockNumber.String()
+			txMap[blockNum] = append(txMap[blockNum], tx)
+		}
+		txsChan <- txResult{txMap: txMap}
+	}()
+
+	// Wait for all results
+	blocksResult := <-blocksChan
+	logsResult := <-logsChan
+	txsResult := <-txsChan
+
+	// Check for errors
+	if blocksResult.err != nil {
+		return nil, fmt.Errorf("error fetching blocks: %v", blocksResult.err)
+	}
+	if logsResult.err != nil {
+		return nil, fmt.Errorf("error fetching logs: %v", logsResult.err)
+	}
+	if txsResult.err != nil {
+		return nil, fmt.Errorf("error fetching transactions: %v", txsResult.err)
+	}
+
+	// Build BlockData slice
+	blockData := make([]common.BlockData, len(blocksResult.blocks))
+
+	// Build BlockData for each block
+	for i, block := range blocksResult.blocks {
+		blockNum := block.Number.String()
+		blockData[i] = common.BlockData{
+			Block:        block,
+			Logs:         logsResult.logMap[blockNum],
+			Transactions: txsResult.txMap[blockNum],
+		}
+	}
+
+	return blockData, nil
+}
+
+func (c *ClickHouseConnector) FindMissingBlockNumbers(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blockNumbers []*big.Int, err error) {
+	tableName := c.getTableName(chainId, "blocks")
+	query := fmt.Sprintf(`
+		WITH sequence AS (
+			SELECT 
+					{startBlock:UInt256} + number AS expected_block_number
+			FROM 
+					numbers(toUInt64({endBlock:UInt256} - {startBlock:UInt256} + 1))
+		),
+		existing_blocks AS (
+				SELECT DISTINCT 
+						block_number
+				FROM 
+						%s FINAL
+				WHERE 
+						chain_id = {chainId:UInt256} 
+						AND block_number >= {startBlock:UInt256}
+						AND block_number <= {endBlock:UInt256}
+		)
+		SELECT 
+				s.expected_block_number AS missing_block_number
+		FROM 
+				sequence s
+		LEFT JOIN 
+				existing_blocks e ON s.expected_block_number = e.block_number
+		WHERE 
+				e.block_number = 0
+		ORDER BY 
+				missing_block_number
+	`, tableName)
+	rows, err := c.conn.Query(context.Background(), query, clickhouse.Named("chainId", chainId.String()), clickhouse.Named("startBlock", startBlock.String()), clickhouse.Named("endBlock", endBlock.String()))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var blockNumber *big.Int
+		err := rows.Scan(&blockNumber)
+		if err != nil {
+			return nil, err
+		}
+		blockNumbers = append(blockNumbers, blockNumber)
+	}
+	return blockNumbers, nil
 }

@@ -26,6 +26,66 @@ func (_m *MockIMainStorage) EXPECT() *MockIMainStorage_Expecter {
 	return &MockIMainStorage_Expecter{mock: &_m.Mock}
 }
 
+// FindMissingBlockNumbers provides a mock function with given fields: chainId, startBlock, endBlock
+func (_m *MockIMainStorage) FindMissingBlockNumbers(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) ([]*big.Int, error) {
+	ret := _m.Called(chainId, startBlock, endBlock)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindMissingBlockNumbers")
+	}
+
+	var r0 []*big.Int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) ([]*big.Int, error)); ok {
+		return rf(chainId, startBlock, endBlock)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) []*big.Int); ok {
+		r0 = rf(chainId, startBlock, endBlock)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int, *big.Int) error); ok {
+		r1 = rf(chainId, startBlock, endBlock)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_FindMissingBlockNumbers_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindMissingBlockNumbers'
+type MockIMainStorage_FindMissingBlockNumbers_Call struct {
+	*mock.Call
+}
+
+// FindMissingBlockNumbers is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - startBlock *big.Int
+//   - endBlock *big.Int
+func (_e *MockIMainStorage_Expecter) FindMissingBlockNumbers(chainId interface{}, startBlock interface{}, endBlock interface{}) *MockIMainStorage_FindMissingBlockNumbers_Call {
+	return &MockIMainStorage_FindMissingBlockNumbers_Call{Call: _e.mock.On("FindMissingBlockNumbers", chainId, startBlock, endBlock)}
+}
+
+func (_c *MockIMainStorage_FindMissingBlockNumbers_Call) Run(run func(chainId *big.Int, startBlock *big.Int, endBlock *big.Int)) *MockIMainStorage_FindMissingBlockNumbers_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].(*big.Int), args[2].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_FindMissingBlockNumbers_Call) Return(blockNumbers []*big.Int, err error) *MockIMainStorage_FindMissingBlockNumbers_Call {
+	_c.Call.Return(blockNumbers, err)
+	return _c
+}
+
+func (_c *MockIMainStorage_FindMissingBlockNumbers_Call) RunAndReturn(run func(*big.Int, *big.Int, *big.Int) ([]*big.Int, error)) *MockIMainStorage_FindMissingBlockNumbers_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAggregations provides a mock function with given fields: table, qf
 func (_m *MockIMainStorage) GetAggregations(table string, qf storage.QueryFilter) (storage.QueryResult[interface{}], error) {
 	ret := _m.Called(table, qf)
@@ -623,6 +683,66 @@ func (_c *MockIMainStorage_GetTransactions_Call) Return(transactions storage.Que
 }
 
 func (_c *MockIMainStorage_GetTransactions_Call) RunAndReturn(run func(storage.QueryFilter, ...string) (storage.QueryResult[common.Transaction], error)) *MockIMainStorage_GetTransactions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetValidationBlockData provides a mock function with given fields: chainId, startBlock, endBlock
+func (_m *MockIMainStorage) GetValidationBlockData(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) ([]common.BlockData, error) {
+	ret := _m.Called(chainId, startBlock, endBlock)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetValidationBlockData")
+	}
+
+	var r0 []common.BlockData
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) ([]common.BlockData, error)); ok {
+		return rf(chainId, startBlock, endBlock)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) []common.BlockData); ok {
+		r0 = rf(chainId, startBlock, endBlock)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]common.BlockData)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int, *big.Int) error); ok {
+		r1 = rf(chainId, startBlock, endBlock)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_GetValidationBlockData_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetValidationBlockData'
+type MockIMainStorage_GetValidationBlockData_Call struct {
+	*mock.Call
+}
+
+// GetValidationBlockData is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - startBlock *big.Int
+//   - endBlock *big.Int
+func (_e *MockIMainStorage_Expecter) GetValidationBlockData(chainId interface{}, startBlock interface{}, endBlock interface{}) *MockIMainStorage_GetValidationBlockData_Call {
+	return &MockIMainStorage_GetValidationBlockData_Call{Call: _e.mock.On("GetValidationBlockData", chainId, startBlock, endBlock)}
+}
+
+func (_c *MockIMainStorage_GetValidationBlockData_Call) Run(run func(chainId *big.Int, startBlock *big.Int, endBlock *big.Int)) *MockIMainStorage_GetValidationBlockData_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].(*big.Int), args[2].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_GetValidationBlockData_Call) Return(blocks []common.BlockData, err error) *MockIMainStorage_GetValidationBlockData_Call {
+	_c.Call.Return(blocks, err)
+	return _c
+}
+
+func (_c *MockIMainStorage_GetValidationBlockData_Call) RunAndReturn(run func(*big.Int, *big.Int, *big.Int) ([]common.BlockData, error)) *MockIMainStorage_GetValidationBlockData_Call {
 	_c.Call.Return(run)
 	return _c
 }
