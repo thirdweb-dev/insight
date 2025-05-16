@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     `s` UInt256,
     `v` UInt256,
     `access_list` Nullable(String),
+    `authorization_list` Nullable(String),
     `contract_address` Nullable(FixedString(42)),
     `gas_used` Nullable(UInt64),
     `cumulative_gas_used` Nullable(UInt64),

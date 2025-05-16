@@ -205,6 +205,16 @@ func serializeTransaction(chainId *big.Int, tx map[string]interface{}, blockTime
 			}
 			return nil
 		}(),
+		AuthorizationListJson: func() *string {
+			if tx["authorizationList"] != nil {
+				jsonString := interfaceToJsonString(tx["authorizationList"])
+				if jsonString == "" {
+					return nil
+				}
+				return &jsonString
+			}
+			return nil
+		}(),
 		ContractAddress: func() *string {
 			if receipt != nil {
 				contractAddress := interfaceToString((*receipt)["contractAddress"])
