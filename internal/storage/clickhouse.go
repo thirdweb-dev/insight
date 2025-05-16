@@ -371,8 +371,8 @@ func (c *ClickHouseConnector) insertTraces(traces []common.Trace, opt InsertOpti
 				trace.Error,
 				trace.FromAddress,
 				trace.ToAddress,
-				trace.Gas.Uint64(),
-				trace.GasUsed.Uint64(),
+				trace.Gas,
+				trace.GasUsed,
 				trace.Input,
 				trace.Output,
 				trace.Value,
@@ -469,6 +469,10 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	// Apply filters
 	if qf.ChainId != nil && qf.ChainId.Sign() > 0 {
 		whereClauses = append(whereClauses, createFilterClause("chain_id", qf.ChainId.String()))
+	}
+	blockNumbersClause := createBlockNumbersClause(qf.BlockNumbers)
+	if blockNumbersClause != "" {
+		whereClauses = append(whereClauses, blockNumbersClause)
 	}
 	contractAddressClause := createContractAddressClause(table, qf.ContractAddress)
 	if contractAddressClause != "" {
@@ -925,7 +929,7 @@ func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 }
 
 func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
-	query := fmt.Sprintf("SELECT data FROM %s.block_data WHERE block_number IN (%s) AND is_deleted = 0",
+	query := fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0",
 		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
 
 	if qf.ChainId.Sign() != 0 {
@@ -1276,8 +1280,8 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 					trace.Error,
 					trace.FromAddress,
 					trace.ToAddress,
-					trace.Gas.Uint64(),
-					trace.GasUsed.Uint64(),
+					trace.Gas,
+					trace.GasUsed,
 					trace.Input,
 					trace.Output,
 					trace.Value,

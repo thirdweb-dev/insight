@@ -198,6 +198,7 @@ func init() {
 	viper.BindPFlag("publisher.events.topic0Filter", rootCmd.PersistentFlags().Lookup("publisher-events-topic0Filter"))
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
+	rootCmd.AddCommand(validateCmd)
 }
 
 func initConfig() {
