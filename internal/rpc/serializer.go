@@ -26,8 +26,8 @@ func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.R
 			BlockNumber: rawBlock.BlockNumber,
 		}
 		if rawBlock.Result == nil {
-			log.Warn().Msgf("Received a nil block result for block %s.", rawBlock.BlockNumber.String())
-			result.Error = fmt.Errorf("received a nil block result from RPC")
+			log.Warn().Err(rawBlock.Error).Msgf("Received a nil block result for block %s.", rawBlock.BlockNumber.String())
+			result.Error = fmt.Errorf("received a nil block result from RPC. %v", rawBlock.Error)
 			results = append(results, result)
 			continue
 		}
