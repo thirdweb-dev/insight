@@ -504,6 +504,14 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
 	}
 
+	// Add limit clause
+	if qf.Page > 0 && qf.Limit > 0 {
+		offset := (qf.Page - 1) * qf.Limit
+		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
+	} else if qf.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
+	}
+
 	if err := common.ValidateQuery(query); err != nil {
 		return QueryResult[interface{}]{}, err
 	}
