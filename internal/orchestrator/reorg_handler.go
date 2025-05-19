@@ -230,7 +230,7 @@ func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) 
 		blockNumbers = append(blockNumbers, header.Number)
 	}
 	blockCount := len(blockNumbers)
-	chunks := common.BigIntSliceToChunks(blockNumbers, rh.rpc.GetBlocksPerRequest().Blocks)
+	chunks := common.SliceToChunks(blockNumbers, rh.rpc.GetBlocksPerRequest().Blocks)
 
 	var wg sync.WaitGroup
 	resultsCh := make(chan []rpc.GetBlocksResult, len(chunks))

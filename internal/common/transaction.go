@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type RawTransaction = map[string]interface{}
+
 type Transaction struct {
 	ChainId               *big.Int  `json:"chain_id" ch:"chain_id" swaggertype:"string"`
 	Hash                  string    `json:"hash" ch:"hash"`
