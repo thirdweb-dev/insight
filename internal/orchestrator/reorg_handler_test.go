@@ -240,14 +240,14 @@ func TestFindFirstReorgedBlockNumber(t *testing.T) {
 		{Number: big.NewInt(1), Hash: "hash1", ParentHash: "hash0"},
 	}
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(3), Data: common.Block{Hash: "hash3", ParentHash: "hash2"}},
 		{BlockNumber: big.NewInt(2), Data: common.Block{Hash: "hash2", ParentHash: "hash1"}},
 		{BlockNumber: big.NewInt(1), Data: common.Block{Hash: "hash1", ParentHash: "hash0"}},
 	})
 
 	reorgedBlockNumbers := []*big.Int{}
-	err := handler.findReorgedBlockNumbers(reversedBlockHeaders, &reorgedBlockNumbers)
+	err := handler.findReorgedBlockNumbers(context.Background(), reversedBlockHeaders, &reorgedBlockNumbers)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []*big.Int{big.NewInt(3)}, reorgedBlockNumbers)
@@ -274,14 +274,14 @@ func TestFindAllReorgedBlockNumbersWithLastBlockInSliceAsValid(t *testing.T) {
 		{Number: big.NewInt(1), Hash: "hash1", ParentHash: "hash0"},
 	}
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(3), Data: common.Block{Hash: "hash3", ParentHash: "hash2"}},
 		{BlockNumber: big.NewInt(2), Data: common.Block{Hash: "hash2", ParentHash: "hash1"}},
 		{BlockNumber: big.NewInt(1), Data: common.Block{Hash: "hash1", ParentHash: "hash0"}},
 	})
 
 	reorgedBlockNumbers := []*big.Int{}
-	err := handler.findReorgedBlockNumbers(reversedBlockHeaders, &reorgedBlockNumbers)
+	err := handler.findReorgedBlockNumbers(context.Background(), reversedBlockHeaders, &reorgedBlockNumbers)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []*big.Int{big.NewInt(3), big.NewInt(2)}, reorgedBlockNumbers)
@@ -305,7 +305,7 @@ func TestFindManyReorgsInOneScan(t *testing.T) {
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(1), nil)
 	handler := NewReorgHandler(mockRPC, mockStorage)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(9), big.NewInt(8), big.NewInt(7), big.NewInt(6), big.NewInt(5), big.NewInt(4), big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(9), big.NewInt(8), big.NewInt(7), big.NewInt(6), big.NewInt(5), big.NewInt(4), big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(9), Data: common.Block{Hash: "hash9", ParentHash: "hash8"}},
 		{BlockNumber: big.NewInt(8), Data: common.Block{Hash: "hash8", ParentHash: "hash7"}},
 		{BlockNumber: big.NewInt(7), Data: common.Block{Hash: "hash7", ParentHash: "hash6"}},
@@ -330,7 +330,7 @@ func TestFindManyReorgsInOneScan(t *testing.T) {
 	}
 
 	reorgedBlockNumbers := []*big.Int{}
-	err := handler.findReorgedBlockNumbers(initialBlockHeaders, &reorgedBlockNumbers)
+	err := handler.findReorgedBlockNumbers(context.Background(), initialBlockHeaders, &reorgedBlockNumbers)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []*big.Int{big.NewInt(9), big.NewInt(6), big.NewInt(4)}, reorgedBlockNumbers)
@@ -354,14 +354,14 @@ func TestFindManyReorgsInOneScanRecursively(t *testing.T) {
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(1), nil)
 	handler := NewReorgHandler(mockRPC, mockStorage)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(9), big.NewInt(8), big.NewInt(7), big.NewInt(6)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(9), big.NewInt(8), big.NewInt(7), big.NewInt(6)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(9), Data: common.Block{Hash: "hash9", ParentHash: "hash8"}},
 		{BlockNumber: big.NewInt(8), Data: common.Block{Hash: "hash8", ParentHash: "hash7"}},
 		{BlockNumber: big.NewInt(7), Data: common.Block{Hash: "hash7", ParentHash: "hash6"}},
 		{BlockNumber: big.NewInt(6), Data: common.Block{Hash: "hash6", ParentHash: "hash5"}},
 	}).Once()
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(5), big.NewInt(4), big.NewInt(3), big.NewInt(2)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(5), big.NewInt(4), big.NewInt(3), big.NewInt(2)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(5), Data: common.Block{Hash: "hash5", ParentHash: "hash4"}},
 		{BlockNumber: big.NewInt(4), Data: common.Block{Hash: "hash4", ParentHash: "hash3"}},
 		{BlockNumber: big.NewInt(3), Data: common.Block{Hash: "hash3", ParentHash: "hash2"}},
@@ -383,7 +383,7 @@ func TestFindManyReorgsInOneScanRecursively(t *testing.T) {
 	}, nil)
 
 	reorgedBlockNumbers := []*big.Int{}
-	err := handler.findReorgedBlockNumbers(initialBlockHeaders, &reorgedBlockNumbers)
+	err := handler.findReorgedBlockNumbers(context.Background(), initialBlockHeaders, &reorgedBlockNumbers)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []*big.Int{big.NewInt(9), big.NewInt(6), big.NewInt(4), big.NewInt(3)}, reorgedBlockNumbers)
@@ -407,13 +407,13 @@ func TestFindReorgedBlockNumbersRecursively(t *testing.T) {
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(3), nil)
 	handler := NewReorgHandler(mockRPC, mockStorage)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(6), big.NewInt(5), big.NewInt(4)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(6), big.NewInt(5), big.NewInt(4)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(6), Data: common.Block{Hash: "hash6", ParentHash: "hash5"}},
 		{BlockNumber: big.NewInt(5), Data: common.Block{Hash: "hash5", ParentHash: "hash4"}},
 		{BlockNumber: big.NewInt(4), Data: common.Block{Hash: "hash4", ParentHash: "hash3"}},
 	}).Once()
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(3), big.NewInt(2), big.NewInt(1)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(3), Data: common.Block{Hash: "hash3", ParentHash: "hash2"}},
 		{BlockNumber: big.NewInt(2), Data: common.Block{Hash: "hash2", ParentHash: "hash1"}},
 		{BlockNumber: big.NewInt(1), Data: common.Block{Hash: "hash1", ParentHash: "hash0"}},
@@ -432,7 +432,7 @@ func TestFindReorgedBlockNumbersRecursively(t *testing.T) {
 	}, nil)
 
 	reorgedBlockNumbers := []*big.Int{}
-	err := handler.findReorgedBlockNumbers(initialBlockHeaders, &reorgedBlockNumbers)
+	err := handler.findReorgedBlockNumbers(context.Background(), initialBlockHeaders, &reorgedBlockNumbers)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []*big.Int{big.NewInt(6), big.NewInt(5), big.NewInt(4), big.NewInt(3)}, reorgedBlockNumbers)
@@ -456,17 +456,17 @@ func TestNewBlocksAreFetchedInBatches(t *testing.T) {
 	mockOrchestratorStorage.EXPECT().GetLastReorgCheckedBlockNumber(big.NewInt(1)).Return(big.NewInt(3), nil)
 	handler := NewReorgHandler(mockRPC, mockStorage)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(6), big.NewInt(5)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(6), big.NewInt(5)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(6), Data: common.Block{Hash: "hash6", ParentHash: "hash5"}},
 		{BlockNumber: big.NewInt(5), Data: common.Block{Hash: "hash5", ParentHash: "hash4"}},
 	}).Once()
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(4), big.NewInt(3)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(4), big.NewInt(3)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(4), Data: common.Block{Hash: "hash4", ParentHash: "hash3"}},
 		{BlockNumber: big.NewInt(3), Data: common.Block{Hash: "hash3", ParentHash: "hash2"}},
 	}).Once()
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(2)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(2)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(2), Data: common.Block{Hash: "hash2", ParentHash: "hash1"}},
 	}).Once()
 
@@ -479,7 +479,7 @@ func TestNewBlocksAreFetchedInBatches(t *testing.T) {
 	}
 
 	reorgedBlockNumbers := []*big.Int{}
-	err := handler.findReorgedBlockNumbers(initialBlockHeaders, &reorgedBlockNumbers)
+	err := handler.findReorgedBlockNumbers(context.Background(), initialBlockHeaders, &reorgedBlockNumbers)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []*big.Int{}, reorgedBlockNumbers)
@@ -497,7 +497,7 @@ func TestHandleReorg(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{Blocks: 100})
-	mockRPC.EXPECT().GetFullBlocks(mock.Anything).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), mock.Anything).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(1), Data: common.BlockData{}},
 		{BlockNumber: big.NewInt(2), Data: common.BlockData{}},
 		{BlockNumber: big.NewInt(3), Data: common.BlockData{}},
@@ -507,7 +507,7 @@ func TestHandleReorg(t *testing.T) {
 	mockMainStorage.EXPECT().ReplaceBlockData(mock.Anything).Return([]common.BlockData{}, nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	err := handler.handleReorg([]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)})
+	err := handler.handleReorg(context.Background(), []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)})
 
 	assert.NoError(t, err)
 }
@@ -560,7 +560,7 @@ func TestReorgHandlingIsSkippedIfMostRecentAndLastCheckedBlockAreSame(t *testing
 	mockMainStorage.EXPECT().GetMaxBlockNumber(big.NewInt(1)).Return(big.NewInt(100), nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(100))
+	mostRecentBlockChecked, err := handler.RunFromBlock(context.Background(), big.NewInt(100))
 
 	assert.NoError(t, err)
 	assert.Nil(t, mostRecentBlockChecked)
@@ -597,7 +597,7 @@ func TestHandleReorgWithSingleBlockReorg(t *testing.T) {
 		{Number: big.NewInt(100), Hash: "hash100", ParentHash: "hash99"},
 	}, nil)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101), big.NewInt(100)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101), big.NewInt(100)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(105), Data: common.Block{Hash: "hash105", ParentHash: "hash104"}},
 		{BlockNumber: big.NewInt(104), Data: common.Block{Hash: "hash104", ParentHash: "hash103"}},
 		{BlockNumber: big.NewInt(103), Data: common.Block{Hash: "hash103", ParentHash: "hash102"}},
@@ -606,7 +606,7 @@ func TestHandleReorgWithSingleBlockReorg(t *testing.T) {
 		{BlockNumber: big.NewInt(100), Data: common.Block{Hash: "hash100", ParentHash: "hash99"}},
 	})
 
-	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(105)}).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(105)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(105), Data: common.BlockData{}},
 	})
 
@@ -615,7 +615,7 @@ func TestHandleReorgWithSingleBlockReorg(t *testing.T) {
 	})).Return([]common.BlockData{}, nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(99))
+	mostRecentBlockChecked, err := handler.RunFromBlock(context.Background(), big.NewInt(99))
 
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(109), mostRecentBlockChecked)
@@ -652,7 +652,7 @@ func TestHandleReorgWithLatestBlockReorged(t *testing.T) {
 		{Number: big.NewInt(100), Hash: "hash100", ParentHash: "hash99"},
 	}, nil)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(108), big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101), big.NewInt(100)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(108), big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101), big.NewInt(100)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(108), Data: common.Block{Hash: "hash108", ParentHash: "hash107"}},
 		{BlockNumber: big.NewInt(107), Data: common.Block{Hash: "hash107", ParentHash: "hash106"}},
 		{BlockNumber: big.NewInt(106), Data: common.Block{Hash: "hash106", ParentHash: "hash105"}},
@@ -664,7 +664,7 @@ func TestHandleReorgWithLatestBlockReorged(t *testing.T) {
 		{BlockNumber: big.NewInt(100), Data: common.Block{Hash: "hash100", ParentHash: "hash99"}},
 	})
 
-	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(108), big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101)}).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(108), big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(101), Data: common.BlockData{}},
 		{BlockNumber: big.NewInt(102), Data: common.BlockData{}},
 		{BlockNumber: big.NewInt(103), Data: common.BlockData{}},
@@ -680,7 +680,7 @@ func TestHandleReorgWithLatestBlockReorged(t *testing.T) {
 	})).Return([]common.BlockData{}, nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(99))
+	mostRecentBlockChecked, err := handler.RunFromBlock(context.Background(), big.NewInt(99))
 
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(109), mostRecentBlockChecked)
@@ -717,7 +717,7 @@ func TestHandleReorgWithManyBlocks(t *testing.T) {
 		{Number: big.NewInt(100), Hash: "hash100", ParentHash: "hash99"},
 	}, nil)
 
-	mockRPC.EXPECT().GetBlocks([]*big.Int{big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101), big.NewInt(100)}).Return([]rpc.GetBlocksResult{
+	mockRPC.EXPECT().GetBlocks(context.Background(), []*big.Int{big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103), big.NewInt(102), big.NewInt(101), big.NewInt(100)}).Return([]rpc.GetBlocksResult{
 		{BlockNumber: big.NewInt(107), Data: common.Block{Hash: "hash107", ParentHash: "hash106"}},
 		{BlockNumber: big.NewInt(106), Data: common.Block{Hash: "hash106", ParentHash: "hash105"}},
 		{BlockNumber: big.NewInt(105), Data: common.Block{Hash: "hash105", ParentHash: "hash104"}},
@@ -728,7 +728,7 @@ func TestHandleReorgWithManyBlocks(t *testing.T) {
 		{BlockNumber: big.NewInt(100), Data: common.Block{Hash: "hash100", ParentHash: "hash99"}},
 	})
 
-	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103)}).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(107), big.NewInt(106), big.NewInt(105), big.NewInt(104), big.NewInt(103)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(107), Data: common.BlockData{}},
 		{BlockNumber: big.NewInt(106), Data: common.BlockData{}},
 		{BlockNumber: big.NewInt(105), Data: common.BlockData{}},
@@ -741,7 +741,7 @@ func TestHandleReorgWithManyBlocks(t *testing.T) {
 	})).Return([]common.BlockData{}, nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(99))
+	mostRecentBlockChecked, err := handler.RunFromBlock(context.Background(), big.NewInt(99))
 
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(109), mostRecentBlockChecked)
@@ -778,7 +778,7 @@ func TestHandleReorgWithDuplicateBlocks(t *testing.T) {
 	}, nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(6268162))
+	mostRecentBlockChecked, err := handler.RunFromBlock(context.Background(), big.NewInt(6268162))
 
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(6268172), mostRecentBlockChecked)
@@ -815,7 +815,7 @@ func TestNothingIsDoneForCorrectBlocks(t *testing.T) {
 	}, nil)
 
 	handler := NewReorgHandler(mockRPC, mockStorage)
-	mostRecentBlockChecked, err := handler.RunFromBlock(big.NewInt(6268163))
+	mostRecentBlockChecked, err := handler.RunFromBlock(context.Background(), big.NewInt(6268163))
 
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(6268173), mostRecentBlockChecked)

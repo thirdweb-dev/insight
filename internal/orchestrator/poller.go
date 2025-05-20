@@ -103,7 +103,7 @@ func (p *Poller) Start(ctx context.Context) {
 						return
 					}
 					blockRangeMutex.Lock()
-					blockNumbers, err := p.getNextBlockRange()
+					blockNumbers, err := p.getNextBlockRange(pollCtx)
 					blockRangeMutex.Unlock()
 
 					if pollCtx.Err() != nil {
@@ -117,7 +117,7 @@ func (p *Poller) Start(ctx context.Context) {
 						continue
 					}
 
-					lastPolledBlock := p.Poll(blockNumbers)
+					lastPolledBlock := p.Poll(pollCtx, blockNumbers)
 					if p.reachedPollLimit(lastPolledBlock) {
 						log.Debug().Msg("Reached poll limit, exiting poller")
 						cancel()
@@ -146,7 +146,7 @@ func (p *Poller) Start(ctx context.Context) {
 	}
 }
 
-func (p *Poller) Poll(blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
+func (p *Poller) Poll(ctx context.Context, blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
 	if len(blockNumbers) < 1 {
 		log.Debug().Msg("No blocks to poll, skipping")
 		return
@@ -161,7 +161,7 @@ func (p *Poller) Poll(blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
 	metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
 
 	worker := worker.NewWorker(p.rpc)
-	results := worker.Run(blockNumbers)
+	results := worker.Run(ctx, blockNumbers)
 	p.handleWorkerResults(results)
 	return endBlock
 }
@@ -170,8 +170,8 @@ func (p *Poller) reachedPollLimit(blockNumber *big.Int) bool {
 	return blockNumber == nil || (p.pollUntilBlock.Sign() > 0 && blockNumber.Cmp(p.pollUntilBlock) >= 0)
 }
 
-func (p *Poller) getNextBlockRange() ([]*big.Int, error) {
-	latestBlock, err := p.rpc.GetLatestBlockNumber()
+func (p *Poller) getNextBlockRange(ctx context.Context) ([]*big.Int, error) {
+	latestBlock, err := p.rpc.GetLatestBlockNumber(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -254,7 +254,7 @@ func TestGetSequentialBlockDataToCommit(t *testing.T) {
 		BlockNumbers: []*big.Int{big.NewInt(101), big.NewInt(102), big.NewInt(103)},
 	}).Return(blockData, nil)
 
-	result, err := committer.getSequentialBlockDataToCommit()
+	result, err := committer.getSequentialBlockDataToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -290,7 +290,7 @@ func TestGetSequentialBlockDataToCommitWithDuplicateBlocks(t *testing.T) {
 		BlockNumbers: []*big.Int{big.NewInt(101), big.NewInt(102), big.NewInt(103)},
 	}).Return(blockData, nil)
 
-	result, err := committer.getSequentialBlockDataToCommit()
+	result, err := committer.getSequentialBlockDataToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -320,7 +320,7 @@ func TestCommit(t *testing.T) {
 	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
 	mockStagingStorage.EXPECT().DeleteStagingData(blockData).Return(nil)
 
-	err := committer.commit(blockData)
+	err := committer.commit(context.Background(), blockData)
 
 	assert.NoError(t, err)
 }
@@ -343,7 +343,7 @@ func TestHandleGap(t *testing.T) {
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{
 		Blocks: 5,
 	})
-	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(100), big.NewInt(101), big.NewInt(102), big.NewInt(103), big.NewInt(104)}).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(100), big.NewInt(101), big.NewInt(102), big.NewInt(103), big.NewInt(104)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(100), Data: common.BlockData{Block: common.Block{Number: big.NewInt(100)}}},
 		{BlockNumber: big.NewInt(101), Data: common.BlockData{Block: common.Block{Number: big.NewInt(101)}}},
 		{BlockNumber: big.NewInt(102), Data: common.BlockData{Block: common.Block{Number: big.NewInt(102)}}},
@@ -352,7 +352,7 @@ func TestHandleGap(t *testing.T) {
 	})
 	mockStagingStorage.EXPECT().InsertStagingData(mock.Anything).Return(nil)
 
-	err := committer.handleGap(expectedStartBlockNumber, actualFirstBlock)
+	err := committer.handleGap(context.Background(), expectedStartBlockNumber, actualFirstBlock)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "first block number (105) in commit batch does not match expected (100)")
@@ -463,7 +463,7 @@ func TestHandleMissingStagingData(t *testing.T) {
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{
 		Blocks: 100,
 	})
-	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)}).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(0), Data: common.BlockData{Block: common.Block{Number: big.NewInt(0)}}},
 		{BlockNumber: big.NewInt(1), Data: common.BlockData{Block: common.Block{Number: big.NewInt(1)}}},
 		{BlockNumber: big.NewInt(2), Data: common.BlockData{Block: common.Block{Number: big.NewInt(2)}}},
@@ -482,7 +482,7 @@ func TestHandleMissingStagingData(t *testing.T) {
 		BlockNumbers: []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)},
 	}).Return(blockData, nil)
 
-	result, err := committer.getSequentialBlockDataToCommit()
+	result, err := committer.getSequentialBlockDataToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Nil(t, result)
@@ -509,7 +509,7 @@ func TestHandleMissingStagingDataIsPolledWithCorrectBatchSize(t *testing.T) {
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{
 		Blocks: 3,
 	})
-	mockRPC.EXPECT().GetFullBlocks([]*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2)}).Return([]rpc.GetFullBlockResult{
+	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(0), Data: common.BlockData{Block: common.Block{Number: big.NewInt(0)}}},
 		{BlockNumber: big.NewInt(1), Data: common.BlockData{Block: common.Block{Number: big.NewInt(1)}}},
 		{BlockNumber: big.NewInt(2), Data: common.BlockData{Block: common.Block{Number: big.NewInt(2)}}},
@@ -526,7 +526,7 @@ func TestHandleMissingStagingDataIsPolledWithCorrectBatchSize(t *testing.T) {
 		BlockNumbers: []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(4)},
 	}).Return(blockData, nil)
 
-	result, err := committer.getSequentialBlockDataToCommit()
+	result, err := committer.getSequentialBlockDataToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Nil(t, result)

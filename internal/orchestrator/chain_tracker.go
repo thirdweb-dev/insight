@@ -35,7 +35,7 @@ func (ct *ChainTracker) Start(ctx context.Context) {
 			log.Info().Msg("Chain tracker shutting down")
 			return
 		case <-ticker.C:
-			latestBlockNumber, err := ct.rpc.GetLatestBlockNumber()
+			latestBlockNumber, err := ct.rpc.GetLatestBlockNumber(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting latest block number")
 				continue

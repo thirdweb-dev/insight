@@ -83,7 +83,7 @@ func (rh *ReorgHandler) Start(ctx context.Context) {
 			rh.publisher.Close()
 			return
 		case <-ticker.C:
-			mostRecentBlockChecked, err := rh.RunFromBlock(rh.lastCheckedBlock)
+			mostRecentBlockChecked, err := rh.RunFromBlock(ctx, rh.lastCheckedBlock)
 			if err != nil {
 				log.Error().Err(err).Msgf("Error during reorg handling: %s", err.Error())
 				continue
@@ -99,7 +99,7 @@ func (rh *ReorgHandler) Start(ctx context.Context) {
 	}
 }
 
-func (rh *ReorgHandler) RunFromBlock(latestCheckedBlock *big.Int) (lastCheckedBlock *big.Int, err error) {
+func (rh *ReorgHandler) RunFromBlock(ctx context.Context, latestCheckedBlock *big.Int) (lastCheckedBlock *big.Int, err error) {
 	fromBlock, toBlock, err := rh.getReorgCheckRange(latestCheckedBlock)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (rh *ReorgHandler) RunFromBlock(latestCheckedBlock *big.Int) (lastCheckedBl
 
 	metrics.ReorgCounter.Inc()
 	reorgedBlockNumbers := make([]*big.Int, 0)
-	err = rh.findReorgedBlockNumbers(blockHeaders[firstMismatchIndex:], &reorgedBlockNumbers)
+	err = rh.findReorgedBlockNumbers(ctx, blockHeaders[firstMismatchIndex:], &reorgedBlockNumbers)
 	if err != nil {
 		return nil, fmt.Errorf("error finding reorged block numbers: %w", err)
 	}
@@ -140,7 +140,7 @@ func (rh *ReorgHandler) RunFromBlock(latestCheckedBlock *big.Int) (lastCheckedBl
 		return mostRecentBlockHeader.Number, nil
 	}
 
-	err = rh.handleReorg(reorgedBlockNumbers)
+	err = rh.handleReorg(ctx, reorgedBlockNumbers)
 	if err != nil {
 		return nil, fmt.Errorf("error while handling reorg: %w", err)
 	}
@@ -190,8 +190,8 @@ func findIndexOfFirstHashMismatch(blockHeadersDescending []common.BlockHeader) (
 	return -1, nil
 }
 
-func (rh *ReorgHandler) findReorgedBlockNumbers(blockHeadersDescending []common.BlockHeader, reorgedBlockNumbers *[]*big.Int) error {
-	newBlocksByNumber, err := rh.getNewBlocksByNumber(blockHeadersDescending)
+func (rh *ReorgHandler) findReorgedBlockNumbers(ctx context.Context, blockHeadersDescending []common.BlockHeader, reorgedBlockNumbers *[]*big.Int) error {
+	newBlocksByNumber, err := rh.getNewBlocksByNumber(ctx, blockHeadersDescending)
 	if err != nil {
 		return err
 	}
@@ -219,12 +219,12 @@ func (rh *ReorgHandler) findReorgedBlockNumbers(blockHeadersDescending []common.
 		sort.Slice(nextHeadersBatch, func(i, j int) bool {
 			return nextHeadersBatch[i].Number.Cmp(nextHeadersBatch[j].Number) > 0
 		})
-		return rh.findReorgedBlockNumbers(nextHeadersBatch, reorgedBlockNumbers)
+		return rh.findReorgedBlockNumbers(ctx, nextHeadersBatch, reorgedBlockNumbers)
 	}
 	return nil
 }
 
-func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) (map[string]common.Block, error) {
+func (rh *ReorgHandler) getNewBlocksByNumber(ctx context.Context, blockHeaders []common.BlockHeader) (map[string]common.Block, error) {
 	blockNumbers := make([]*big.Int, 0, len(blockHeaders))
 	for _, header := range blockHeaders {
 		blockNumbers = append(blockNumbers, header.Number)
@@ -241,7 +241,7 @@ func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) 
 		wg.Add(1)
 		go func(chunk []*big.Int) {
 			defer wg.Done()
-			resultsCh <- rh.rpc.GetBlocks(chunk)
+			resultsCh <- rh.rpc.GetBlocks(ctx, chunk)
 			if config.Cfg.RPC.Blocks.BatchDelay > 0 {
 				time.Sleep(time.Duration(config.Cfg.RPC.Blocks.BatchDelay) * time.Millisecond)
 			}
@@ -264,9 +264,9 @@ func (rh *ReorgHandler) getNewBlocksByNumber(blockHeaders []common.BlockHeader) 
 	return fetchedBlocksByNumber, nil
 }
 
-func (rh *ReorgHandler) handleReorg(reorgedBlockNumbers []*big.Int) error {
+func (rh *ReorgHandler) handleReorg(ctx context.Context, reorgedBlockNumbers []*big.Int) error {
 	log.Debug().Msgf("Handling reorg for blocks %v", reorgedBlockNumbers)
-	results := rh.worker.Run(reorgedBlockNumbers)
+	results := rh.worker.Run(ctx, reorgedBlockNumbers)
 	data := make([]common.BlockData, 0, len(results))
 	blocksToDelete := make([]*big.Int, 0, len(results))
 	for _, result := range results {

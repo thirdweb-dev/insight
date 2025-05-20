@@ -63,7 +63,7 @@ func (c *Committer) Start(ctx context.Context) {
 			return
 		default:
 			time.Sleep(interval)
-			blockDataToCommit, err := c.getSequentialBlockDataToCommit()
+			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting block data to commit")
 				continue
@@ -72,7 +72,7 @@ func (c *Committer) Start(ctx context.Context) {
 				log.Debug().Msg("No block data to commit")
 				continue
 			}
-			if err := c.commit(blockDataToCommit); err != nil {
+			if err := c.commit(ctx, blockDataToCommit); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
 		}
@@ -108,7 +108,7 @@ func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 	return blockNumbers, nil
 }
 
-func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error) {
+func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]common.BlockData, error) {
 	blocksToCommit, err := c.getBlockNumbersToCommit()
 	if err != nil {
 		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
@@ -123,7 +123,7 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	}
 	if len(blocksData) == 0 {
 		log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blocksToCommit[0].Int64(), blocksToCommit[len(blocksToCommit)-1].Int64())
-		c.handleMissingStagingData(blocksToCommit)
+		c.handleMissingStagingData(ctx, blocksToCommit)
 		return nil, nil
 	}
 
@@ -133,7 +133,7 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	})
 
 	if blocksData[0].Block.Number.Cmp(blocksToCommit[0]) != 0 {
-		return nil, c.handleGap(blocksToCommit[0], blocksData[0].Block)
+		return nil, c.handleGap(ctx, blocksToCommit[0], blocksData[0].Block)
 	}
 
 	var sequentialBlockData []common.BlockData
@@ -161,7 +161,7 @@ func (c *Committer) getSequentialBlockDataToCommit() ([]common.BlockData, error)
 	return sequentialBlockData, nil
 }
 
-func (c *Committer) commit(blockData []common.BlockData) error {
+func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) error {
 	blockNumbers := make([]*big.Int, len(blockData))
 	for i, block := range blockData {
 		blockNumbers[i] = block.Block.Number
@@ -199,7 +199,7 @@ func (c *Committer) commit(blockData []common.BlockData) error {
 	return nil
 }
 
-func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBlock common.Block) error {
+func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big.Int, actualFirstBlock common.Block) error {
 	// increment the gap counter in prometheus
 	metrics.GapCounter.Inc()
 	// record the first missed block number in prometheus
@@ -220,11 +220,11 @@ func (c *Committer) handleGap(expectedStartBlockNumber *big.Int, actualFirstBloc
 	}
 
 	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
-	poller.Poll(missingBlockNumbers)
+	poller.Poll(ctx, missingBlockNumbers)
 	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
 }
 
-func (c *Committer) handleMissingStagingData(blocksToCommit []*big.Int) {
+func (c *Committer) handleMissingStagingData(ctx context.Context, blocksToCommit []*big.Int) {
 	// Checks if there are any blocks in staging after the current range end
 	lastStagedBlockNumber, err := c.storage.StagingStorage.GetLastStagedBlockNumber(c.rpc.GetChainID(), blocksToCommit[len(blocksToCommit)-1], big.NewInt(0))
 	if err != nil {
@@ -242,6 +242,6 @@ func (c *Committer) handleMissingStagingData(blocksToCommit []*big.Int) {
 	if len(blocksToCommit) > int(poller.blocksPerPoll) {
 		blocksToPoll = blocksToCommit[:int(poller.blocksPerPoll)]
 	}
-	poller.Poll(blocksToPoll)
+	poller.Poll(ctx, blocksToPoll)
 	log.Debug().Msgf("Polled %d blocks due to committer detecting them as missing. Range: %s - %s", len(blocksToPoll), blocksToPoll[0].String(), blocksToPoll[len(blocksToPoll)-1].String())
 }
