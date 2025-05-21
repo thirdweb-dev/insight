@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -76,7 +77,7 @@ func Search(c *gin.Context) {
 		return
 	}
 
-	result, err := executeSearch(mainStorage, chainId, searchInput)
+	result, err := executeSearch(c.Request.Context(), mainStorage, chainId, searchInput)
 	if err != nil {
 		log.Error().Err(err).Msg("Error executing search")
 		api.InternalErrorHandler(c)
@@ -124,7 +125,7 @@ func isValidHashWithLength(input string, length int) bool {
 	return false
 }
 
-func executeSearch(storage storage.IMainStorage, chainId *big.Int, input SearchInput) (SearchResultModel, error) {
+func executeSearch(ctx context.Context, storage storage.IMainStorage, chainId *big.Int, input SearchInput) (SearchResultModel, error) {
 	switch {
 	case input.BlockNumber != nil:
 		block, err := searchByBlockNumber(storage, chainId, input.BlockNumber)
@@ -134,7 +135,7 @@ func executeSearch(storage storage.IMainStorage, chainId *big.Int, input SearchI
 		return searchByHash(storage, chainId, input.Hash)
 
 	case input.Address != "":
-		return searchByAddress(storage, chainId, input.Address)
+		return searchByAddress(ctx, storage, chainId, input.Address)
 
 	case input.FunctionSignature != "":
 		transactions, err := searchByFunctionSelectorOptimistically(storage, chainId, input.FunctionSignature)
@@ -329,9 +330,9 @@ func searchByHash(mainStorage storage.IMainStorage, chainId *big.Int, hash strin
 	}
 }
 
-func searchByAddress(mainStorage storage.IMainStorage, chainId *big.Int, address string) (SearchResultModel, error) {
+func searchByAddress(ctx context.Context, mainStorage storage.IMainStorage, chainId *big.Int, address string) (SearchResultModel, error) {
 	searchResult := SearchResultModel{Type: SearchResultTypeAddress}
-	contractCode, err := checkIfContractHasCode(chainId, address)
+	contractCode, err := checkIfContractHasCode(ctx, chainId, address)
 	if err != nil {
 		return searchResult, err
 	}
@@ -437,14 +438,14 @@ const (
 	ContractCodeDoesNotExist
 )
 
-func checkIfContractHasCode(chainId *big.Int, address string) (ContractCodeState, error) {
+func checkIfContractHasCode(ctx context.Context, chainId *big.Int, address string) (ContractCodeState, error) {
 	if config.Cfg.API.Thirdweb.ClientId != "" {
 		rpcUrl := fmt.Sprintf("https://%s.rpc.thirdweb.com/%s", chainId.String(), config.Cfg.API.Thirdweb.ClientId)
 		r, err := rpc.InitializeSimpleRPCWithUrl(rpcUrl)
 		if err != nil {
 			return ContractCodeUnknown, err
 		}
-		hasCode, err := r.HasCode(address)
+		hasCode, err := r.HasCode(ctx, address)
 		if err != nil {
 			return ContractCodeUnknown, err
 		}

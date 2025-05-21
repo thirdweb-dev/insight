@@ -5,9 +5,11 @@
 package mocks
 
 import (
+	context "context"
 	big "math/big"
 
 	mock "github.com/stretchr/testify/mock"
+
 	rpc "github.com/thirdweb-dev/indexer/internal/rpc"
 )
 
@@ -56,17 +58,17 @@ func (_c *MockIRPCClient_Close_Call) RunAndReturn(run func()) *MockIRPCClient_Cl
 	return _c
 }
 
-// GetBlocks provides a mock function with given fields: blockNumbers
-func (_m *MockIRPCClient) GetBlocks(blockNumbers []*big.Int) []rpc.GetBlocksResult {
-	ret := _m.Called(blockNumbers)
+// GetBlocks provides a mock function with given fields: ctx, blockNumbers
+func (_m *MockIRPCClient) GetBlocks(ctx context.Context, blockNumbers []*big.Int) []rpc.GetBlocksResult {
+	ret := _m.Called(ctx, blockNumbers)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBlocks")
 	}
 
 	var r0 []rpc.GetBlocksResult
-	if rf, ok := ret.Get(0).(func([]*big.Int) []rpc.GetBlocksResult); ok {
-		r0 = rf(blockNumbers)
+	if rf, ok := ret.Get(0).(func(context.Context, []*big.Int) []rpc.GetBlocksResult); ok {
+		r0 = rf(ctx, blockNumbers)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]rpc.GetBlocksResult)
@@ -82,14 +84,15 @@ type MockIRPCClient_GetBlocks_Call struct {
 }
 
 // GetBlocks is a helper method to define mock.On call
+//   - ctx context.Context
 //   - blockNumbers []*big.Int
-func (_e *MockIRPCClient_Expecter) GetBlocks(blockNumbers interface{}) *MockIRPCClient_GetBlocks_Call {
-	return &MockIRPCClient_GetBlocks_Call{Call: _e.mock.On("GetBlocks", blockNumbers)}
+func (_e *MockIRPCClient_Expecter) GetBlocks(ctx interface{}, blockNumbers interface{}) *MockIRPCClient_GetBlocks_Call {
+	return &MockIRPCClient_GetBlocks_Call{Call: _e.mock.On("GetBlocks", ctx, blockNumbers)}
 }
 
-func (_c *MockIRPCClient_GetBlocks_Call) Run(run func(blockNumbers []*big.Int)) *MockIRPCClient_GetBlocks_Call {
+func (_c *MockIRPCClient_GetBlocks_Call) Run(run func(ctx context.Context, blockNumbers []*big.Int)) *MockIRPCClient_GetBlocks_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]*big.Int))
+		run(args[0].(context.Context), args[1].([]*big.Int))
 	})
 	return _c
 }
@@ -99,7 +102,7 @@ func (_c *MockIRPCClient_GetBlocks_Call) Return(_a0 []rpc.GetBlocksResult) *Mock
 	return _c
 }
 
-func (_c *MockIRPCClient_GetBlocks_Call) RunAndReturn(run func([]*big.Int) []rpc.GetBlocksResult) *MockIRPCClient_GetBlocks_Call {
+func (_c *MockIRPCClient_GetBlocks_Call) RunAndReturn(run func(context.Context, []*big.Int) []rpc.GetBlocksResult) *MockIRPCClient_GetBlocks_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -196,17 +199,17 @@ func (_c *MockIRPCClient_GetChainID_Call) RunAndReturn(run func() *big.Int) *Moc
 	return _c
 }
 
-// GetFullBlocks provides a mock function with given fields: blockNumbers
-func (_m *MockIRPCClient) GetFullBlocks(blockNumbers []*big.Int) []rpc.GetFullBlockResult {
-	ret := _m.Called(blockNumbers)
+// GetFullBlocks provides a mock function with given fields: ctx, blockNumbers
+func (_m *MockIRPCClient) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) []rpc.GetFullBlockResult {
+	ret := _m.Called(ctx, blockNumbers)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetFullBlocks")
 	}
 
 	var r0 []rpc.GetFullBlockResult
-	if rf, ok := ret.Get(0).(func([]*big.Int) []rpc.GetFullBlockResult); ok {
-		r0 = rf(blockNumbers)
+	if rf, ok := ret.Get(0).(func(context.Context, []*big.Int) []rpc.GetFullBlockResult); ok {
+		r0 = rf(ctx, blockNumbers)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]rpc.GetFullBlockResult)
@@ -222,14 +225,15 @@ type MockIRPCClient_GetFullBlocks_Call struct {
 }
 
 // GetFullBlocks is a helper method to define mock.On call
+//   - ctx context.Context
 //   - blockNumbers []*big.Int
-func (_e *MockIRPCClient_Expecter) GetFullBlocks(blockNumbers interface{}) *MockIRPCClient_GetFullBlocks_Call {
-	return &MockIRPCClient_GetFullBlocks_Call{Call: _e.mock.On("GetFullBlocks", blockNumbers)}
+func (_e *MockIRPCClient_Expecter) GetFullBlocks(ctx interface{}, blockNumbers interface{}) *MockIRPCClient_GetFullBlocks_Call {
+	return &MockIRPCClient_GetFullBlocks_Call{Call: _e.mock.On("GetFullBlocks", ctx, blockNumbers)}
 }
 
-func (_c *MockIRPCClient_GetFullBlocks_Call) Run(run func(blockNumbers []*big.Int)) *MockIRPCClient_GetFullBlocks_Call {
+func (_c *MockIRPCClient_GetFullBlocks_Call) Run(run func(ctx context.Context, blockNumbers []*big.Int)) *MockIRPCClient_GetFullBlocks_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]*big.Int))
+		run(args[0].(context.Context), args[1].([]*big.Int))
 	})
 	return _c
 }
@@ -239,14 +243,14 @@ func (_c *MockIRPCClient_GetFullBlocks_Call) Return(_a0 []rpc.GetFullBlockResult
 	return _c
 }
 
-func (_c *MockIRPCClient_GetFullBlocks_Call) RunAndReturn(run func([]*big.Int) []rpc.GetFullBlockResult) *MockIRPCClient_GetFullBlocks_Call {
+func (_c *MockIRPCClient_GetFullBlocks_Call) RunAndReturn(run func(context.Context, []*big.Int) []rpc.GetFullBlockResult) *MockIRPCClient_GetFullBlocks_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// GetLatestBlockNumber provides a mock function with no fields
-func (_m *MockIRPCClient) GetLatestBlockNumber() (*big.Int, error) {
-	ret := _m.Called()
+// GetLatestBlockNumber provides a mock function with given fields: ctx
+func (_m *MockIRPCClient) GetLatestBlockNumber(ctx context.Context) (*big.Int, error) {
+	ret := _m.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLatestBlockNumber")
@@ -254,19 +258,19 @@ func (_m *MockIRPCClient) GetLatestBlockNumber() (*big.Int, error) {
 
 	var r0 *big.Int
 	var r1 error
-	if rf, ok := ret.Get(0).(func() (*big.Int, error)); ok {
-		return rf()
+	if rf, ok := ret.Get(0).(func(context.Context) (*big.Int, error)); ok {
+		return rf(ctx)
 	}
-	if rf, ok := ret.Get(0).(func() *big.Int); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(context.Context) *big.Int); ok {
+		r0 = rf(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*big.Int)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -280,13 +284,14 @@ type MockIRPCClient_GetLatestBlockNumber_Call struct {
 }
 
 // GetLatestBlockNumber is a helper method to define mock.On call
-func (_e *MockIRPCClient_Expecter) GetLatestBlockNumber() *MockIRPCClient_GetLatestBlockNumber_Call {
-	return &MockIRPCClient_GetLatestBlockNumber_Call{Call: _e.mock.On("GetLatestBlockNumber")}
+//   - ctx context.Context
+func (_e *MockIRPCClient_Expecter) GetLatestBlockNumber(ctx interface{}) *MockIRPCClient_GetLatestBlockNumber_Call {
+	return &MockIRPCClient_GetLatestBlockNumber_Call{Call: _e.mock.On("GetLatestBlockNumber", ctx)}
 }
 
-func (_c *MockIRPCClient_GetLatestBlockNumber_Call) Run(run func()) *MockIRPCClient_GetLatestBlockNumber_Call {
+func (_c *MockIRPCClient_GetLatestBlockNumber_Call) Run(run func(ctx context.Context)) *MockIRPCClient_GetLatestBlockNumber_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(context.Context))
 	})
 	return _c
 }
@@ -296,22 +301,22 @@ func (_c *MockIRPCClient_GetLatestBlockNumber_Call) Return(_a0 *big.Int, _a1 err
 	return _c
 }
 
-func (_c *MockIRPCClient_GetLatestBlockNumber_Call) RunAndReturn(run func() (*big.Int, error)) *MockIRPCClient_GetLatestBlockNumber_Call {
+func (_c *MockIRPCClient_GetLatestBlockNumber_Call) RunAndReturn(run func(context.Context) (*big.Int, error)) *MockIRPCClient_GetLatestBlockNumber_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// GetTransactions provides a mock function with given fields: txHashes
-func (_m *MockIRPCClient) GetTransactions(txHashes []string) []rpc.GetTransactionsResult {
-	ret := _m.Called(txHashes)
+// GetTransactions provides a mock function with given fields: ctx, txHashes
+func (_m *MockIRPCClient) GetTransactions(ctx context.Context, txHashes []string) []rpc.GetTransactionsResult {
+	ret := _m.Called(ctx, txHashes)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTransactions")
 	}
 
 	var r0 []rpc.GetTransactionsResult
-	if rf, ok := ret.Get(0).(func([]string) []rpc.GetTransactionsResult); ok {
-		r0 = rf(txHashes)
+	if rf, ok := ret.Get(0).(func(context.Context, []string) []rpc.GetTransactionsResult); ok {
+		r0 = rf(ctx, txHashes)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]rpc.GetTransactionsResult)
@@ -327,14 +332,15 @@ type MockIRPCClient_GetTransactions_Call struct {
 }
 
 // GetTransactions is a helper method to define mock.On call
+//   - ctx context.Context
 //   - txHashes []string
-func (_e *MockIRPCClient_Expecter) GetTransactions(txHashes interface{}) *MockIRPCClient_GetTransactions_Call {
-	return &MockIRPCClient_GetTransactions_Call{Call: _e.mock.On("GetTransactions", txHashes)}
+func (_e *MockIRPCClient_Expecter) GetTransactions(ctx interface{}, txHashes interface{}) *MockIRPCClient_GetTransactions_Call {
+	return &MockIRPCClient_GetTransactions_Call{Call: _e.mock.On("GetTransactions", ctx, txHashes)}
 }
 
-func (_c *MockIRPCClient_GetTransactions_Call) Run(run func(txHashes []string)) *MockIRPCClient_GetTransactions_Call {
+func (_c *MockIRPCClient_GetTransactions_Call) Run(run func(ctx context.Context, txHashes []string)) *MockIRPCClient_GetTransactions_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]string))
+		run(args[0].(context.Context), args[1].([]string))
 	})
 	return _c
 }
@@ -344,7 +350,7 @@ func (_c *MockIRPCClient_GetTransactions_Call) Return(_a0 []rpc.GetTransactionsR
 	return _c
 }
 
-func (_c *MockIRPCClient_GetTransactions_Call) RunAndReturn(run func([]string) []rpc.GetTransactionsResult) *MockIRPCClient_GetTransactions_Call {
+func (_c *MockIRPCClient_GetTransactions_Call) RunAndReturn(run func(context.Context, []string) []rpc.GetTransactionsResult) *MockIRPCClient_GetTransactions_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -394,9 +400,9 @@ func (_c *MockIRPCClient_GetURL_Call) RunAndReturn(run func() string) *MockIRPCC
 	return _c
 }
 
-// HasCode provides a mock function with given fields: address
-func (_m *MockIRPCClient) HasCode(address string) (bool, error) {
-	ret := _m.Called(address)
+// HasCode provides a mock function with given fields: ctx, address
+func (_m *MockIRPCClient) HasCode(ctx context.Context, address string) (bool, error) {
+	ret := _m.Called(ctx, address)
 
 	if len(ret) == 0 {
 		panic("no return value specified for HasCode")
@@ -404,17 +410,17 @@ func (_m *MockIRPCClient) HasCode(address string) (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string) (bool, error)); ok {
-		return rf(address)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (bool, error)); ok {
+		return rf(ctx, address)
 	}
-	if rf, ok := ret.Get(0).(func(string) bool); ok {
-		r0 = rf(address)
+	if rf, ok := ret.Get(0).(func(context.Context, string) bool); ok {
+		r0 = rf(ctx, address)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(address)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, address)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -428,14 +434,15 @@ type MockIRPCClient_HasCode_Call struct {
 }
 
 // HasCode is a helper method to define mock.On call
+//   - ctx context.Context
 //   - address string
-func (_e *MockIRPCClient_Expecter) HasCode(address interface{}) *MockIRPCClient_HasCode_Call {
-	return &MockIRPCClient_HasCode_Call{Call: _e.mock.On("HasCode", address)}
+func (_e *MockIRPCClient_Expecter) HasCode(ctx interface{}, address interface{}) *MockIRPCClient_HasCode_Call {
+	return &MockIRPCClient_HasCode_Call{Call: _e.mock.On("HasCode", ctx, address)}
 }
 
-func (_c *MockIRPCClient_HasCode_Call) Run(run func(address string)) *MockIRPCClient_HasCode_Call {
+func (_c *MockIRPCClient_HasCode_Call) Run(run func(ctx context.Context, address string)) *MockIRPCClient_HasCode_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		run(args[0].(context.Context), args[1].(string))
 	})
 	return _c
 }
@@ -445,7 +452,7 @@ func (_c *MockIRPCClient_HasCode_Call) Return(_a0 bool, _a1 error) *MockIRPCClie
 	return _c
 }
 
-func (_c *MockIRPCClient_HasCode_Call) RunAndReturn(run func(string) (bool, error)) *MockIRPCClient_HasCode_Call {
+func (_c *MockIRPCClient_HasCode_Call) RunAndReturn(run func(context.Context, string) (bool, error)) *MockIRPCClient_HasCode_Call {
 	_c.Call.Return(run)
 	return _c
 }

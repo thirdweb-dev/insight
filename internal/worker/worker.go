@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"math/big"
 	"sort"
 	"sync"
@@ -23,13 +24,19 @@ func NewWorker(rpc rpc.IRPCClient) *Worker {
 	}
 }
 
-func (w *Worker) processChunkWithRetry(chunk []*big.Int, resultsCh chan<- []rpc.GetFullBlockResult) {
+func (w *Worker) processChunkWithRetry(ctx context.Context, chunk []*big.Int, resultsCh chan<- []rpc.GetFullBlockResult) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	defer func() {
 		time.Sleep(time.Duration(config.Cfg.RPC.Blocks.BatchDelay) * time.Millisecond)
 	}()
 
 	// Try with current chunk size
-	results := w.rpc.GetFullBlocks(chunk)
+	results := w.rpc.GetFullBlocks(ctx, chunk)
 
 	if len(chunk) == 1 {
 		// chunk size 1 is the minimum, so we return whatever we get
@@ -61,7 +68,7 @@ func (w *Worker) processChunkWithRetry(chunk []*big.Int, resultsCh chan<- []rpc.
 
 	// can't split any further, so try one last time
 	if len(failedBlocks) == 1 {
-		w.processChunkWithRetry(failedBlocks, resultsCh)
+		w.processChunkWithRetry(ctx, failedBlocks, resultsCh)
 		return
 	}
 
@@ -77,18 +84,18 @@ func (w *Worker) processChunkWithRetry(chunk []*big.Int, resultsCh chan<- []rpc.
 
 	go func() {
 		defer wg.Done()
-		w.processChunkWithRetry(leftChunk, resultsCh)
+		w.processChunkWithRetry(ctx, leftChunk, resultsCh)
 	}()
 
 	go func() {
 		defer wg.Done()
-		w.processChunkWithRetry(rightChunk, resultsCh)
+		w.processChunkWithRetry(ctx, rightChunk, resultsCh)
 	}()
 
 	wg.Wait()
 }
 
-func (w *Worker) Run(blockNumbers []*big.Int) []rpc.GetFullBlockResult {
+func (w *Worker) Run(ctx context.Context, blockNumbers []*big.Int) []rpc.GetFullBlockResult {
 	blockCount := len(blockNumbers)
 	chunks := common.SliceToChunks(blockNumbers, w.rpc.GetBlocksPerRequest().Blocks)
 
@@ -98,10 +105,18 @@ func (w *Worker) Run(blockNumbers []*big.Int) []rpc.GetFullBlockResult {
 	log.Debug().Msgf("Worker Processing %d blocks in %d chunks of max %d blocks", blockCount, len(chunks), w.rpc.GetBlocksPerRequest().Blocks)
 
 	for _, chunk := range chunks {
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("Context canceled, stopping Worker")
+			return nil
+		default:
+			// continue processing
+		}
+
 		wg.Add(1)
 		go func(chunk []*big.Int) {
 			defer wg.Done()
-			w.processChunkWithRetry(chunk, resultsCh)
+			w.processChunkWithRetry(ctx, chunk, resultsCh)
 		}(chunk)
 	}
 

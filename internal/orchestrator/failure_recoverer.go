@@ -75,7 +75,7 @@ func (fr *FailureRecoverer) Start(ctx context.Context) {
 			// Trigger worker for recovery
 			log.Debug().Msgf("Triggering Failure Recoverer for blocks: %v", blocksToTrigger)
 			worker := worker.NewWorker(fr.rpc)
-			results := worker.Run(blocksToTrigger)
+			results := worker.Run(ctx, blocksToTrigger)
 			fr.handleWorkerResults(blockFailures, results)
 
 			// Track recovery activity

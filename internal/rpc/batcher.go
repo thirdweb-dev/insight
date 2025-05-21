@@ -16,9 +16,9 @@ type RPCFetchBatchResult[K any, T any] struct {
 	Result T
 }
 
-func RPCFetchInBatches[K any, T any](rpc *Client, keys []K, batchSize int, batchDelay int, method string, argsFunc func(K) []interface{}) []RPCFetchBatchResult[K, T] {
+func RPCFetchInBatches[K any, T any](rpc *Client, ctx context.Context, keys []K, batchSize int, batchDelay int, method string, argsFunc func(K) []interface{}) []RPCFetchBatchResult[K, T] {
 	if len(keys) <= batchSize {
-		return RPCFetchSingleBatch[K, T](rpc, keys, method, argsFunc)
+		return RPCFetchSingleBatch[K, T](rpc, ctx, keys, method, argsFunc)
 	}
 	chunks := common.SliceToChunks[K](keys, batchSize)
 
@@ -31,7 +31,7 @@ func RPCFetchInBatches[K any, T any](rpc *Client, keys []K, batchSize int, batch
 		wg.Add(1)
 		go func(chunk []K) {
 			defer wg.Done()
-			resultsCh <- RPCFetchSingleBatch[K, T](rpc, chunk, method, argsFunc)
+			resultsCh <- RPCFetchSingleBatch[K, T](rpc, ctx, chunk, method, argsFunc)
 			if batchDelay > 0 {
 				time.Sleep(time.Duration(batchDelay) * time.Millisecond)
 			}
@@ -50,7 +50,7 @@ func RPCFetchInBatches[K any, T any](rpc *Client, keys []K, batchSize int, batch
 	return results
 }
 
-func RPCFetchSingleBatch[K any, T any](rpc *Client, keys []K, method string, argsFunc func(K) []interface{}) []RPCFetchBatchResult[K, T] {
+func RPCFetchSingleBatch[K any, T any](rpc *Client, ctx context.Context, keys []K, method string, argsFunc func(K) []interface{}) []RPCFetchBatchResult[K, T] {
 	batch := make([]gethRpc.BatchElem, len(keys))
 	results := make([]RPCFetchBatchResult[K, T], len(keys))
 
@@ -63,7 +63,7 @@ func RPCFetchSingleBatch[K any, T any](rpc *Client, keys []K, method string, arg
 		}
 	}
 
-	err := rpc.RPCClient.BatchCallContext(context.Background(), batch)
+	err := rpc.RPCClient.BatchCallContext(ctx, batch)
 	if err != nil {
 		for i := range results {
 			results[i].Error = err
