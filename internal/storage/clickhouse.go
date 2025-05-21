@@ -32,6 +32,7 @@ type InsertOptions struct {
 var DEFAULT_MAX_ROWS_PER_INSERT = 100000
 var ZERO_BYTES_66 = strings.Repeat("\x00", 66)
 var ZERO_BYTES_10 = strings.Repeat("\x00", 10)
+var ZERO_BYTES_42 = strings.Repeat("\x00", 42)
 
 var defaultBlockFields = []string{
 	"chain_id", "block_number", "hash", "parent_hash", "block_timestamp", "nonce",
@@ -748,6 +749,9 @@ func scanTransaction(rows driver.Rows) (common.Transaction, error) {
 	}
 	if tx.FunctionSelector == ZERO_BYTES_10 {
 		tx.FunctionSelector = ""
+	}
+	if tx.ToAddress == ZERO_BYTES_42 {
+		tx.ToAddress = ""
 	}
 	return tx, nil
 }

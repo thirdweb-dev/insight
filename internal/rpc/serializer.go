@@ -167,21 +167,15 @@ func serializeTransactions(chainId *big.Int, transactions []interface{}, blockTi
 
 func serializeTransaction(chainId *big.Int, tx map[string]interface{}, blockTimestamp time.Time, receipt *common.RawReceipt) common.Transaction {
 	return common.Transaction{
-		ChainId:          chainId,
-		Hash:             interfaceToString(tx["hash"]),
-		Nonce:            hexToUint64(tx["nonce"]),
-		BlockHash:        interfaceToString(tx["blockHash"]),
-		BlockNumber:      hexToBigInt(tx["blockNumber"]),
-		BlockTimestamp:   blockTimestamp,
-		TransactionIndex: hexToUint64(tx["transactionIndex"]),
-		FromAddress:      interfaceToString(tx["from"]),
-		ToAddress: func() string {
-			to := interfaceToString(tx["to"])
-			if to != "" {
-				return to
-			}
-			return "0x0000000000000000000000000000000000000000"
-		}(),
+		ChainId:              chainId,
+		Hash:                 interfaceToString(tx["hash"]),
+		Nonce:                hexToUint64(tx["nonce"]),
+		BlockHash:            interfaceToString(tx["blockHash"]),
+		BlockNumber:          hexToBigInt(tx["blockNumber"]),
+		BlockTimestamp:       blockTimestamp,
+		TransactionIndex:     hexToUint64(tx["transactionIndex"]),
+		FromAddress:          interfaceToString(tx["from"]),
+		ToAddress:            interfaceToString(tx["to"]),
 		Value:                hexToBigInt(tx["value"]),
 		Gas:                  hexToUint64(tx["gas"]),
 		GasPrice:             hexToBigInt(tx["gasPrice"]),
