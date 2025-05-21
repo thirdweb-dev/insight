@@ -10,6 +10,10 @@ func GetBlockWithTransactionsParams(blockNum *big.Int) []interface{} {
 	return []interface{}{hexutil.EncodeBig(blockNum), true}
 }
 
+func GetTransactionParams(txHash string) []interface{} {
+	return []interface{}{txHash}
+}
+
 func GetBlockWithoutTransactionsParams(blockNum *big.Int) []interface{} {
 	return []interface{}{hexutil.EncodeBig(blockNum), false}
 }

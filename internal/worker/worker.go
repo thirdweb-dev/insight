@@ -24,7 +24,7 @@ func NewWorker(rpc rpc.IRPCClient) *Worker {
 
 func (w *Worker) Run(blockNumbers []*big.Int) []rpc.GetFullBlockResult {
 	blockCount := len(blockNumbers)
-	chunks := common.BigIntSliceToChunks(blockNumbers, w.rpc.GetBlocksPerRequest().Blocks)
+	chunks := common.SliceToChunks(blockNumbers, w.rpc.GetBlocksPerRequest().Blocks)
 
 	var wg sync.WaitGroup
 	resultsCh := make(chan []rpc.GetFullBlockResult, len(chunks))

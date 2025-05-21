@@ -11,7 +11,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
-func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock], logs []RPCFetchBatchResult[common.RawLogs], traces []RPCFetchBatchResult[common.RawTraces], receipts []RPCFetchBatchResult[common.RawReceipts]) []GetFullBlockResult {
+func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[*big.Int, common.RawBlock], logs []RPCFetchBatchResult[*big.Int, common.RawLogs], traces []RPCFetchBatchResult[*big.Int, common.RawTraces], receipts []RPCFetchBatchResult[*big.Int, common.RawReceipts]) []GetFullBlockResult {
 	if blocks == nil {
 		return []GetFullBlockResult{}
 	}
@@ -21,46 +21,46 @@ func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.R
 	rawReceiptsMap := mapBatchResultsByBlockNumber[common.RawReceipts](receipts)
 	rawTracesMap := mapBatchResultsByBlockNumber[common.RawTraces](traces)
 
-	for _, rawBlock := range blocks {
+	for _, rawBlockData := range blocks {
 		result := GetFullBlockResult{
-			BlockNumber: rawBlock.BlockNumber,
+			BlockNumber: rawBlockData.Key,
 		}
-		if rawBlock.Result == nil {
-			log.Warn().Err(rawBlock.Error).Msgf("Received a nil block result for block %s.", rawBlock.BlockNumber.String())
-			result.Error = fmt.Errorf("received a nil block result from RPC. %v", rawBlock.Error)
+		if rawBlockData.Result == nil {
+			log.Warn().Err(rawBlockData.Error).Msgf("Received a nil block result for block %s.", rawBlockData.Key.String())
+			result.Error = fmt.Errorf("received a nil block result from RPC. %v", rawBlockData.Error)
 			results = append(results, result)
 			continue
 		}
 
-		if rawBlock.Error != nil {
-			result.Error = rawBlock.Error
+		if rawBlockData.Error != nil {
+			result.Error = rawBlockData.Error
 			results = append(results, result)
 			continue
 		}
 
-		result.Data.Block = serializeBlock(chainId, rawBlock.Result)
+		result.Data.Block = serializeBlock(chainId, rawBlockData.Result)
 		blockTimestamp := result.Data.Block.Timestamp
 
-		if rawReceipts, exists := rawReceiptsMap[rawBlock.BlockNumber.String()]; exists {
+		if rawReceipts, exists := rawReceiptsMap[rawBlockData.Key.String()]; exists {
 			if rawReceipts.Error != nil {
 				result.Error = rawReceipts.Error
 			} else {
 				result.Data.Logs = serializeLogsFromReceipts(chainId, rawReceipts.Result, result.Data.Block)
-				result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp, &rawReceipts.Result)
+				result.Data.Transactions = serializeTransactions(chainId, rawBlockData.Result["transactions"].([]interface{}), blockTimestamp, &rawReceipts.Result)
 			}
 		} else {
-			if rawLogs, exists := rawLogsMap[rawBlock.BlockNumber.String()]; exists {
+			if rawLogs, exists := rawLogsMap[rawBlockData.Key.String()]; exists {
 				if rawLogs.Error != nil {
 					result.Error = rawLogs.Error
 				} else {
 					result.Data.Logs = serializeLogs(chainId, rawLogs.Result, result.Data.Block)
-					result.Data.Transactions = serializeTransactions(chainId, rawBlock.Result["transactions"].([]interface{}), blockTimestamp, nil)
+					result.Data.Transactions = serializeTransactions(chainId, rawBlockData.Result["transactions"].([]interface{}), blockTimestamp, nil)
 				}
 			}
 		}
 
 		if result.Error == nil {
-			if rawTraces, exists := rawTracesMap[rawBlock.BlockNumber.String()]; exists {
+			if rawTraces, exists := rawTracesMap[rawBlockData.Key.String()]; exists {
 				if rawTraces.Error != nil {
 					result.Error = rawTraces.Error
 				} else {
@@ -75,26 +75,26 @@ func SerializeFullBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.R
 	return results
 }
 
-func mapBatchResultsByBlockNumber[T any](results []RPCFetchBatchResult[T]) map[string]*RPCFetchBatchResult[T] {
+func mapBatchResultsByBlockNumber[T any](results []RPCFetchBatchResult[*big.Int, T]) map[string]*RPCFetchBatchResult[*big.Int, T] {
 	if results == nil {
-		return make(map[string]*RPCFetchBatchResult[T], 0)
+		return make(map[string]*RPCFetchBatchResult[*big.Int, T], 0)
 	}
-	resultsMap := make(map[string]*RPCFetchBatchResult[T], len(results))
+	resultsMap := make(map[string]*RPCFetchBatchResult[*big.Int, T], len(results))
 	for _, result := range results {
-		resultsMap[result.BlockNumber.String()] = &result
+		resultsMap[result.Key.String()] = &result
 	}
 	return resultsMap
 }
 
-func SerializeBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[common.RawBlock]) []GetBlocksResult {
+func SerializeBlocks(chainId *big.Int, blocks []RPCFetchBatchResult[*big.Int, common.RawBlock]) []GetBlocksResult {
 	results := make([]GetBlocksResult, 0, len(blocks))
 
 	for _, rawBlock := range blocks {
 		result := GetBlocksResult{
-			BlockNumber: rawBlock.BlockNumber,
+			BlockNumber: rawBlock.Key,
 		}
 		if rawBlock.Result == nil {
-			log.Warn().Msgf("Received a nil block result for block %s.", rawBlock.BlockNumber.String())
+			log.Warn().Msgf("Received a nil block result for block %s.", rawBlock.Key.String())
 			result.Error = fmt.Errorf("received a nil block result from RPC")
 			results = append(results, result)
 			continue
@@ -472,4 +472,16 @@ func interfaceToJsonString(value interface{}) string {
 		return ""
 	}
 	return string(jsonString)
+}
+
+func SerializeTransactions(chainId *big.Int, transactions []RPCFetchBatchResult[string, common.RawTransaction]) []GetTransactionsResult {
+	results := make([]GetTransactionsResult, 0, len(transactions))
+	for _, transaction := range transactions {
+		result := GetTransactionsResult{
+			Error: transaction.Error,
+			Data:  serializeTransaction(chainId, transaction.Result, time.Time{}, nil),
+		}
+		results = append(results, result)
+	}
+	return results
 }

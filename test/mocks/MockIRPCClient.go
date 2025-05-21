@@ -24,6 +24,38 @@ func (_m *MockIRPCClient) EXPECT() *MockIRPCClient_Expecter {
 	return &MockIRPCClient_Expecter{mock: &_m.Mock}
 }
 
+// Close provides a mock function with no fields
+func (_m *MockIRPCClient) Close() {
+	_m.Called()
+}
+
+// MockIRPCClient_Close_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Close'
+type MockIRPCClient_Close_Call struct {
+	*mock.Call
+}
+
+// Close is a helper method to define mock.On call
+func (_e *MockIRPCClient_Expecter) Close() *MockIRPCClient_Close_Call {
+	return &MockIRPCClient_Close_Call{Call: _e.mock.On("Close")}
+}
+
+func (_c *MockIRPCClient_Close_Call) Run(run func()) *MockIRPCClient_Close_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockIRPCClient_Close_Call) Return() *MockIRPCClient_Close_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockIRPCClient_Close_Call) RunAndReturn(run func()) *MockIRPCClient_Close_Call {
+	_c.Run(run)
+	return _c
+}
+
 // GetBlocks provides a mock function with given fields: blockNumbers
 func (_m *MockIRPCClient) GetBlocks(blockNumbers []*big.Int) []rpc.GetBlocksResult {
 	ret := _m.Called(blockNumbers)
@@ -265,6 +297,54 @@ func (_c *MockIRPCClient_GetLatestBlockNumber_Call) Return(_a0 *big.Int, _a1 err
 }
 
 func (_c *MockIRPCClient_GetLatestBlockNumber_Call) RunAndReturn(run func() (*big.Int, error)) *MockIRPCClient_GetLatestBlockNumber_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetTransactions provides a mock function with given fields: txHashes
+func (_m *MockIRPCClient) GetTransactions(txHashes []string) []rpc.GetTransactionsResult {
+	ret := _m.Called(txHashes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTransactions")
+	}
+
+	var r0 []rpc.GetTransactionsResult
+	if rf, ok := ret.Get(0).(func([]string) []rpc.GetTransactionsResult); ok {
+		r0 = rf(txHashes)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]rpc.GetTransactionsResult)
+		}
+	}
+
+	return r0
+}
+
+// MockIRPCClient_GetTransactions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTransactions'
+type MockIRPCClient_GetTransactions_Call struct {
+	*mock.Call
+}
+
+// GetTransactions is a helper method to define mock.On call
+//   - txHashes []string
+func (_e *MockIRPCClient_Expecter) GetTransactions(txHashes interface{}) *MockIRPCClient_GetTransactions_Call {
+	return &MockIRPCClient_GetTransactions_Call{Call: _e.mock.On("GetTransactions", txHashes)}
+}
+
+func (_c *MockIRPCClient_GetTransactions_Call) Run(run func(txHashes []string)) *MockIRPCClient_GetTransactions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]string))
+	})
+	return _c
+}
+
+func (_c *MockIRPCClient_GetTransactions_Call) Return(_a0 []rpc.GetTransactionsResult) *MockIRPCClient_GetTransactions_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIRPCClient_GetTransactions_Call) RunAndReturn(run func([]string) []rpc.GetTransactionsResult) *MockIRPCClient_GetTransactions_Call {
 	_c.Call.Return(run)
 	return _c
 }

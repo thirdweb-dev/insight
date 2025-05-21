@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"math/big"
 	"sync"
 	"time"
 
@@ -11,28 +10,28 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
 
-type RPCFetchBatchResult[T any] struct {
-	BlockNumber *big.Int
-	Error       error
-	Result      T
+type RPCFetchBatchResult[K any, T any] struct {
+	Key    K
+	Error  error
+	Result T
 }
 
-func RPCFetchInBatches[T any](rpc *Client, blockNumbers []*big.Int, batchSize int, batchDelay int, method string, argsFunc func(*big.Int) []interface{}) []RPCFetchBatchResult[T] {
-	if len(blockNumbers) <= batchSize {
-		return RPCFetchBatch[T](rpc, blockNumbers, method, argsFunc)
+func RPCFetchInBatches[K any, T any](rpc *Client, keys []K, batchSize int, batchDelay int, method string, argsFunc func(K) []interface{}) []RPCFetchBatchResult[K, T] {
+	if len(keys) <= batchSize {
+		return RPCFetchSingleBatch[K, T](rpc, keys, method, argsFunc)
 	}
-	chunks := common.BigIntSliceToChunks(blockNumbers, batchSize)
+	chunks := common.SliceToChunks[K](keys, batchSize)
 
-	log.Debug().Msgf("Fetching %s for %d blocks in %d chunks of max %d requests", method, len(blockNumbers), len(chunks), batchSize)
+	log.Debug().Msgf("Fetching %s for %d blocks in %d chunks of max %d requests", method, len(keys), len(chunks), batchSize)
 
 	var wg sync.WaitGroup
-	resultsCh := make(chan []RPCFetchBatchResult[T], len(chunks))
+	resultsCh := make(chan []RPCFetchBatchResult[K, T], len(chunks))
 
 	for _, chunk := range chunks {
 		wg.Add(1)
-		go func(chunk []*big.Int) {
+		go func(chunk []K) {
 			defer wg.Done()
-			resultsCh <- RPCFetchBatch[T](rpc, chunk, method, argsFunc)
+			resultsCh <- RPCFetchSingleBatch[K, T](rpc, chunk, method, argsFunc)
 			if batchDelay > 0 {
 				time.Sleep(time.Duration(batchDelay) * time.Millisecond)
 			}
@@ -43,7 +42,7 @@ func RPCFetchInBatches[T any](rpc *Client, blockNumbers []*big.Int, batchSize in
 		close(resultsCh)
 	}()
 
-	results := make([]RPCFetchBatchResult[T], 0, len(blockNumbers))
+	results := make([]RPCFetchBatchResult[K, T], 0, len(keys))
 	for batchResults := range resultsCh {
 		results = append(results, batchResults...)
 	}
@@ -51,17 +50,15 @@ func RPCFetchInBatches[T any](rpc *Client, blockNumbers []*big.Int, batchSize in
 	return results
 }
 
-func RPCFetchBatch[T any](rpc *Client, blockNumbers []*big.Int, method string, argsFunc func(*big.Int) []interface{}) []RPCFetchBatchResult[T] {
-	batch := make([]gethRpc.BatchElem, len(blockNumbers))
-	results := make([]RPCFetchBatchResult[T], len(blockNumbers))
+func RPCFetchSingleBatch[K any, T any](rpc *Client, keys []K, method string, argsFunc func(K) []interface{}) []RPCFetchBatchResult[K, T] {
+	batch := make([]gethRpc.BatchElem, len(keys))
+	results := make([]RPCFetchBatchResult[K, T], len(keys))
 
-	for i, blockNum := range blockNumbers {
-		results[i] = RPCFetchBatchResult[T]{
-			BlockNumber: blockNum,
-		}
+	for i, key := range keys {
+		results[i] = RPCFetchBatchResult[K, T]{Key: key}
 		batch[i] = gethRpc.BatchElem{
 			Method: method,
-			Args:   argsFunc(blockNum),
+			Args:   argsFunc(key),
 			Result: new(T),
 		}
 	}

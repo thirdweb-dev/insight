@@ -27,6 +27,11 @@ type GetBlocksResult struct {
 	Data        common.Block
 }
 
+type GetTransactionsResult struct {
+	Error error
+	Data  common.Transaction
+}
+
 type BlocksPerRequestConfig struct {
 	Blocks   int
 	Logs     int
@@ -37,6 +42,7 @@ type BlocksPerRequestConfig struct {
 type IRPCClient interface {
 	GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult
 	GetBlocks(blockNumbers []*big.Int) []GetBlocksResult
+	GetTransactions(txHashes []string) []GetTransactionsResult
 	GetLatestBlockNumber() (*big.Int, error)
 	GetChainID() *big.Int
 	GetURL() string
@@ -44,6 +50,7 @@ type IRPCClient interface {
 	IsWebsocket() bool
 	SupportsTraceBlock() bool
 	HasCode(address string) (bool, error)
+	Close()
 }
 
 type Client struct {
@@ -213,28 +220,28 @@ func (rpc *Client) setChainID() error {
 
 func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 	var wg sync.WaitGroup
-	var blocks []RPCFetchBatchResult[common.RawBlock]
-	var logs []RPCFetchBatchResult[common.RawLogs]
-	var traces []RPCFetchBatchResult[common.RawTraces]
-	var receipts []RPCFetchBatchResult[common.RawReceipts]
+	var blocks []RPCFetchBatchResult[*big.Int, common.RawBlock]
+	var logs []RPCFetchBatchResult[*big.Int, common.RawLogs]
+	var traces []RPCFetchBatchResult[*big.Int, common.RawTraces]
+	var receipts []RPCFetchBatchResult[*big.Int, common.RawReceipts]
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		result := RPCFetchBatch[common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithTransactionsParams)
+		result := RPCFetchSingleBatch[*big.Int, common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithTransactionsParams)
 		blocks = result
 	}()
 
 	if rpc.supportsBlockReceipts {
 		go func() {
 			defer wg.Done()
-			result := RPCFetchInBatches[common.RawReceipts](rpc, blockNumbers, rpc.blocksPerRequest.Receipts, config.Cfg.RPC.BlockReceipts.BatchDelay, "eth_getBlockReceipts", GetBlockReceiptsParams)
+			result := RPCFetchInBatches[*big.Int, common.RawReceipts](rpc, blockNumbers, rpc.blocksPerRequest.Receipts, config.Cfg.RPC.BlockReceipts.BatchDelay, "eth_getBlockReceipts", GetBlockReceiptsParams)
 			receipts = result
 		}()
 	} else {
 		go func() {
 			defer wg.Done()
-			result := RPCFetchInBatches[common.RawLogs](rpc, blockNumbers, rpc.blocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
+			result := RPCFetchInBatches[*big.Int, common.RawLogs](rpc, blockNumbers, rpc.blocksPerRequest.Logs, config.Cfg.RPC.Logs.BatchDelay, "eth_getLogs", GetLogsParams)
 			logs = result
 		}()
 	}
@@ -243,7 +250,7 @@ func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := RPCFetchInBatches[common.RawTraces](rpc, blockNumbers, rpc.blocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
+			result := RPCFetchInBatches[*big.Int, common.RawTraces](rpc, blockNumbers, rpc.blocksPerRequest.Traces, config.Cfg.RPC.Traces.BatchDelay, "trace_block", TraceBlockParams)
 			traces = result
 		}()
 	}
@@ -255,17 +262,32 @@ func (rpc *Client) GetFullBlocks(blockNumbers []*big.Int) []GetFullBlockResult {
 
 func (rpc *Client) GetBlocks(blockNumbers []*big.Int) []GetBlocksResult {
 	var wg sync.WaitGroup
-	var blocks []RPCFetchBatchResult[common.RawBlock]
+	var blocks []RPCFetchBatchResult[*big.Int, common.RawBlock]
 
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		blocks = RPCFetchBatch[common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithoutTransactionsParams)
+		blocks = RPCFetchSingleBatch[*big.Int, common.RawBlock](rpc, blockNumbers, "eth_getBlockByNumber", GetBlockWithoutTransactionsParams)
 	}()
 	wg.Wait()
 
 	return SerializeBlocks(rpc.chainID, blocks)
+}
+
+func (rpc *Client) GetTransactions(txHashes []string) []GetTransactionsResult {
+	var wg sync.WaitGroup
+	var transactions []RPCFetchBatchResult[string, common.RawTransaction]
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		transactions = RPCFetchSingleBatch[string, common.RawTransaction](rpc, txHashes, "eth_getTransactionByHash", GetTransactionParams)
+	}()
+	wg.Wait()
+
+	return SerializeTransactions(rpc.chainID, transactions)
 }
 
 func (rpc *Client) GetLatestBlockNumber() (*big.Int, error) {

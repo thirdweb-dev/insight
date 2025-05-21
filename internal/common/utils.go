@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-func BigIntSliceToChunks(values []*big.Int, chunkSize int) [][]*big.Int {
+func SliceToChunks[T any](values []T, chunkSize int) [][]T {
 	if chunkSize >= len(values) || chunkSize <= 0 {
-		return [][]*big.Int{values}
+		return [][]T{values}
 	}
-	var chunks [][]*big.Int
+	var chunks [][]T
 	for i := 0; i < len(values); i += chunkSize {
 		end := i + chunkSize
 		if end > len(values) {
