@@ -38,6 +38,11 @@ func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contract abi: %v", err)
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get contract abi: unexpected status code %d", resp.StatusCode)
+	}
 
 	abi, err := abi.JSON(resp.Body)
 	if err != nil {
