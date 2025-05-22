@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	config "github.com/thirdweb-dev/indexer/configs"
 
@@ -34,7 +35,12 @@ func GetABIForContractWithCache(chainId string, contract string, abiCache map[st
 func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 	url := fmt.Sprintf("%s/abi/%s/%s", config.Cfg.API.ThirdwebContractApi, chainId, contract)
 
-	resp, err := http.Get(url)
+	// Create a custom client with timeouts
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contract abi: %v", err)
 	}
