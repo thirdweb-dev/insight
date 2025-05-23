@@ -25,6 +25,10 @@ func SliceToChunks[T any](values []T, chunkSize int) [][]T {
 var allowedFunctions = map[string]struct{}{
 	"sum":                  {},
 	"count":                {},
+	"countDistinct":        {},
+	"avg":                  {},
+	"max":                  {},
+	"min":                  {},
 	"reinterpretasuint256": {},
 	"reverse":              {},
 	"unhex":                {},
