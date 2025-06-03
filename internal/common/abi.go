@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -11,11 +12,13 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/rs/zerolog/log"
 )
 
 var (
-	httpClient     *http.Client
-	httpClientOnce sync.Once
+	httpClient      *http.Client
+	httpClientOnce  sync.Once
+	jsonDecodeMutex sync.Mutex
 )
 
 func getHTTPClient() *http.Client {
@@ -66,11 +69,23 @@ func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 		return nil, fmt.Errorf("failed to get contract abi: unexpected status code %d", resp.StatusCode)
 	}
 
-	abi, err := abi.JSON(resp.Body)
+	// Read the entire response body
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return nil, fmt.Errorf("failed to read contract abi response: %v", err)
+	}
+
+	// Protect JSON decoding with a mutex
+	jsonDecodeMutex.Lock()
+	defer jsonDecodeMutex.Unlock()
+
+	// Parse the ABI
+	parsedABI, err := abi.JSON(strings.NewReader(string(body)))
+	if err != nil {
+		log.Warn().Err(err).Str("contract", contract).Str("chainId", chainId).Msg("Failed to parse contract ABI")
 		return nil, fmt.Errorf("failed to load contract abi: %v", err)
 	}
-	return &abi, nil
+	return &parsedABI, nil
 }
 
 func ConstructEventABI(signature string) (*abi.Event, error) {
