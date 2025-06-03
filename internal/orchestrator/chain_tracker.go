@@ -29,19 +29,25 @@ func (ct *ChainTracker) Start(ctx context.Context) {
 	defer ticker.Stop()
 
 	log.Debug().Msgf("Chain tracker running")
+	ct.trackLatestBlockNumber(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().Msg("Chain tracker shutting down")
 			return
 		case <-ticker.C:
-			latestBlockNumber, err := ct.rpc.GetLatestBlockNumber(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting latest block number")
-				continue
-			}
-			latestBlockNumberFloat, _ := latestBlockNumber.Float64()
-			metrics.ChainHead.Set(latestBlockNumberFloat)
+			ct.trackLatestBlockNumber(ctx)
 		}
 	}
+}
+
+func (ct *ChainTracker) trackLatestBlockNumber(ctx context.Context) {
+	latestBlockNumber, err := ct.rpc.GetLatestBlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error getting latest block number")
+		return
+	}
+	latestBlockNumberFloat, _ := latestBlockNumber.Float64()
+	metrics.ChainHead.Set(latestBlockNumberFloat)
 }
