@@ -112,12 +112,22 @@ type ThirdwebConfig struct {
 	ClientId string `mapstructure:"clientId"`
 }
 
+type ContractApiRequestConfig struct {
+	MaxIdleConns        int  `mapstructure:"maxIdleConns"`
+	MaxIdleConnsPerHost int  `mapstructure:"maxIdleConnsPerHost"`
+	MaxConnsPerHost     int  `mapstructure:"maxConnsPerHost"`
+	IdleConnTimeout     int  `mapstructure:"idleConnTimeout"`
+	DisableCompression  bool `mapstructure:"disableCompression"`
+	Timeout             int  `mapstructure:"timeout"`
+}
+
 type APIConfig struct {
-	Host                string          `mapstructure:"host"`
-	BasicAuth           BasicAuthConfig `mapstructure:"basicAuth"`
-	ThirdwebContractApi string          `mapstructure:"thirdwebContractApi"`
-	AbiDecodingEnabled  bool            `mapstructure:"abiDecodingEnabled"`
-	Thirdweb            ThirdwebConfig  `mapstructure:"thirdweb"`
+	Host                string                   `mapstructure:"host"`
+	BasicAuth           BasicAuthConfig          `mapstructure:"basicAuth"`
+	ThirdwebContractApi string                   `mapstructure:"thirdwebContractApi"`
+	ContractApiRequest  ContractApiRequestConfig `mapstructure:"contractApiRequest"`
+	AbiDecodingEnabled  bool                     `mapstructure:"abiDecodingEnabled"`
+	Thirdweb            ThirdwebConfig           `mapstructure:"thirdweb"`
 }
 
 type BlockPublisherConfig struct {
