@@ -13,6 +13,27 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
+var (
+	httpClient     *http.Client
+	httpClientOnce sync.Once
+)
+
+func getHTTPClient() *http.Client {
+	httpClientOnce.Do(func() {
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        config.Cfg.API.ContractApiRequest.MaxIdleConns,
+				MaxIdleConnsPerHost: config.Cfg.API.ContractApiRequest.MaxIdleConnsPerHost,
+				MaxConnsPerHost:     config.Cfg.API.ContractApiRequest.MaxConnsPerHost,
+				IdleConnTimeout:     time.Duration(config.Cfg.API.ContractApiRequest.IdleConnTimeout) * time.Second,
+				DisableCompression:  config.Cfg.API.ContractApiRequest.DisableCompression,
+			},
+			Timeout: time.Duration(config.Cfg.API.ContractApiRequest.Timeout) * time.Second,
+		}
+	})
+	return httpClient
+}
+
 func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI, mut *sync.Mutex) *abi.ABI {
 	abi, ok := abiCache[contract]
 	if !ok {
@@ -35,12 +56,7 @@ func GetABIForContractWithCache(chainId string, contract string, abiCache map[st
 func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
 	url := fmt.Sprintf("%s/abi/%s/%s", config.Cfg.API.ThirdwebContractApi, chainId, contract)
 
-	// Create a custom client with timeouts
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	resp, err := client.Get(url)
+	resp, err := getHTTPClient().Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contract abi: %v", err)
 	}
