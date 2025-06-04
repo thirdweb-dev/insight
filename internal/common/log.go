@@ -117,6 +117,9 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 					log.Error().
 						Any("chainId", chainId).
 						Any("Logs", logs).
+						Int("logIndex", idx).
+						Str("logAddress", eventLog.Address).
+						Str("logTopic0", eventLog.Topic0).
 						Err(fmt.Errorf("%v", err)).
 						Msg("Caught panic in DecodeLogs, possibly in decodeLogFunc")
 				}
