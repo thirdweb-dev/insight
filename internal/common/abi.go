@@ -34,23 +34,20 @@ func getHTTPClient() *http.Client {
 	return httpClient
 }
 
-func GetABIForContractWithCache(chainId string, contract string, abiCache map[string]*abi.ABI, mut *sync.Mutex) *abi.ABI {
-	abi, ok := abiCache[contract]
-	if !ok {
-		abiResult, err := GetABIForContract(chainId, contract)
-		if err != nil {
-			mut.Lock()
-			abiCache[contract] = nil
-			mut.Unlock()
-			return nil
-		} else {
-			mut.Lock()
-			abiCache[contract] = abiResult
-			mut.Unlock()
-			abi = abiResult
+func GetABIForContractWithCache(chainId string, contract string, abiCache *sync.Map) *abi.ABI {
+	if abiValue, ok := abiCache.Load(contract); ok {
+		if abi, ok := abiValue.(*abi.ABI); ok {
+			return abi
 		}
 	}
-	return abi
+
+	abiResult, err := GetABIForContract(chainId, contract)
+	if err != nil {
+		abiCache.Store(contract, nil)
+		return nil
+	}
+	abiCache.Store(contract, abiResult)
+	return abiResult
 }
 
 func GetABIForContract(chainId string, contract string) (*abi.ABI, error) {
