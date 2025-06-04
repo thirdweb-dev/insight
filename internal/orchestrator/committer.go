@@ -80,6 +80,12 @@ func (c *Committer) Start(ctx context.Context) {
 }
 
 func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
+	startTime := time.Now()
+	defer func() {
+		log.Debug().Str("metric", "get_block_numbers_to_commit_duration").Msgf("getBlockNumbersToCommit duration: %f", time.Since(startTime).Seconds())
+		metrics.GetBlockNumbersToCommitDuration.Observe(time.Since(startTime).Seconds())
+	}()
+
 	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
 	log.Info().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 	if err != nil {
@@ -117,7 +123,11 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 		return nil, nil
 	}
 
+	startTime := time.Now()
 	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{BlockNumbers: blocksToCommit, ChainId: c.rpc.GetChainID()})
+	log.Debug().Str("metric", "get_staging_data_duration").Msgf("StagingStorage.GetStagingData duration: %f", time.Since(startTime).Seconds())
+	metrics.GetStagingDataDuration.Observe(time.Since(startTime).Seconds())
+
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
 	}
@@ -168,20 +178,29 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
 
+	mainStorageStart := time.Now()
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
 		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
 		return fmt.Errorf("error saving data to main storage: %v", err)
 	}
+	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
+	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
 
+	publishStart := time.Now()
 	go func() {
 		if err := c.publisher.PublishBlockData(blockData); err != nil {
 			log.Error().Err(err).Msg("Failed to publish block data to kafka")
 		}
+		log.Debug().Str("metric", "publish_duration").Msgf("Publisher.PublishBlockData duration: %f", time.Since(publishStart).Seconds())
+		metrics.PublishDuration.Observe(time.Since(publishStart).Seconds())
 	}()
 
+	stagingDeleteStart := time.Now()
 	if err := c.storage.StagingStorage.DeleteStagingData(blockData); err != nil {
 		return fmt.Errorf("error deleting data from staging storage: %v", err)
 	}
+	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingData duration: %f", time.Since(stagingDeleteStart).Seconds())
+	metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
 
 	// Find highest block number from committed blocks
 	highestBlock := blockData[0].Block

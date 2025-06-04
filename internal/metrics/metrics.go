@@ -105,3 +105,42 @@ var (
 		Help: "The last block number that was published",
 	})
 )
+
+// Operation Duration Metrics
+var (
+	StagingInsertDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "staging_insert_duration_seconds",
+		Help:    "Time taken to insert data into staging storage",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	MainStorageInsertDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "main_storage_insert_duration_seconds",
+		Help:    "Time taken to insert data into main storage",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	PublishDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "publish_duration_seconds",
+		Help:    "Time taken to publish block data to Kafka",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	StagingDeleteDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "staging_delete_duration_seconds",
+		Help:    "Time taken to delete data from staging storage",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	GetBlockNumbersToCommitDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "get_block_numbers_to_commit_duration_seconds",
+		Help:    "Time taken to get block numbers to commit from storage",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	GetStagingDataDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "get_staging_data_duration_seconds",
+		Help:    "Time taken to get data from staging storage",
+		Buckets: prometheus.DefBuckets,
+	})
+)

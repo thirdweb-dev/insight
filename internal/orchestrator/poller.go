@@ -234,6 +234,8 @@ func (p *Poller) handleWorkerResults(results []rpc.GetFullBlockResult) {
 			Traces:       result.Data.Traces,
 		})
 	}
+
+	startTime := time.Now()
 	if err := p.storage.StagingStorage.InsertStagingData(blockData); err != nil {
 		e := fmt.Errorf("error inserting block data: %v", err)
 		log.Error().Err(e)
@@ -245,6 +247,8 @@ func (p *Poller) handleWorkerResults(results []rpc.GetFullBlockResult) {
 		}
 		metrics.PolledBatchSize.Set(float64(len(blockData)))
 	}
+	log.Debug().Str("metric", "staging_insert_duration").Msgf("StagingStorage.InsertStagingData duration: %f", time.Since(startTime).Seconds())
+	metrics.StagingInsertDuration.Observe(time.Since(startTime).Seconds())
 
 	if len(failedResults) > 0 {
 		p.handleBlockFailures(failedResults)
