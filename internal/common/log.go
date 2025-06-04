@@ -87,11 +87,11 @@ type DecodedLog struct {
 
 func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 	decodedLogs := make([]*DecodedLog, len(logs))
-	abiCache := make(map[string]*abi.ABI)
+	abiCache := &sync.Map{}
 
-	decodeLogFunc := func(eventLog *Log, mut *sync.Mutex) *DecodedLog {
+	decodeLogFunc := func(eventLog *Log) *DecodedLog {
 		decodedLog := DecodedLog{Log: *eventLog}
-		abi := GetABIForContractWithCache(chainId, eventLog.Address, abiCache, mut)
+		abi := GetABIForContractWithCache(chainId, eventLog.Address, abiCache)
 		if abi == nil {
 			return &decodedLog
 		}
@@ -108,27 +108,26 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 	}
 
 	var wg sync.WaitGroup
-	var mut sync.Mutex
 	for idx, eventLog := range logs {
 		wg.Add(1)
-		go func(idx int, eventLog Log, mut *sync.Mutex) {
+		go func(idx int, eventLog Log) {
 			defer func() {
 				if err := recover(); err != nil {
 					log.Error().
 						Any("chainId", chainId).
-						Any("Logs", logs).
-						Int("logIndex", idx).
+						Str("txHash", eventLog.TransactionHash).
+						Uint64("logIndex", eventLog.LogIndex).
 						Str("logAddress", eventLog.Address).
 						Str("logTopic0", eventLog.Topic0).
 						Err(fmt.Errorf("%v", err)).
 						Msg("Caught panic in DecodeLogs, possibly in decodeLogFunc")
+					decodedLogs[idx] = &DecodedLog{Log: eventLog}
 				}
-				decodedLogs[idx] = &DecodedLog{Log: eventLog}
 			}()
 			defer wg.Done()
-			decodedLog := decodeLogFunc(&eventLog, mut)
+			decodedLog := decodeLogFunc(&eventLog)
 			decodedLogs[idx] = decodedLog
-		}(idx, eventLog, &mut)
+		}(idx, eventLog)
 	}
 	wg.Wait()
 	return decodedLogs
