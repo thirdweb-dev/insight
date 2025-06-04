@@ -120,6 +120,7 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 						Err(fmt.Errorf("%v", err)).
 						Msg("Caught panic in DecodeLogs, possibly in decodeLogFunc")
 				}
+				decodedLogs[idx] = &DecodedLog{Log: eventLog}
 			}()
 			defer wg.Done()
 			decodedLog := decodeLogFunc(&eventLog, mut)
