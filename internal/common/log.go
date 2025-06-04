@@ -112,6 +112,19 @@ func DecodeLogs(chainId string, logs []Log) []*DecodedLog {
 	for idx, eventLog := range logs {
 		wg.Add(1)
 		go func(idx int, eventLog Log, mut *sync.Mutex) {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Error().
+						Any("chainId", chainId).
+						Any("Logs", logs).
+						Int("logIndex", idx).
+						Str("logAddress", eventLog.Address).
+						Str("logTopic0", eventLog.Topic0).
+						Err(fmt.Errorf("%v", err)).
+						Msg("Caught panic in DecodeLogs, possibly in decodeLogFunc")
+				}
+				decodedLogs[idx] = &DecodedLog{Log: eventLog}
+			}()
 			defer wg.Done()
 			decodedLog := decodeLogFunc(&eventLog, mut)
 			decodedLogs[idx] = decodedLog
