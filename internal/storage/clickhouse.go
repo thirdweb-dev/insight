@@ -142,6 +142,7 @@ func (c *ClickHouseConnector) insertBlocks(blocks []common.Block, opt InsertOpti
 		if err != nil {
 			return err
 		}
+		defer batch.Close()
 
 		for _, block := range blocks[i:end] {
 			args := []interface{}{
@@ -212,6 +213,7 @@ func (c *ClickHouseConnector) insertTransactions(txs []common.Transaction, opt I
 		if err != nil {
 			return err
 		}
+		defer batch.Close()
 
 		for _, tx := range txs[i:end] {
 			args := []interface{}{
@@ -293,6 +295,7 @@ func (c *ClickHouseConnector) insertLogs(logs []common.Log, opt InsertOptions) e
 		if err != nil {
 			return err
 		}
+		defer batch.Close()
 
 		for _, log := range logs[i:end] {
 			args := []interface{}{
@@ -356,6 +359,7 @@ func (c *ClickHouseConnector) insertTraces(traces []common.Trace, opt InsertOpti
 		if err != nil {
 			return err
 		}
+		defer batch.Close()
 
 		for _, trace := range traces[i:end] {
 			args := []interface{}{
@@ -413,6 +417,7 @@ func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure)
 	if err != nil {
 		return err
 	}
+	defer batch.Close()
 
 	for _, failure := range failures {
 		err := batch.Append(
@@ -875,6 +880,7 @@ func (c *ClickHouseConnector) DeleteBlockFailures(failures []common.BlockFailure
 	if err != nil {
 		return err
 	}
+	defer batch.Close()
 
 	for _, failure := range failures {
 		err := batch.Append(
@@ -911,6 +917,7 @@ func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 	if err != nil {
 		return err
 	}
+	defer batch.Close()
 	for _, blockData := range data {
 		blockDataJSON, err := json.Marshal(blockData)
 		if err != nil {
@@ -975,6 +982,7 @@ func (c *ClickHouseConnector) DeleteStagingData(data []common.BlockData) error {
 	if err != nil {
 		return err
 	}
+	defer batch.Close()
 
 	for _, blockData := range data {
 		err := batch.Append(
@@ -1178,6 +1186,7 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 		if err != nil {
 			return err
 		}
+		defer batch.Close()
 
 		for _, blockData := range data[i:end] {
 			block := blockData.Block
