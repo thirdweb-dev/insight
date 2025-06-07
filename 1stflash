@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IPancakePair {
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function swap(
+        uint amount0Out,
+        uint amount1Out,
+        address to,
+        bytes calldata data
+    ) external;
+}
+
+interface IERC20 {
+    function transfer(address to, uint amount) external returns (bool);
+    function approve(address spender, uint value) external returns (bool);
+    function balanceOf(address owner) external view returns (uint);
+}
+
+interface IPancakeRouter {
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+
+    function getAmountsOut(uint amountIn, address[] calldata path)
+        external
+        view
+        returns (uint[] memory amounts);
+}
+
+contract FlashArbitrage {
+    address owner;
+    address public router1; // PancakeSwap
+    address public router2; // BakerySwap or another DEX
+    uint constant SLIPPAGE_TOLERANCE = 97; // 3% slippage protection
+
+    constructor(address _router1, address _router2) {
+        owner = msg.sender;
+        router1 = _router1;
+        router2 = _router2;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    // Called by PancakeSwap pair during flash swap
+    function pancakeCall(
+        address sender,
+        uint amount0,
+        uint amount1,
+        bytes calldata data
+    ) external {
+        address[] memory path = abi.decode(data, (address[]));
+        address tokenBorrow = amount0 > 0 ? path[0] : path[1];
+        address tokenToTrade = amount0 > 0 ? path[1] : path[0];
+        uint amountToken = amount0 > 0 ? amount0 : amount1;
+
+        IERC20(tokenBorrow).approve(router2, amountToken);
+
+        // Sell tokenBorrow for tokenToTrade on second DEX
+        IPancakeRouter secondRouter = IPancakeRouter(router2);
+
+        address[] memory reversePath = new address[](2);
+        reversePath[0] = tokenBorrow;
+        reversePath[1] = tokenToTrade;
+
+        uint[] memory outMins = secondRouter.getAmountsOut(amountToken, reversePath);
+        uint amountOutMin = (outMins[1] * SLIPPAGE_TOLERANCE) / 100;
+
+        uint[] memory result = secondRouter.swapExactTokensForTokens(
+            amountToken,
+            amountOutMin,
+            reversePath,
+            address(this),
+            block.timestamp
+        );
+
+        // Repay loan + fees
+        uint fee = ((amountToken * 3) / 997) + 1; // PancakeSwap fee
+        uint amountToRepay = amountToken + fee;
+        IERC20(tokenToTrade).transfer(msg.sender, amountToRepay);
+
+        // Keep profit
+        uint profit = IERC20(tokenToTrade).balanceOf(address(this));
+        IERC20(tokenToTrade).transfer(owner, profit);
+    }
+
+    function withdrawToken(address token) external onlyOwner {
+        uint balance = IERC20(token).balanceOf(address(this));
+        IERC20(token).transfer(owner, balance);
+    }
+}
