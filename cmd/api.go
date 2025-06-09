@@ -48,7 +48,7 @@ func RunApi(cmd *cobra.Command, args []string) {
 	defer stop()
 
 	r := gin.New()
-	r.Use(gin.Logger())
+	r.Use(middleware.Logger())
 	r.Use(gin.Recovery())
 
 	// Add Swagger route
