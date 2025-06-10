@@ -71,17 +71,18 @@ type TableConfig struct {
 type TableOverrideConfig map[string]TableConfig
 
 type ClickhouseConfig struct {
-	Host             string                         `mapstructure:"host"`
-	Port             int                            `mapstructure:"port"`
-	Username         string                         `mapstructure:"username"`
-	Password         string                         `mapstructure:"password"`
-	Database         string                         `mapstructure:"database"`
-	DisableTLS       bool                           `mapstructure:"disableTLS"`
-	AsyncInsert      bool                           `mapstructure:"asyncInsert"`
-	MaxRowsPerInsert int                            `mapstructure:"maxRowsPerInsert"`
-	MaxOpenConns     int                            `mapstructure:"maxOpenConns"`
-	MaxIdleConns     int                            `mapstructure:"maxIdleConns"`
-	ChainBasedConfig map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
+	Host                         string                         `mapstructure:"host"`
+	Port                         int                            `mapstructure:"port"`
+	Username                     string                         `mapstructure:"username"`
+	Password                     string                         `mapstructure:"password"`
+	Database                     string                         `mapstructure:"database"`
+	DisableTLS                   bool                           `mapstructure:"disableTLS"`
+	AsyncInsert                  bool                           `mapstructure:"asyncInsert"`
+	MaxRowsPerInsert             int                            `mapstructure:"maxRowsPerInsert"`
+	MaxOpenConns                 int                            `mapstructure:"maxOpenConns"`
+	MaxIdleConns                 int                            `mapstructure:"maxIdleConns"`
+	ChainBasedConfig             map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
+	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
 }
 
 type RPCBatchRequestConfig struct {
