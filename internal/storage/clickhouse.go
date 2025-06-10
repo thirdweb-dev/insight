@@ -103,7 +103,9 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 				"do_not_merge_across_partitions_select_final": "1",
 				"use_skip_indexes_if_final":                   "1",
 				"optimize_move_to_prewhere_if_final":          "1",
-				"parallel_view_processing":                    "1",
+			}
+			if cfg.EnableParallelViewProcessing {
+				settings["parallel_view_processing"] = "1"
 			}
 			if cfg.AsyncInsert {
 				settings["async_insert"] = "1"
