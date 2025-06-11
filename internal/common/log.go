@@ -188,9 +188,7 @@ func decodeIndexedArgument(argType abi.Type, topic string) (interface{}, error) 
 		return new(big.Int).SetBytes(topicBytes), nil
 	case abi.BoolTy:
 		return topicBytes[0] != 0, nil
-	case abi.StringTy:
-		return string(topicBytes), nil
-	case abi.BytesTy, abi.FixedBytesTy:
+	case abi.BytesTy, abi.FixedBytesTy, abi.StringTy:
 		return "0x" + gethCommon.Bytes2Hex(topicBytes), nil
 	case abi.HashTy:
 		if len(topicBytes) != 32 {
@@ -201,10 +199,8 @@ func decodeIndexedArgument(argType abi.Type, topic string) (interface{}, error) 
 		bi := new(big.Int).SetBytes(topicBytes)
 		bf := new(big.Float).SetInt(bi)
 		return bf, nil
-	case abi.SliceTy, abi.ArrayTy, abi.TupleTy:
-		return nil, fmt.Errorf("type %s is not supported for indexed parameters", argType.String())
 	default:
-		return nil, fmt.Errorf("unsupported indexed type: %s", argType.String())
+		return topic, nil
 	}
 }
 
