@@ -27,9 +27,19 @@ type Committer struct {
 	rpc                rpc.IRPCClient
 	lastCommittedBlock *big.Int
 	publisher          *publisher.Publisher
+	workMode           WorkMode
+	workModeChan       chan WorkMode
 }
 
-func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
+type CommitterOption func(*Committer)
+
+func WithCommitterWorkModeChan(ch chan WorkMode) CommitterOption {
+	return func(c *Committer) {
+		c.workModeChan = ch
+	}
+}
+
+func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...CommitterOption) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
@@ -40,7 +50,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 	}
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
-	return &Committer{
+	committer := &Committer{
 		triggerIntervalMs:  triggerInterval,
 		blocksPerCommit:    blocksPerCommit,
 		storage:            storage,
@@ -48,7 +58,14 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage) *Committer {
 		rpc:                rpc,
 		lastCommittedBlock: commitFromBlock,
 		publisher:          publisher.GetInstance(),
+		workMode:           "",
 	}
+
+	for _, opt := range opts {
+		opt(committer)
+	}
+
+	return committer
 }
 
 func (c *Committer) Start(ctx context.Context) {
@@ -61,8 +78,17 @@ func (c *Committer) Start(ctx context.Context) {
 			log.Info().Msg("Committer shutting down")
 			c.publisher.Close()
 			return
+		case workMode := <-c.workModeChan:
+			if workMode != c.workMode && workMode != "" {
+				log.Info().Msgf("Committer work mode changing from %s to %s", c.workMode, workMode)
+				c.workMode = workMode
+			}
 		default:
 			time.Sleep(interval)
+			if c.workMode == "" {
+				log.Debug().Msg("Committer work mode not set, skipping commit")
+				continue
+			}
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting block data to commit")

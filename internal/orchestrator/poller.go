@@ -28,6 +28,7 @@ type Poller struct {
 	pollFromBlock     *big.Int
 	pollUntilBlock    *big.Int
 	parallelPollers   int
+	workModeChan      chan WorkMode
 }
 
 type BlockNumberWithError struct {
@@ -35,7 +36,15 @@ type BlockNumberWithError struct {
 	Error       error
 }
 
-func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
+type PollerOption func(*Poller)
+
+func WithPollerWorkModeChan(ch chan WorkMode) PollerOption {
+	return func(p *Poller) {
+		p.workModeChan = ch
+	}
+}
+
+func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOption) *Poller {
 	blocksPerPoll := config.Cfg.Poller.BlocksPerPoll
 	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
@@ -44,19 +53,25 @@ func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
-	return &Poller{
+	poller := &Poller{
 		rpc:               rpc,
 		triggerIntervalMs: int64(triggerInterval),
 		blocksPerPoll:     int64(blocksPerPoll),
 		storage:           storage,
 		parallelPollers:   config.Cfg.Poller.ParallelPollers,
 	}
+
+	for _, opt := range opts {
+		opt(poller)
+	}
+
+	return poller
 }
 
 var ErrNoNewBlocks = fmt.Errorf("no new blocks to poll")
 
-func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage) *Poller {
-	poller := NewBoundlessPoller(rpc, storage)
+func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOption) *Poller {
+	poller := NewBoundlessPoller(rpc, storage, opts...)
 	untilBlock := big.NewInt(int64(config.Cfg.Poller.UntilBlock))
 	pollFromBlock := big.NewInt(int64(config.Cfg.Poller.FromBlock))
 	lastPolledBlock := new(big.Int).Sub(pollFromBlock, big.NewInt(1)) // needs to include the first block
@@ -131,11 +146,14 @@ func (p *Poller) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			cancel()
-			close(tasks)
-			wg.Wait()
-			log.Info().Msg("Poller shutting down")
+			p.shutdown(cancel, tasks, &wg)
 			return
+		case workMode := <-p.workModeChan:
+			if workMode == WorkModeLive {
+				log.Info().Msg("Switching to live mode, stopping poller")
+				p.shutdown(cancel, tasks, &wg)
+				return
+			}
 		case <-ticker.C:
 			select {
 			case tasks <- struct{}{}:
@@ -273,4 +291,11 @@ func (p *Poller) handleBlockFailures(results []rpc.GetFullBlockResult) {
 		// TODO: exiting if this fails, but should handle this better
 		log.Error().Err(err).Msg("Error saving block failures")
 	}
+}
+
+func (p *Poller) shutdown(cancel context.CancelFunc, tasks chan struct{}, wg *sync.WaitGroup) {
+	cancel()
+	close(tasks)
+	wg.Wait()
+	log.Info().Msg("Poller shutting down")
 }
