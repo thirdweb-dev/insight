@@ -25,6 +25,7 @@ func TestNewCommitter(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 
 	assert.NotNil(t, committer)
 	assert.Equal(t, DEFAULT_COMMITTER_TRIGGER_INTERVAL, committer.triggerIntervalMs)
@@ -40,12 +41,13 @@ func TestGetBlockNumbersToCommit(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -63,12 +65,13 @@ func TestGetBlockNumbersToCommitWithoutConfiguredAndNotStored(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -89,12 +92,13 @@ func TestGetBlockNumbersToCommitWithConfiguredAndNotStored(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -115,12 +119,13 @@ func TestGetBlockNumbersToCommitWithConfiguredAndStored(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -138,12 +143,13 @@ func TestGetBlockNumbersToCommitWithoutConfiguredAndStored(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -164,12 +170,13 @@ func TestGetBlockNumbersToCommitWithStoredHigherThanInMemory(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -190,12 +197,13 @@ func TestGetBlockNumbersToCommitWithStoredLowerThanInMemory(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(99), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(blockNumbers))
@@ -214,12 +222,13 @@ func TestGetBlockNumbersToCommitWithStoredEqualThanInMemory(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
 
-	blockNumbers, err := committer.getBlockNumbersToCommit()
+	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, committer.blocksPerCommit, len(blockNumbers))
@@ -239,6 +248,7 @@ func TestGetSequentialBlockDataToCommit(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
@@ -273,6 +283,7 @@ func TestGetSequentialBlockDataToCommitWithDuplicateBlocks(t *testing.T) {
 		StagingStorage: mockStagingStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 	chainID := big.NewInt(1)
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
@@ -311,6 +322,7 @@ func TestCommit(t *testing.T) {
 		OrchestratorStorage: mockOrchestratorStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
@@ -336,6 +348,7 @@ func TestHandleGap(t *testing.T) {
 		OrchestratorStorage: mockOrchestratorStorage,
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 
 	expectedStartBlockNumber := big.NewInt(100)
 	actualFirstBlock := common.Block{Number: big.NewInt(105)}
@@ -459,6 +472,7 @@ func TestHandleMissingStagingData(t *testing.T) {
 	}
 
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
@@ -505,6 +519,7 @@ func TestHandleMissingStagingDataIsPolledWithCorrectBatchSize(t *testing.T) {
 	}
 
 	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeBackfill
 
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
