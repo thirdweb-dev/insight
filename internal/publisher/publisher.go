@@ -97,13 +97,7 @@ func (p *Publisher) initialize() error {
 }
 
 func (p *Publisher) PublishBlockData(blockData []common.BlockData) error {
-	err := p.publishBlockData(blockData, false)
-	if err != nil {
-		return err
-	}
-	metrics.PublisherBlockCounter.Add(float64(len(blockData)))
-	metrics.LastPublishedBlock.Set(float64(blockData[len(blockData)-1].Block.Number.Int64()))
-	return nil
+	return p.publishBlockData(blockData, false)
 }
 
 func (p *Publisher) PublishReorg(oldData []common.BlockData, newData []common.BlockData) error {
@@ -114,8 +108,6 @@ func (p *Publisher) PublishReorg(oldData []common.BlockData, newData []common.Bl
 	if err := p.publishBlockData(newData, false); err != nil {
 		return fmt.Errorf("failed to publish new block data: %v", err)
 	}
-
-	metrics.PublisherReorgedBlockCounter.Add(float64(len(oldData)))
 	return nil
 }
 
@@ -167,6 +159,8 @@ func (p *Publisher) publishBlockData(blockData []common.BlockData, isReorg bool)
 	if p.client == nil || len(blockData) == 0 {
 		return nil
 	}
+
+	publishStart := time.Now()
 
 	// Prepare messages for blocks, events, transactions and traces
 	blockMessages := make([]*kgo.Record, len(blockData))
@@ -251,6 +245,13 @@ func (p *Publisher) publishBlockData(blockData []common.BlockData, isReorg bool)
 		}
 	}
 
+	log.Debug().Str("metric", "publish_duration").Msgf("Publisher.PublishBlockData duration: %f", time.Since(publishStart).Seconds())
+	metrics.PublishDuration.Observe(time.Since(publishStart).Seconds())
+	metrics.PublisherBlockCounter.Add(float64(len(blockData)))
+	metrics.LastPublishedBlock.Set(float64(blockData[len(blockData)-1].Block.Number.Int64()))
+	if isReorg {
+		metrics.PublisherReorgedBlockCounter.Add(float64(len(blockData)))
+	}
 	return nil
 }
 
