@@ -253,13 +253,10 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
 	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
 
-	publishStart := time.Now()
 	go func() {
 		if err := c.publisher.PublishBlockData(blockData); err != nil {
 			log.Error().Err(err).Msg("Failed to publish block data to kafka")
 		}
-		log.Debug().Str("metric", "publish_duration").Msgf("Publisher.PublishBlockData duration: %f", time.Since(publishStart).Seconds())
-		metrics.PublishDuration.Observe(time.Since(publishStart).Seconds())
 	}()
 
 	stagingDeleteStart := time.Now()
