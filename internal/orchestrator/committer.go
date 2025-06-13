@@ -105,7 +105,7 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 }
 
-func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
+func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, error) {
 	startTime := time.Now()
 	defer func() {
 		log.Debug().Str("metric", "get_block_numbers_to_commit_duration").Msgf("getBlockNumbersToCommit duration: %f", time.Since(startTime).Seconds())
@@ -129,7 +129,10 @@ func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 	}
 
 	startBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(1))
-	endBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+	endBlock, err := c.getBlockToCommitUntil(ctx, latestCommittedBlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("error getting block to commit until: %v", err)
+	}
 
 	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
 	blockNumbers := make([]*big.Int, blockCount)
@@ -140,8 +143,52 @@ func (c *Committer) getBlockNumbersToCommit() ([]*big.Int, error) {
 	return blockNumbers, nil
 }
 
+func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBlockNumber *big.Int) (*big.Int, error) {
+	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+	if c.workMode == WorkModeBackfill {
+		return untilBlock, nil
+	} else {
+		// get latest block from RPC and if that's less than until block, return that
+		latestBlock, err := c.rpc.GetLatestBlockNumber(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error getting latest block from RPC: %v", err)
+		}
+		if latestBlock.Cmp(untilBlock) < 0 {
+			log.Debug().Msgf("Committing until latest block: %s", latestBlock.String())
+			return latestBlock, nil
+		}
+		return untilBlock, nil
+	}
+}
+
+func (c *Committer) fetchBlockDataToCommit(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
+	if c.workMode == WorkModeBackfill {
+		startTime := time.Now()
+		blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{BlockNumbers: blockNumbers, ChainId: c.rpc.GetChainID()})
+		log.Debug().Str("metric", "get_staging_data_duration").Msgf("StagingStorage.GetStagingData duration: %f", time.Since(startTime).Seconds())
+		metrics.GetStagingDataDuration.Observe(time.Since(startTime).Seconds())
+
+		if err != nil {
+			return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
+		}
+		if len(blocksData) == 0 {
+			log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64())
+			c.handleMissingStagingData(ctx, blockNumbers)
+			return nil, nil
+		}
+		return blocksData, nil
+	} else {
+		poller := NewBoundlessPoller(c.rpc, c.storage)
+		blocksData, err := poller.PollWithoutSaving(ctx, blockNumbers)
+		if err != nil {
+			return nil, fmt.Errorf("poller error: %v", err)
+		}
+		return blocksData, nil
+	}
+}
+
 func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]common.BlockData, error) {
-	blocksToCommit, err := c.getBlockNumbersToCommit()
+	blocksToCommit, err := c.getBlockNumbersToCommit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
 	}
@@ -149,17 +196,11 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 		return nil, nil
 	}
 
-	startTime := time.Now()
-	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{BlockNumbers: blocksToCommit, ChainId: c.rpc.GetChainID()})
-	log.Debug().Str("metric", "get_staging_data_duration").Msgf("StagingStorage.GetStagingData duration: %f", time.Since(startTime).Seconds())
-	metrics.GetStagingDataDuration.Observe(time.Since(startTime).Seconds())
-
+	blocksData, err := c.fetchBlockDataToCommit(ctx, blocksToCommit)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
+		return nil, err
 	}
 	if len(blocksData) == 0 {
-		log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blocksToCommit[0].Int64(), blocksToCommit[len(blocksToCommit)-1].Int64())
-		c.handleMissingStagingData(ctx, blocksToCommit)
 		return nil, nil
 	}
 
@@ -249,6 +290,11 @@ func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big
 	metrics.GapCounter.Inc()
 	// record the first missed block number in prometheus
 	metrics.MissedBlockNumbers.Set(float64(expectedStartBlockNumber.Int64()))
+
+	if c.workMode == WorkModeLive {
+		log.Debug().Msgf("Skipping gap handling in live mode. Expected block %s, actual first block %s", expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
+		return nil
+	}
 
 	poller := NewBoundlessPoller(c.rpc, c.storage)
 
