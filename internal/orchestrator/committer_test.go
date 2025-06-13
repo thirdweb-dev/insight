@@ -372,6 +372,7 @@ func TestStartCommitter(t *testing.T) {
 
 	committer := NewCommitter(mockRPC, mockStorage)
 	committer.triggerIntervalMs = 100 // Set a short interval for testing
+	committer.workMode = WorkModeBackfill
 
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
@@ -405,6 +406,7 @@ func TestCommitterRespectsSIGTERM(t *testing.T) {
 
 	committer := NewCommitter(mockRPC, mockStorage)
 	committer.triggerIntervalMs = 100 // Short interval for testing
+	committer.workMode = WorkModeBackfill
 
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)

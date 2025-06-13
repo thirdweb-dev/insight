@@ -144,3 +144,11 @@ var (
 		Buckets: prometheus.DefBuckets,
 	})
 )
+
+// Work Mode Metrics
+var (
+	CurrentWorkMode = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "current_work_mode",
+		Help: "The current work mode (0 = backfill, 1 = live)",
+	})
+)

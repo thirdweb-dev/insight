@@ -54,11 +54,17 @@ func (o *Orchestrator) Start() {
 		o.cancel()
 	}()
 
+	// Create the work mode monitor first
+	workModeMonitor := NewWorkModeMonitor(o.rpc, o.storage)
+
 	if o.pollerEnabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			poller := NewPoller(o.rpc, o.storage)
+			pollerWorkModeChan := make(chan WorkMode, 1)
+			workModeMonitor.RegisterChannel(pollerWorkModeChan)
+			defer workModeMonitor.UnregisterChannel(pollerWorkModeChan)
+			poller := NewPoller(o.rpc, o.storage, WithPollerWorkModeChan(pollerWorkModeChan))
 			poller.Start(ctx)
 		}()
 	}
@@ -76,7 +82,10 @@ func (o *Orchestrator) Start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			committer := NewCommitter(o.rpc, o.storage)
+			committerWorkModeChan := make(chan WorkMode, 1)
+			workModeMonitor.RegisterChannel(committerWorkModeChan)
+			defer workModeMonitor.UnregisterChannel(committerWorkModeChan)
+			committer := NewCommitter(o.rpc, o.storage, WithCommitterWorkModeChan(committerWorkModeChan))
 			committer.Start(ctx)
 		}()
 	}
@@ -89,6 +98,12 @@ func (o *Orchestrator) Start() {
 			reorgHandler.Start(ctx)
 		}()
 	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		workModeMonitor.Start(ctx)
+	}()
 
 	// The chain tracker is always running
 	wg.Add(1)
