@@ -329,12 +329,25 @@ func TestCommit(t *testing.T) {
 		{Block: common.Block{Number: big.NewInt(102)}},
 	}
 
+	// Create a channel to signal when DeleteStagingData is called
+	deleteDone := make(chan struct{})
+
 	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
-	mockStagingStorage.EXPECT().DeleteStagingData(blockData).Return(nil)
+	mockStagingStorage.EXPECT().DeleteStagingData(blockData).RunAndReturn(func(data []common.BlockData) error {
+		close(deleteDone)
+		return nil
+	})
 
 	err := committer.commit(context.Background(), blockData)
-
 	assert.NoError(t, err)
+
+	// Wait for DeleteStagingData to be called with a timeout
+	select {
+	case <-deleteDone:
+		// Success - DeleteStagingData was called
+	case <-time.After(2 * time.Second):
+		t.Fatal("DeleteStagingData was not called within timeout period")
+	}
 }
 
 func TestHandleGap(t *testing.T) {
