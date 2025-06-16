@@ -259,12 +259,16 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 		}
 	}()
 
-	stagingDeleteStart := time.Now()
-	if err := c.storage.StagingStorage.DeleteStagingData(blockData); err != nil {
-		return fmt.Errorf("error deleting data from staging storage: %v", err)
+	if c.workMode == WorkModeBackfill {
+		go func() {
+			stagingDeleteStart := time.Now()
+			if err := c.storage.StagingStorage.DeleteStagingData(blockData); err != nil {
+				log.Error().Err(err).Msg("Failed to delete staging data")
+			}
+			log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingData duration: %f", time.Since(stagingDeleteStart).Seconds())
+			metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
+		}()
 	}
-	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingData duration: %f", time.Since(stagingDeleteStart).Seconds())
-	metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
 
 	// Find highest block number from committed blocks
 	highestBlock := blockData[0].Block
