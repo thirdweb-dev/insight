@@ -135,6 +135,9 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 	}
 
 	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
+	if blockCount < 1 {
+		return []*big.Int{}, fmt.Errorf("more blocks have been committed than the RPC has available - possible chain reset")
+	}
 	blockNumbers := make([]*big.Int, blockCount)
 	for i := int64(0); i < blockCount; i++ {
 		blockNumber := new(big.Int).Add(startBlock, big.NewInt(i))
