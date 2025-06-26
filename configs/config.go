@@ -166,6 +166,11 @@ type PublisherConfig struct {
 	Events       EventPublisherConfig       `mapstructure:"events"`
 }
 
+type WorkModeConfig struct {
+	CheckIntervalMinutes int   `mapstructure:"checkIntervalMinutes"`
+	LiveModeThreshold    int64 `mapstructure:"liveModeThreshold"`
+}
+
 type Config struct {
 	RPC              RPCConfig              `mapstructure:"rpc"`
 	Log              LogConfig              `mapstructure:"log"`
@@ -176,6 +181,7 @@ type Config struct {
 	Storage          StorageConfig          `mapstructure:"storage"`
 	API              APIConfig              `mapstructure:"api"`
 	Publisher        PublisherConfig        `mapstructure:"publisher"`
+	WorkMode         WorkModeConfig         `mapstructure:"workMode"`
 }
 
 var Cfg Config

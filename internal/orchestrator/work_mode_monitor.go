@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
@@ -15,26 +16,39 @@ import (
 type WorkMode string
 
 const (
-	WORK_MODE_CHECK_INTERVAL              = 10 * time.Minute
-	WORK_MODE_BACKFILL_THRESHOLD          = 500
-	WorkModeLive                 WorkMode = "live"
-	WorkModeBackfill             WorkMode = "backfill"
+	DEFAULT_WORK_MODE_CHECK_INTERVAL          = 10
+	DEFAULT_LIVE_MODE_THRESHOLD               = 500
+	WorkModeLive                     WorkMode = "live"
+	WorkModeBackfill                 WorkMode = "backfill"
 )
 
 type WorkModeMonitor struct {
-	rpc              rpc.IRPCClient
-	storage          storage.IStorage
-	workModeChannels map[chan WorkMode]struct{}
-	channelsMutex    sync.RWMutex
-	currentMode      WorkMode
+	rpc               rpc.IRPCClient
+	storage           storage.IStorage
+	workModeChannels  map[chan WorkMode]struct{}
+	channelsMutex     sync.RWMutex
+	currentMode       WorkMode
+	checkInterval     time.Duration
+	liveModeThreshold *big.Int
 }
 
 func NewWorkModeMonitor(rpc rpc.IRPCClient, storage storage.IStorage) *WorkModeMonitor {
+	checkInterval := config.Cfg.WorkMode.CheckIntervalMinutes
+	if checkInterval < 1 {
+		checkInterval = DEFAULT_WORK_MODE_CHECK_INTERVAL
+	}
+	liveModeThreshold := config.Cfg.WorkMode.LiveModeThreshold
+	if liveModeThreshold < 1 {
+		liveModeThreshold = DEFAULT_LIVE_MODE_THRESHOLD
+	}
+	log.Info().Msgf("Work mode monitor initialized with check interval %d and live mode threshold %d", checkInterval, liveModeThreshold)
 	return &WorkModeMonitor{
-		rpc:              rpc,
-		storage:          storage,
-		workModeChannels: make(map[chan WorkMode]struct{}),
-		currentMode:      "",
+		rpc:               rpc,
+		storage:           storage,
+		workModeChannels:  make(map[chan WorkMode]struct{}),
+		currentMode:       "",
+		checkInterval:     time.Duration(checkInterval) * time.Minute,
+		liveModeThreshold: big.NewInt(liveModeThreshold),
 	}
 }
 
@@ -83,7 +97,7 @@ func (m *WorkModeMonitor) Start(ctx context.Context) {
 		m.broadcastWorkMode(newMode)
 	}
 
-	ticker := time.NewTicker(WORK_MODE_CHECK_INTERVAL)
+	ticker := time.NewTicker(m.checkInterval)
 	defer ticker.Stop()
 
 	log.Info().Msgf("Work mode monitor started with initial mode: %s", m.currentMode)
@@ -145,7 +159,7 @@ func (m *WorkModeMonitor) determineWorkMode(ctx context.Context) (WorkMode, erro
 
 	blockDiff := new(big.Int).Sub(latestBlock, lastCommittedBlock)
 	log.Debug().Msgf("Committer is %d blocks behind the chain", blockDiff.Int64())
-	if blockDiff.Cmp(big.NewInt(WORK_MODE_BACKFILL_THRESHOLD)) < 0 {
+	if blockDiff.Cmp(m.liveModeThreshold) < 0 {
 		return WorkModeLive, nil
 	}
 
