@@ -70,9 +70,13 @@ func TestSearch_TransactionHash(t *testing.T) {
 
 	txHash := "0x1234567890123456789012345678901234567890123456789012345678901234"
 
+	// Mock the 3 GetTransactions calls for different time ranges
+	// 1. Past 5 days (startOffsetDays=5, endOffsetDays=0)
 	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
-			filter.FilterParams["hash"] == txHash
+			filter.FilterParams["hash"] == txHash &&
+			filter.FilterParams["block_timestamp_gte"] != "" &&
+			filter.FilterParams["block_timestamp_lte"] == ""
 	})).Return(storage.QueryResult[common.Transaction]{
 		Data: []common.Transaction{{
 			Hash:                 txHash,
@@ -84,9 +88,33 @@ func TestSearch_TransactionHash(t *testing.T) {
 		}},
 	}, nil)
 
-	// Mock other necessary calls for block and logs search
-	mockStorage.EXPECT().GetBlocks(mock.Anything).Return(storage.QueryResult[common.Block]{}, nil)
-	mockStorage.EXPECT().GetLogs(mock.Anything).Return(storage.QueryResult[common.Log]{}, nil)
+	// 2. 5-30 days (startOffsetDays=30, endOffsetDays=5)
+	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
+			filter.FilterParams["hash"] == txHash &&
+			filter.FilterParams["block_timestamp_gte"] != "" &&
+			filter.FilterParams["block_timestamp_lte"] != ""
+	})).Return(storage.QueryResult[common.Transaction]{}, nil)
+
+	// 3. More than 30 days (startOffsetDays=0, endOffsetDays=30)
+	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
+			filter.FilterParams["hash"] == txHash &&
+			filter.FilterParams["block_timestamp_gte"] == "" &&
+			filter.FilterParams["block_timestamp_lte"] != ""
+	})).Return(storage.QueryResult[common.Transaction]{}, nil)
+
+	// Mock the GetBlocks call for block hash search
+	mockStorage.EXPECT().GetBlocks(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
+			filter.FilterParams["hash"] == txHash
+	})).Return(storage.QueryResult[common.Block]{}, nil)
+
+	// Mock the GetLogs call for topic_0 search
+	mockStorage.EXPECT().GetLogs(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
+			filter.Signature == txHash
+	})).Return(storage.QueryResult[common.Log]{}, nil)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/v1/search/1/"+txHash, nil)
@@ -112,7 +140,7 @@ func TestSearch_Address(t *testing.T) {
 	router, mockStorage := setupTestRouter()
 
 	address := "0x1234567890123456789012345678901234567890"
-	mockStorage.On("GetTransactions", mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.ContractAddress == address
 	})).Return(storage.QueryResult[common.Transaction]{
@@ -126,7 +154,7 @@ func TestSearch_Address(t *testing.T) {
 		}},
 	}, nil)
 
-	mockStorage.On("GetTransactions", mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.FromAddress == address
 	})).Return(storage.QueryResult[common.Transaction]{
@@ -164,7 +192,7 @@ func TestSearch_Contract(t *testing.T) {
 	router, mockStorage := setupTestRouter()
 
 	address := "0x1234567890123456789012345678901234567890"
-	mockStorage.On("GetTransactions", mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.ContractAddress == address
 	})).Return(storage.QueryResult[common.Transaction]{
@@ -204,7 +232,7 @@ func TestSearch_FunctionSignature(t *testing.T) {
 	router, mockStorage := setupTestRouter()
 
 	signature := "0x12345678"
-	mockStorage.On("GetTransactions", mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.Signature == signature
 	})).Return(storage.QueryResult[common.Transaction]{
