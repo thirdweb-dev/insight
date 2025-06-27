@@ -125,6 +125,8 @@ func init() {
 	rootCmd.PersistentFlags().String("publisher-events-topicName", "", "Kafka topic name for events")
 	rootCmd.PersistentFlags().String("publisher-events-addressFilter", "", "Filter events by address")
 	rootCmd.PersistentFlags().String("publisher-events-topic0Filter", "", "Filter events by topic0")
+	rootCmd.PersistentFlags().Int("workMode-checkIntervalMinutes", 10, "How often to check work mode in minutes")
+	rootCmd.PersistentFlags().Int64("workMode-liveModeThreshold", 500, "How many blocks the indexer can be behind before switching to live mode")
 	viper.BindPFlag("rpc.url", rootCmd.PersistentFlags().Lookup("rpc-url"))
 	viper.BindPFlag("rpc.blocks.blocksPerRequest", rootCmd.PersistentFlags().Lookup("rpc-blocks-blocksPerRequest"))
 	viper.BindPFlag("rpc.blocks.batchDelay", rootCmd.PersistentFlags().Lookup("rpc-blocks-batchDelay"))
@@ -214,6 +216,8 @@ func init() {
 	viper.BindPFlag("publisher.events.topicName", rootCmd.PersistentFlags().Lookup("publisher-events-topicName"))
 	viper.BindPFlag("publisher.events.addressFilter", rootCmd.PersistentFlags().Lookup("publisher-events-addressFilter"))
 	viper.BindPFlag("publisher.events.topic0Filter", rootCmd.PersistentFlags().Lookup("publisher-events-topic0Filter"))
+	viper.BindPFlag("workMode.checkIntervalMinutes", rootCmd.PersistentFlags().Lookup("workMode-checkIntervalMinutes"))
+	viper.BindPFlag("workMode.liveModeThreshold", rootCmd.PersistentFlags().Lookup("workMode-liveModeThreshold"))
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
 }
