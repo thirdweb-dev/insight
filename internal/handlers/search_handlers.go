@@ -84,11 +84,12 @@ func Search(c *gin.Context) {
 		return
 	}
 
+	var data interface{} = result
 	sendJSONResponse(c, api.QueryResponse{
 		Meta: api.Meta{
 			ChainId: chainId.Uint64(),
 		},
-		Data: result,
+		Data: &data,
 	})
 }
 

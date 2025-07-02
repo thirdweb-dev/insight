@@ -73,9 +73,9 @@ type QueryResponse struct {
 	// @Description Metadata for the query response
 	Meta Meta `json:"meta"`
 	// @Description Query result data
-	Data interface{} `json:"data,omitempty"`
+	Data *interface{} `json:"data,omitempty"`
 	// @Description Aggregation results
-	Aggregations []map[string]interface{} `json:"aggregations,omitempty"`
+	Aggregations *[]map[string]interface{} `json:"aggregations,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, message string, code int) {

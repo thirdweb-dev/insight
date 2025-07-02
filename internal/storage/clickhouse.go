@@ -535,8 +535,8 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	columnNames := rows.Columns()
 	columnTypes := rows.ColumnTypes()
 
-	// Collect results
-	var aggregates []map[string]interface{}
+	// Collect results - initialize as empty array to ensure we always return an array
+	aggregates := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		values := make([]interface{}, len(columnNames))
 

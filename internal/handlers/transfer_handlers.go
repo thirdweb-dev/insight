@@ -161,7 +161,8 @@ func GetTokenTransfers(c *gin.Context) {
 		return
 	}
 
-	queryResult.Data = serializeTransfers(transfersResult.Data)
+	var data interface{} = serializeTransfers(transfersResult.Data)
+	queryResult.Data = &data
 	sendJSONResponse(c, queryResult)
 }
 

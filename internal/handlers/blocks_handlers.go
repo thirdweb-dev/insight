@@ -88,7 +88,7 @@ func handleBlocksRequest(c *gin.Context) {
 			api.InternalErrorHandler(c)
 			return
 		}
-		queryResult.Aggregations = aggregatesResult.Aggregates
+		queryResult.Aggregations = &aggregatesResult.Aggregates
 		queryResult.Meta.TotalItems = len(aggregatesResult.Aggregates)
 	} else {
 		// Retrieve blocks data
@@ -100,7 +100,8 @@ func handleBlocksRequest(c *gin.Context) {
 			return
 		}
 
-		queryResult.Data = serializeBlocks(blocksResult.Data)
+		var data interface{} = serializeBlocks(blocksResult.Data)
+		queryResult.Data = &data
 		queryResult.Meta.TotalItems = len(blocksResult.Data)
 	}
 
