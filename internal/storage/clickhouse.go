@@ -515,8 +515,8 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	}
 
 	// Add limit clause
-	if qf.Page > 0 && qf.Limit > 0 {
-		offset := (qf.Page - 1) * qf.Limit
+	if qf.Page >= 0 && qf.Limit > 0 {
+		offset := qf.Page * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else if qf.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
@@ -648,8 +648,8 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 	}
 
 	// Add limit clause
-	if qf.Page > 0 && qf.Limit > 0 {
-		offset := (qf.Page - 1) * qf.Limit
+	if qf.Page >= 0 && qf.Limit > 0 {
+		offset := qf.Page * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else if qf.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
@@ -1613,8 +1613,8 @@ func (c *ClickHouseConnector) GetTokenTransfers(qf TransfersQueryFilter, fields 
 	}
 
 	// Add limit clause
-	if qf.Page > 0 && qf.Limit > 0 {
-		offset := (qf.Page - 1) * qf.Limit
+	if qf.Page >= 0 && qf.Limit > 0 {
+		offset := qf.Page * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else if qf.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
@@ -1704,7 +1704,7 @@ func (c *ClickHouseConnector) GetTokenBalances(qf BalancesQueryFilter, fields ..
 	}
 
 	// Add limit clause
-	if qf.Page > 0 && qf.Limit > 0 {
+	if qf.Page >= 0 && qf.Limit > 0 {
 		offset := qf.Page * qf.Limit
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else if qf.Limit > 0 {
