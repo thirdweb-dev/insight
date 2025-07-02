@@ -128,7 +128,8 @@ func GetTokenIdsByType(c *gin.Context) {
 		return
 	}
 
-	queryResult.Data = serializeTokenIds(balancesResult.Data)
+	var data interface{} = serializeTokenIds(balancesResult.Data)
+	queryResult.Data = &data
 	sendJSONResponse(c, queryResult)
 }
 
@@ -224,7 +225,8 @@ func GetTokenBalancesByType(c *gin.Context) {
 		api.InternalErrorHandler(c)
 		return
 	}
-	queryResult.Data = serializeBalances(balancesResult.Data)
+	var data interface{} = serializeBalances(balancesResult.Data)
+	queryResult.Data = &data
 	sendJSONResponse(c, queryResult)
 }
 
@@ -313,7 +315,8 @@ func GetTokenHoldersByType(c *gin.Context) {
 		api.InternalErrorHandler(c)
 		return
 	}
-	queryResult.Data = serializeHolders(balancesResult.Data)
+	var data interface{} = serializeHolders(balancesResult.Data)
+	queryResult.Data = &data
 	sendJSONResponse(c, queryResult)
 }
 

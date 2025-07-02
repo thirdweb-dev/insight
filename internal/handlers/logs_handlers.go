@@ -168,7 +168,7 @@ func handleLogsRequest(c *gin.Context) {
 			api.InternalErrorHandler(c)
 			return
 		}
-		queryResult.Aggregations = aggregatesResult.Aggregates
+		queryResult.Aggregations = &aggregatesResult.Aggregates
 		queryResult.Meta.TotalItems = len(aggregatesResult.Aggregates)
 	} else {
 		// Retrieve logs data
@@ -180,12 +180,13 @@ func handleLogsRequest(c *gin.Context) {
 			return
 		}
 
+		var data interface{}
 		if decodedLogs := decodeLogsIfNeeded(chainId.String(), logsResult.Data, eventABI, config.Cfg.API.AbiDecodingEnabled && queryParams.Decode); decodedLogs != nil {
-			queryResult.Data = serializeDecodedLogs(decodedLogs)
+			data = serializeDecodedLogs(decodedLogs)
 		} else {
-			queryResult.Data = serializeLogs(logsResult.Data)
+			data = serializeLogs(logsResult.Data)
 		}
-
+		queryResult.Data = &data
 		queryResult.Meta.TotalItems = len(logsResult.Data)
 	}
 

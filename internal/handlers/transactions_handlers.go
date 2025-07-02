@@ -187,7 +187,7 @@ func handleTransactionsRequest(c *gin.Context) {
 			api.InternalErrorHandler(c)
 			return
 		}
-		queryResult.Aggregations = aggregatesResult.Aggregates
+		queryResult.Aggregations = &aggregatesResult.Aggregates
 		queryResult.Meta.TotalItems = len(aggregatesResult.Aggregates)
 	} else {
 		// Retrieve logs data
@@ -199,11 +199,13 @@ func handleTransactionsRequest(c *gin.Context) {
 			return
 		}
 
+		var data interface{}
 		if decodedTxs := decodeTransactionsIfNeeded(chainId.String(), transactionsResult.Data, functionABI, config.Cfg.API.AbiDecodingEnabled && queryParams.Decode); decodedTxs != nil {
-			queryResult.Data = serializeDecodedTransactions(decodedTxs)
+			data = serializeDecodedTransactions(decodedTxs)
 		} else {
-			queryResult.Data = serializeTransactions(transactionsResult.Data)
+			data = serializeTransactions(transactionsResult.Data)
 		}
+		queryResult.Data = &data
 		queryResult.Meta.TotalItems = len(transactionsResult.Data)
 	}
 
