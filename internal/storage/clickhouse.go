@@ -1358,9 +1358,10 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 		metrics.ClickHouseTransactionsInserted.Add(float64(txsCount))
 		metrics.ClickHouseLogsInserted.Add(float64(logsCount))
 		metrics.ClickHouseTracesInserted.Add(float64(tracesCount))
+		metrics.ClickHouseMainStorageRowsInserted.Add(float64(end - i))
+		metrics.ClickHouseMainStorageInsertOperations.Inc()
 	}
 
-	metrics.ClickHouseMainStorageRowsInserted.Add(float64(len(data)))
 	return nil
 }
 

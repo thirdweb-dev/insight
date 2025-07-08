@@ -155,6 +155,11 @@ var (
 
 // ClickHouse Insert Row Count Metrics
 var (
+	ClickHouseMainStorageInsertOperations = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "clickhouse_main_storage_insert_operations",
+		Help: "The total number of insert operations into ClickHouse main storage",
+	})
+
 	ClickHouseMainStorageRowsInserted = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "clickhouse_main_storage_rows_inserted_total",
 		Help: "The total number of rows inserted into ClickHouse main storage",
