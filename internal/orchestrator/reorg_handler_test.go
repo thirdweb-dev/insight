@@ -536,10 +536,30 @@ func TestStartReorgHandler(t *testing.T) {
 
 	mockOrchestratorStorage.EXPECT().SetLastReorgCheckedBlockNumber(mock.Anything, mock.Anything).Return(nil).Times(2)
 
-	go handler.Start(context.Background())
+	// Create a cancelable context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start the handler in a goroutine
+	done := make(chan struct{})
+	go func() {
+		handler.Start(ctx)
+		close(done)
+	}()
 
 	// Allow some time for the goroutine to run
 	time.Sleep(250 * time.Millisecond)
+
+	// Cancel the context to stop the handler
+	cancel()
+
+	// Wait for the handler to stop with a timeout
+	select {
+	case <-done:
+		// Success - handler stopped
+	case <-time.After(2 * time.Second):
+		t.Fatal("Handler did not stop within timeout period after receiving cancel signal")
+	}
 }
 
 func TestReorgHandlingIsSkippedIfMostRecentAndLastCheckedBlockAreSame(t *testing.T) {
