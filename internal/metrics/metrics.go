@@ -152,3 +152,26 @@ var (
 		Help: "The current work mode (0 = backfill, 1 = live)",
 	})
 )
+
+// ClickHouse Insert Row Count Metrics
+var (
+	ClickHouseMainStorageRowsInserted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "clickhouse_main_storage_rows_inserted_total",
+		Help: "The total number of rows inserted into ClickHouse main storage",
+	})
+
+	ClickHouseTransactionsInserted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "clickhouse_transactions_inserted_total",
+		Help: "The total number of transactions inserted into ClickHouse",
+	})
+
+	ClickHouseLogsInserted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "clickhouse_logs_inserted_total",
+		Help: "The total number of logs inserted into ClickHouse",
+	})
+
+	ClickHouseTracesInserted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "clickhouse_traces_inserted_total",
+		Help: "The total number of traces inserted into ClickHouse",
+	})
+)
