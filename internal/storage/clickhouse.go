@@ -18,6 +18,7 @@ import (
 	zLog "github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
 type ClickHouseConnector struct {
@@ -271,7 +272,7 @@ func (c *ClickHouseConnector) insertTransactions(txs []common.Transaction, opt I
 			return err
 		}
 	}
-
+	metrics.ClickHouseTransactionsInserted.Add(float64(len(txs)))
 	return nil
 }
 
@@ -334,7 +335,7 @@ func (c *ClickHouseConnector) insertLogs(logs []common.Log, opt InsertOptions) e
 			return err
 		}
 	}
-
+	metrics.ClickHouseLogsInserted.Add(float64(len(logs)))
 	return nil
 }
 
@@ -406,7 +407,7 @@ func (c *ClickHouseConnector) insertTraces(traces []common.Trace, opt InsertOpti
 			return err
 		}
 	}
-
+	metrics.ClickHouseTracesInserted.Add(float64(len(traces)))
 	return nil
 }
 
@@ -1191,6 +1192,9 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 		}
 		defer batch.Close()
 
+		txsCount := 0
+		logsCount := 0
+		tracesCount := 0
 		for _, blockData := range data[i:end] {
 			block := blockData.Block
 
@@ -1221,6 +1225,7 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 
 			// Prepare transactions array
 			transactions := make([][]interface{}, len(blockData.Transactions))
+			txsCount += len(blockData.Transactions)
 			for j, tx := range blockData.Transactions {
 				transactions[j] = []interface{}{
 					tx.Hash,
@@ -1259,6 +1264,7 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 
 			// Prepare logs array
 			logs := make([][]interface{}, len(blockData.Logs))
+			logsCount += len(blockData.Logs)
 			for j, log := range blockData.Logs {
 				logs[j] = []interface{}{
 					log.BlockNumber,
@@ -1278,6 +1284,7 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 
 			// Prepare traces array
 			traces := make([][]interface{}, len(blockData.Traces))
+			tracesCount += len(blockData.Traces)
 			for j, trace := range blockData.Traces {
 				traces[j] = []interface{}{
 					trace.BlockNumber,
@@ -1348,8 +1355,12 @@ func (c *ClickHouseConnector) InsertBlockData(data []common.BlockData) error {
 				zLog.Info().Err(err).Msgf("Failure while inserting block data, but insert still succeeded")
 			}
 		}
+		metrics.ClickHouseTransactionsInserted.Add(float64(txsCount))
+		metrics.ClickHouseLogsInserted.Add(float64(logsCount))
+		metrics.ClickHouseTracesInserted.Add(float64(tracesCount))
 	}
 
+	metrics.ClickHouseMainStorageRowsInserted.Add(float64(len(data)))
 	return nil
 }
 
