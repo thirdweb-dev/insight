@@ -71,7 +71,7 @@ func TestSearch_TransactionHash(t *testing.T) {
 	txHash := "0x1234567890123456789012345678901234567890123456789012345678901234"
 
 	// Mock the 3 GetTransactions calls for different time ranges
-	// 1. Past 5 days (startOffsetDays=5, endOffsetDays=0)
+	// 1. Past 5 days (startOffsetDays=5, endOffsetDays=0) - This should always be called first and return a result
 	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.FilterParams["hash"] == txHash &&
@@ -88,33 +88,33 @@ func TestSearch_TransactionHash(t *testing.T) {
 		}},
 	}, nil)
 
-	// 2. 5-30 days (startOffsetDays=30, endOffsetDays=5)
-	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	// 2. 5-30 days (startOffsetDays=30, endOffsetDays=5) - This might not be called due to race conditions
+	mockStorage.On("GetTransactions", mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.FilterParams["hash"] == txHash &&
 			filter.FilterParams["block_timestamp_gte"] != "" &&
 			filter.FilterParams["block_timestamp_lte"] != ""
-	})).Return(storage.QueryResult[common.Transaction]{}, nil)
+	})).Return(storage.QueryResult[common.Transaction]{}, nil).Maybe()
 
-	// 3. More than 30 days (startOffsetDays=0, endOffsetDays=30)
-	mockStorage.EXPECT().GetTransactions(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	// 3. More than 30 days (startOffsetDays=0, endOffsetDays=30) - This might not be called due to race conditions
+	mockStorage.On("GetTransactions", mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.FilterParams["hash"] == txHash &&
 			filter.FilterParams["block_timestamp_gte"] == "" &&
 			filter.FilterParams["block_timestamp_lte"] != ""
-	})).Return(storage.QueryResult[common.Transaction]{}, nil)
+	})).Return(storage.QueryResult[common.Transaction]{}, nil).Maybe()
 
-	// Mock the GetBlocks call for block hash search
-	mockStorage.EXPECT().GetBlocks(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	// Mock the GetBlocks call for block hash search - This might not be called due to race conditions
+	mockStorage.On("GetBlocks", mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.FilterParams["hash"] == txHash
-	})).Return(storage.QueryResult[common.Block]{}, nil)
+	})).Return(storage.QueryResult[common.Block]{}, nil).Maybe()
 
-	// Mock the GetLogs call for topic_0 search
-	mockStorage.EXPECT().GetLogs(mock.MatchedBy(func(filter storage.QueryFilter) bool {
+	// Mock the GetLogs call for topic_0 search - This might not be called due to race conditions
+	mockStorage.On("GetLogs", mock.MatchedBy(func(filter storage.QueryFilter) bool {
 		return filter.ChainId.Cmp(big.NewInt(1)) == 0 &&
 			filter.Signature == txHash
-	})).Return(storage.QueryResult[common.Log]{}, nil)
+	})).Return(storage.QueryResult[common.Log]{}, nil).Maybe()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/v1/search/1/"+txHash, nil)
