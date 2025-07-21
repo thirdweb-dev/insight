@@ -22,6 +22,18 @@ CREATE TABLE IF NOT EXISTS logs (
     INDEX idx_topic1 topic_1 TYPE bloom_filter GRANULARITY 1,
     INDEX idx_topic2 topic_2 TYPE bloom_filter GRANULARITY 1,
     INDEX idx_topic3 topic_3 TYPE bloom_filter GRANULARITY 1,
+    PROJECTION logs_chainid_topic0_address
+    (
+        SELECT *
+        ORDER BY 
+            chain_id,
+            topic_0,
+            address,
+            block_number,
+            transaction_index,
+            log_index
+    )
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, block_number, transaction_hash, log_index)
-PARTITION BY chain_id;
+PARTITION BY chain_id
+SETTINGS deduplicate_merge_projection_mode = 'drop', lightweight_mutation_projection_mode = 'rebuild';
