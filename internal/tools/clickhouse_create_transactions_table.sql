@@ -39,6 +39,24 @@ CREATE TABLE IF NOT EXISTS transactions (
     INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 1,
     INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
     INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 1,
+    PROJECTION txs_chainid_from_address
+    (
+        SELECT *
+        ORDER BY 
+          chain_id,
+          from_address,
+          block_number
+    ),
+    PROJECTION txs_chainid_to_address
+    (
+        SELECT *
+        ORDER BY 
+          chain_id,
+          to_address,
+          block_number,
+          hash
+    )
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, block_number, hash)
-PARTITION BY chain_id;
+PARTITION BY chain_id
+SETTINGS deduplicate_merge_projection_mode = 'drop', lightweight_mutation_projection_mode = 'rebuild';
