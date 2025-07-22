@@ -113,7 +113,7 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 	}()
 
 	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
-	log.Info().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
+	log.Debug().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +135,11 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 	}
 
 	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
-	if blockCount < 1 {
+	if blockCount < 0 {
 		return []*big.Int{}, fmt.Errorf("more blocks have been committed than the RPC has available - possible chain reset")
+	}
+	if blockCount == 0 {
+		return []*big.Int{}, nil
 	}
 	blockNumbers := make([]*big.Int, blockCount)
 	for i := int64(0); i < blockCount; i++ {
