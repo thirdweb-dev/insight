@@ -85,7 +85,8 @@ func (o *Orchestrator) Start() {
 			committerWorkModeChan := make(chan WorkMode, 1)
 			workModeMonitor.RegisterChannel(committerWorkModeChan)
 			defer workModeMonitor.UnregisterChannel(committerWorkModeChan)
-			committer := NewCommitter(o.rpc, o.storage, WithCommitterWorkModeChan(committerWorkModeChan))
+			validator := NewValidator(o.rpc, o.storage)
+			committer := NewCommitter(o.rpc, o.storage, WithCommitterWorkModeChan(committerWorkModeChan), WithValidator(validator))
 			committer.Start(ctx)
 		}()
 	}

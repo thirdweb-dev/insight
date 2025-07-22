@@ -29,6 +29,7 @@ type Committer struct {
 	publisher          *publisher.Publisher
 	workMode           WorkMode
 	workModeChan       chan WorkMode
+	validator          *Validator
 }
 
 type CommitterOption func(*Committer)
@@ -36,6 +37,12 @@ type CommitterOption func(*Committer)
 func WithCommitterWorkModeChan(ch chan WorkMode) CommitterOption {
 	return func(c *Committer) {
 		c.workModeChan = ch
+	}
+}
+
+func WithValidator(validator *Validator) CommitterOption {
+	return func(c *Committer) {
+		c.validator = validator
 	}
 }
 
@@ -208,6 +215,18 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 	}
 	if len(blocksData) == 0 {
 		return nil, nil
+	}
+
+	if c.validator != nil {
+		validBlocks, invalidBlocks, err := c.validator.ValidateBlocks(blocksData)
+		if err != nil {
+			return nil, err
+		}
+		if len(invalidBlocks) > 0 {
+			log.Warn().Msgf("Found %d invalid blocks in commit batch, continuing with %d valid blocks", len(invalidBlocks), len(validBlocks))
+			// continue with valid blocks only
+			blocksData = validBlocks
+		}
 	}
 
 	// Sort blocks by block number
