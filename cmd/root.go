@@ -220,6 +220,8 @@ func init() {
 	viper.BindPFlag("workMode.liveModeThreshold", rootCmd.PersistentFlags().Lookup("workMode-liveModeThreshold"))
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
+	rootCmd.AddCommand(validateAndFixCmd)
+	rootCmd.AddCommand(validateCmd)
 }
 
 func initConfig() {

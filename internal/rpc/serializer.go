@@ -379,8 +379,8 @@ func serializeTrace(chainId *big.Int, trace map[string]interface{}, block common
 		Error:         interfaceToString(trace["error"]),
 		FromAddress:   interfaceToString(action["from"]),
 		ToAddress:     interfaceToString(action["to"]),
-		Gas:           hexToBigInt(action["gas"]),
-		GasUsed:       hexToBigInt(result["gasUsed"]),
+		Gas:           hexToUint64(action["gas"]),
+		GasUsed:       hexToUint64(result["gasUsed"]),
 		Input:         interfaceToString(action["input"]),
 		Output:        interfaceToString(result["output"]),
 		Value:         hexToBigInt(action["value"]),
@@ -399,15 +399,15 @@ func hexToBigInt(hex interface{}) *big.Int {
 	return v
 }
 
-func serializeTraceAddress(traceAddress interface{}) []uint64 {
+func serializeTraceAddress(traceAddress interface{}) []int64 {
 	if traceAddressSlice, ok := traceAddress.([]interface{}); ok {
-		var addresses []uint64
+		var addresses []int64
 		for _, addr := range traceAddressSlice {
-			addresses = append(addresses, uint64(addr.(float64)))
+			addresses = append(addresses, int64(addr.(float64)))
 		}
 		return addresses
 	}
-	return []uint64{}
+	return []int64{}
 }
 
 func hexToTime(hex interface{}) time.Time {

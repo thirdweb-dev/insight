@@ -102,6 +102,15 @@ type IMainStorage interface {
 
 	GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error)
 	GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error)
+
+	/**
+	 * Gets only the data required for validation.
+	 */
+	GetValidationBlockData(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blocks []common.BlockData, err error)
+	/**
+	 * Finds missing block numbers in a range. Block numbers should be sequential.
+	 */
+	FindMissingBlockNumbers(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blockNumbers []*big.Int, err error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
