@@ -253,39 +253,55 @@ func CalculateTransactionsRoot(transactions []common.Transaction) (string, error
 }
 
 func CalculateLogsBloom(logs []common.Log) string {
-	// Convert our logs to go-ethereum types.Log
-	ethLogs := make([]*types.Log, len(logs))
-	for i, log := range logs {
-		// Convert address
-		addr := gethCommon.HexToAddress(log.Address)
+	// Group logs by transaction hash (order matters)
+	txLogsMap := make(map[string][]common.Log)
+	txOrder := make([]string, 0)
+	for _, log := range logs {
+		txHash := log.TransactionHash
+		if _, exists := txLogsMap[txHash]; !exists {
+			txOrder = append(txOrder, txHash)
+		}
+		txLogsMap[txHash] = append(txLogsMap[txHash], log)
+	}
 
-		// Convert topics
-		topics := make([]gethCommon.Hash, 0, 4)
-		if log.Topic0 != "" {
-			topics = append(topics, gethCommon.HexToHash(log.Topic0))
-		}
-		if log.Topic1 != "" {
-			topics = append(topics, gethCommon.HexToHash(log.Topic1))
-		}
-		if log.Topic2 != "" {
-			topics = append(topics, gethCommon.HexToHash(log.Topic2))
-		}
-		if log.Topic3 != "" {
-			topics = append(topics, gethCommon.HexToHash(log.Topic3))
-		}
+	// Initialize block bloom (256 bytes)
+	var blockBloom [256]byte
 
-		ethLogs[i] = &types.Log{
-			Address: addr,
-			Topics:  topics,
+	for _, txHash := range txOrder {
+		txLogs := txLogsMap[txHash]
+		// Convert logs to go-ethereum types.Log
+		ethLogs := make([]*types.Log, len(txLogs))
+		for i, log := range txLogs {
+			addr := gethCommon.HexToAddress(log.Address)
+			topics := make([]gethCommon.Hash, 0, 4)
+			if log.Topic0 != "" {
+				topics = append(topics, gethCommon.HexToHash(log.Topic0))
+			}
+			if log.Topic1 != "" {
+				topics = append(topics, gethCommon.HexToHash(log.Topic1))
+			}
+			if log.Topic2 != "" {
+				topics = append(topics, gethCommon.HexToHash(log.Topic2))
+			}
+			if log.Topic3 != "" {
+				topics = append(topics, gethCommon.HexToHash(log.Topic3))
+			}
+			ethLogs[i] = &types.Log{
+				Address: addr,
+				Topics:  topics,
+			}
+		}
+		receipt := &types.Receipt{
+			Logs: ethLogs,
+		}
+		bloom := types.CreateBloom(receipt)
+		// OR this tx's bloom into the block bloom
+		for i := 0; i < 256; i++ {
+			blockBloom[i] |= bloom[i]
 		}
 	}
 
-	receipt := &types.Receipt{
-		Logs: ethLogs,
-	}
-	// Create bloom filter using go-ethereum's implementation
-	bloom := types.CreateBloom(receipt)
-	return "0x" + hex.EncodeToString(bloom[:])
+	return "0x" + hex.EncodeToString(blockBloom[:])
 }
 
 func safeUint256(b *big.Int) *uint256.Int {
