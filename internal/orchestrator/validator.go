@@ -48,7 +48,7 @@ func (v *Validator) ValidateBlocks(blocks []common.BlockData) (validBlocks []com
 	invalidBlocks = make([]common.BlockData, 0)
 	validBlocks = make([]common.BlockData, 0)
 	for _, blockData := range blocks {
-		valid, err := ValidateBlock(blockData)
+		valid, err := v.ValidateBlock(blockData)
 		if err != nil {
 			log.Error().Err(err).Msgf("Block verification failed for block %s", blockData.Block.Number)
 			return nil, nil, err
@@ -62,7 +62,7 @@ func (v *Validator) ValidateBlocks(blocks []common.BlockData) (validBlocks []com
 	return validBlocks, invalidBlocks, nil
 }
 
-func ValidateBlock(blockData common.BlockData) (valid bool, err error) {
+func (v *Validator) ValidateBlock(blockData common.BlockData) (valid bool, err error) {
 	if blockData.Block.TransactionCount != uint64(len(blockData.Transactions)) {
 		log.Error().Msgf("Block verification failed for block %s: transaction count mismatch: expected=%d, fetched from DB=%d", blockData.Block.Number, blockData.Block.TransactionCount, len(blockData.Transactions))
 		return false, nil
@@ -74,6 +74,12 @@ func ValidateBlock(blockData common.BlockData) (valid bool, err error) {
 	if calculatedLogsBloom != blockData.Block.LogsBloom {
 		log.Error().Msgf("Block verification failed for block %s: logsBloom mismatch: calculated=%s, block=%s", blockData.Block.Number, calculatedLogsBloom, blockData.Block.LogsBloom)
 		return false, nil
+	}
+
+	// Check transactionsRoot
+	if blockData.Block.TransactionsRoot == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		// likely a zk chain and does not support tx root
+		return true, nil
 	}
 
 	// TODO: remove this once we know how to validate all tx types
