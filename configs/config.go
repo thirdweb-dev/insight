@@ -171,6 +171,10 @@ type WorkModeConfig struct {
 	LiveModeThreshold    int64 `mapstructure:"liveModeThreshold"`
 }
 
+type ValidationConfig struct {
+	Mode string `mapstructure:"mode"` // "disabled", "minimal", "strict"
+}
+
 type Config struct {
 	RPC              RPCConfig              `mapstructure:"rpc"`
 	Log              LogConfig              `mapstructure:"log"`
@@ -182,6 +186,7 @@ type Config struct {
 	API              APIConfig              `mapstructure:"api"`
 	Publisher        PublisherConfig        `mapstructure:"publisher"`
 	WorkMode         WorkModeConfig         `mapstructure:"workMode"`
+	Validation       ValidationConfig       `mapstructure:"validation"`
 }
 
 var Cfg Config
