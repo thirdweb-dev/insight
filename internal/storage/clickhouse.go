@@ -527,6 +527,10 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
 	}
 
+	if c.cfg.MaxQueryTime > 0 {
+		query += fmt.Sprintf(" SETTINGS max_execution_time = %d", c.cfg.MaxQueryTime)
+	}
+
 	if err := common.ValidateQuery(query); err != nil {
 		return QueryResult[interface{}]{}, err
 	}
@@ -658,6 +662,10 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
 	} else if qf.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
+	}
+
+	if c.cfg.MaxQueryTime > 0 {
+		query += fmt.Sprintf(" SETTINGS max_execution_time = %d", c.cfg.MaxQueryTime)
 	}
 
 	return query
