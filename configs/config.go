@@ -83,6 +83,7 @@ type ClickhouseConfig struct {
 	MaxIdleConns                 int                            `mapstructure:"maxIdleConns"`
 	ChainBasedConfig             map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
 	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
+	MaxQueryTime                 int                            `mapstructure:"maxQueryTime"`
 }
 
 type RPCBatchRequestConfig struct {
