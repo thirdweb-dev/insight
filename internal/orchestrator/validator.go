@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
@@ -63,43 +64,59 @@ func (v *Validator) ValidateBlocks(blocks []common.BlockData) (validBlocks []com
 }
 
 func (v *Validator) ValidateBlock(blockData common.BlockData) (valid bool, err error) {
+	if config.Cfg.Validation.Mode == "disabled" {
+		return true, nil
+	}
+
+	// check that transaction count matches
 	if blockData.Block.TransactionCount != uint64(len(blockData.Transactions)) {
 		log.Error().Msgf("Block verification failed for block %s: transaction count mismatch: expected=%d, fetched from DB=%d", blockData.Block.Number, blockData.Block.TransactionCount, len(blockData.Transactions))
 		return false, nil
 	}
 
-	// Calculate logsBloom from logs
-	calculatedLogsBloom := validation.CalculateLogsBloom(blockData.Logs)
-	// Compare calculated logsBloom with block's logsBloom
-	if calculatedLogsBloom != blockData.Block.LogsBloom {
-		log.Error().Msgf("Block verification failed for block %s: logsBloom mismatch: calculated=%s, block=%s", blockData.Block.Number, calculatedLogsBloom, blockData.Block.LogsBloom)
+	// check that logs exist if logsBloom is not empty
+	logsBloomAsNumber := new(big.Int)
+	logsBloomAsNumber.SetString(blockData.Block.LogsBloom[2:], 16)
+	if logsBloomAsNumber.Sign() != 0 && len(blockData.Logs) == 0 {
+		log.Error().Msgf("Block verification failed for block %s: logsBloom is not empty but no logs exist", blockData.Block.Number)
 		return false, nil
 	}
 
-	// Check transactionsRoot
-	if blockData.Block.TransactionsRoot == "0x0000000000000000000000000000000000000000000000000000000000000000" {
-		// likely a zk chain and does not support tx root
-		return true, nil
-	}
+	// strict mode also validates logsBloom and transactionsRoot
+	if config.Cfg.Validation.Mode == "strict" {
+		// Calculate logsBloom from logs
+		calculatedLogsBloom := validation.CalculateLogsBloom(blockData.Logs)
+		// Compare calculated logsBloom with block's logsBloom
+		if calculatedLogsBloom != blockData.Block.LogsBloom {
+			log.Error().Msgf("Block verification failed for block %s: logsBloom mismatch: calculated=%s, block=%s", blockData.Block.Number, calculatedLogsBloom, blockData.Block.LogsBloom)
+			return false, nil
+		}
 
-	// TODO: remove this once we know how to validate all tx types
-	for _, tx := range blockData.Transactions {
-		if tx.TransactionType > 4 { // Currently supported types are 0-4
-			log.Warn().Msgf("Skipping transaction root validation for block %s due to unsupported transaction type %d", blockData.Block.Number, tx.TransactionType)
+		// Check transactionsRoot
+		if blockData.Block.TransactionsRoot == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+			// likely a zk chain and does not support tx root
 			return true, nil
 		}
-	}
 
-	// Calculate transactionsRoot from transactions
-	calculatedTransactionsRoot, err := validation.CalculateTransactionsRoot(blockData.Transactions)
-	if err != nil {
-		return false, fmt.Errorf("failed to calculate transactionsRoot: %v", err)
-	}
+		// TODO: remove this once we know how to validate all tx types
+		for _, tx := range blockData.Transactions {
+			if tx.TransactionType > 4 { // Currently supported types are 0-4
+				log.Warn().Msgf("Skipping transaction root validation for block %s due to unsupported transaction type %d", blockData.Block.Number, tx.TransactionType)
+				return true, nil
+			}
+		}
 
-	// Compare calculated transactionsRoot with block's transactionsRoot
-	if calculatedTransactionsRoot != blockData.Block.TransactionsRoot {
-		log.Error().Msgf("Block verification failed for block %s: transactionsRoot mismatch: calculated=%s, block=%s", blockData.Block.Number, calculatedTransactionsRoot, blockData.Block.TransactionsRoot)
-		return false, nil
+		// Calculate transactionsRoot from transactions
+		calculatedTransactionsRoot, err := validation.CalculateTransactionsRoot(blockData.Transactions)
+		if err != nil {
+			return false, fmt.Errorf("failed to calculate transactionsRoot: %v", err)
+		}
+
+		// Compare calculated transactionsRoot with block's transactionsRoot
+		if calculatedTransactionsRoot != blockData.Block.TransactionsRoot {
+			log.Error().Msgf("Block verification failed for block %s: transactionsRoot mismatch: calculated=%s, block=%s", blockData.Block.Number, calculatedTransactionsRoot, blockData.Block.TransactionsRoot)
+			return false, nil
+		}
 	}
 
 	return true, nil

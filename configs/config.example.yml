@@ -38,6 +38,9 @@ reorgHandler:
   interval: 1000
   blocksPerScan: 50
 
+validation:
+  mode: strict  # "disabled", "minimal", or "strict"
+
 storage:
   main:
     clickhouse:
