@@ -230,6 +230,7 @@ func init() {
 	rootCmd.AddCommand(apiCmd)
 	rootCmd.AddCommand(validateAndFixCmd)
 	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(migrateValidationCmd)
 }
 
 func initConfig() {

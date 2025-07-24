@@ -274,6 +274,65 @@ func (_c *MockIMainStorage_GetBlocks_Call) RunAndReturn(run func(storage.QueryFi
 	return _c
 }
 
+// GetFullBlockData provides a mock function with given fields: chainId, blockNumbers
+func (_m *MockIMainStorage) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error) {
+	ret := _m.Called(chainId, blockNumbers)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFullBlockData")
+	}
+
+	var r0 []common.BlockData
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) ([]common.BlockData, error)); ok {
+		return rf(chainId, blockNumbers)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) []common.BlockData); ok {
+		r0 = rf(chainId, blockNumbers)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]common.BlockData)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int, []*big.Int) error); ok {
+		r1 = rf(chainId, blockNumbers)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_GetFullBlockData_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFullBlockData'
+type MockIMainStorage_GetFullBlockData_Call struct {
+	*mock.Call
+}
+
+// GetFullBlockData is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - blockNumbers []*big.Int
+func (_e *MockIMainStorage_Expecter) GetFullBlockData(chainId interface{}, blockNumbers interface{}) *MockIMainStorage_GetFullBlockData_Call {
+	return &MockIMainStorage_GetFullBlockData_Call{Call: _e.mock.On("GetFullBlockData", chainId, blockNumbers)}
+}
+
+func (_c *MockIMainStorage_GetFullBlockData_Call) Run(run func(chainId *big.Int, blockNumbers []*big.Int)) *MockIMainStorage_GetFullBlockData_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].([]*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_GetFullBlockData_Call) Return(blocks []common.BlockData, err error) *MockIMainStorage_GetFullBlockData_Call {
+	_c.Call.Return(blocks, err)
+	return _c
+}
+
+func (_c *MockIMainStorage_GetFullBlockData_Call) RunAndReturn(run func(*big.Int, []*big.Int) ([]common.BlockData, error)) *MockIMainStorage_GetFullBlockData_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetLogs provides a mock function with given fields: qf, fields
 func (_m *MockIMainStorage) GetLogs(qf storage.QueryFilter, fields ...string) (storage.QueryResult[common.Log], error) {
 	_va := make([]interface{}, len(fields))
@@ -399,6 +458,66 @@ func (_c *MockIMainStorage_GetMaxBlockNumber_Call) Return(maxBlockNumber *big.In
 }
 
 func (_c *MockIMainStorage_GetMaxBlockNumber_Call) RunAndReturn(run func(*big.Int) (*big.Int, error)) *MockIMainStorage_GetMaxBlockNumber_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetMaxBlockNumberInRange provides a mock function with given fields: chainId, startBlock, endBlock
+func (_m *MockIMainStorage) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (*big.Int, error) {
+	ret := _m.Called(chainId, startBlock, endBlock)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMaxBlockNumberInRange")
+	}
+
+	var r0 *big.Int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) (*big.Int, error)); ok {
+		return rf(chainId, startBlock, endBlock)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) *big.Int); ok {
+		r0 = rf(chainId, startBlock, endBlock)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int, *big.Int) error); ok {
+		r1 = rf(chainId, startBlock, endBlock)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_GetMaxBlockNumberInRange_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMaxBlockNumberInRange'
+type MockIMainStorage_GetMaxBlockNumberInRange_Call struct {
+	*mock.Call
+}
+
+// GetMaxBlockNumberInRange is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - startBlock *big.Int
+//   - endBlock *big.Int
+func (_e *MockIMainStorage_Expecter) GetMaxBlockNumberInRange(chainId interface{}, startBlock interface{}, endBlock interface{}) *MockIMainStorage_GetMaxBlockNumberInRange_Call {
+	return &MockIMainStorage_GetMaxBlockNumberInRange_Call{Call: _e.mock.On("GetMaxBlockNumberInRange", chainId, startBlock, endBlock)}
+}
+
+func (_c *MockIMainStorage_GetMaxBlockNumberInRange_Call) Run(run func(chainId *big.Int, startBlock *big.Int, endBlock *big.Int)) *MockIMainStorage_GetMaxBlockNumberInRange_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].(*big.Int), args[2].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_GetMaxBlockNumberInRange_Call) Return(maxBlockNumber *big.Int, err error) *MockIMainStorage_GetMaxBlockNumberInRange_Call {
+	_c.Call.Return(maxBlockNumber, err)
+	return _c
+}
+
+func (_c *MockIMainStorage_GetMaxBlockNumberInRange_Call) RunAndReturn(run func(*big.Int, *big.Int, *big.Int) (*big.Int, error)) *MockIMainStorage_GetMaxBlockNumberInRange_Call {
 	_c.Call.Return(run)
 	return _c
 }

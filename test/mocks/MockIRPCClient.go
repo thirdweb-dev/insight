@@ -502,6 +502,51 @@ func (_c *MockIRPCClient_IsWebsocket_Call) RunAndReturn(run func() bool) *MockIR
 	return _c
 }
 
+// SupportsBlockReceipts provides a mock function with no fields
+func (_m *MockIRPCClient) SupportsBlockReceipts() bool {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for SupportsBlockReceipts")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// MockIRPCClient_SupportsBlockReceipts_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SupportsBlockReceipts'
+type MockIRPCClient_SupportsBlockReceipts_Call struct {
+	*mock.Call
+}
+
+// SupportsBlockReceipts is a helper method to define mock.On call
+func (_e *MockIRPCClient_Expecter) SupportsBlockReceipts() *MockIRPCClient_SupportsBlockReceipts_Call {
+	return &MockIRPCClient_SupportsBlockReceipts_Call{Call: _e.mock.On("SupportsBlockReceipts")}
+}
+
+func (_c *MockIRPCClient_SupportsBlockReceipts_Call) Run(run func()) *MockIRPCClient_SupportsBlockReceipts_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockIRPCClient_SupportsBlockReceipts_Call) Return(_a0 bool) *MockIRPCClient_SupportsBlockReceipts_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIRPCClient_SupportsBlockReceipts_Call) RunAndReturn(run func() bool) *MockIRPCClient_SupportsBlockReceipts_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SupportsTraceBlock provides a mock function with no fields
 func (_m *MockIRPCClient) SupportsTraceBlock() bool {
 	ret := _m.Called()

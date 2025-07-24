@@ -822,6 +822,19 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 	return maxBlockNumber, nil
 }
 
+func (c *ClickHouseConnector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (maxBlockNumber *big.Int, err error) {
+	tableName := c.getTableName(chainId, "blocks")
+	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? AND block_number >= ? AND block_number <= ? ORDER BY block_number DESC LIMIT 1", c.cfg.Database, tableName)
+	err = c.conn.QueryRow(context.Background(), query, chainId, startBlock, endBlock).Scan(&maxBlockNumber)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+	return maxBlockNumber, nil
+}
+
 func (c *ClickHouseConnector) getMaxBlockNumberConsistent(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
 	tableName := c.getTableName(chainId, "blocks")
 	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1 SETTINGS select_sequential_consistency = 1", c.cfg.Database, tableName)
@@ -1917,4 +1930,137 @@ func (c *ClickHouseConnector) FindMissingBlockNumbers(chainId *big.Int, startBlo
 		blockNumbers = append(blockNumbers, blockNumber)
 	}
 	return blockNumbers, nil
+}
+
+func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) (blocks []common.BlockData, err error) {
+	// Get blocks, logs and transactions concurrently
+	type blockResult struct {
+		blocks []common.Block
+		err    error
+	}
+
+	type logResult struct {
+		logMap map[string][]common.Log // blockNumber -> logs
+		err    error
+	}
+
+	type txResult struct {
+		txMap map[string][]common.Transaction // blockNumber -> transactions
+		err   error
+	}
+
+	type traceResult struct {
+		traceMap map[string][]common.Trace // blockNumber -> traces
+		err      error
+	}
+
+	blocksChan := make(chan blockResult)
+	logsChan := make(chan logResult)
+	txsChan := make(chan txResult)
+	tracesChan := make(chan traceResult)
+
+	// Launch goroutines for concurrent fetching
+	go func() {
+		blocksResult, err := c.GetBlocks(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		})
+		blocksChan <- blockResult{blocks: blocksResult.Data, err: err}
+	}()
+
+	go func() {
+		logsResult, err := c.GetLogs(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		})
+		if err != nil {
+			logsChan <- logResult{err: err}
+			return
+		}
+
+		// Pre-organize logs by block number
+		logMap := make(map[string][]common.Log)
+		for _, log := range logsResult.Data {
+			blockNum := log.BlockNumber.String()
+			logMap[blockNum] = append(logMap[blockNum], log)
+		}
+		logsChan <- logResult{logMap: logMap}
+	}()
+
+	go func() {
+		transactionsResult, err := c.GetTransactions(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		})
+		if err != nil {
+			txsChan <- txResult{err: err}
+			return
+		}
+
+		// Pre-organize transactions by block number
+		txMap := make(map[string][]common.Transaction)
+		for _, tx := range transactionsResult.Data {
+			blockNum := tx.BlockNumber.String()
+			txMap[blockNum] = append(txMap[blockNum], tx)
+		}
+		txsChan <- txResult{txMap: txMap}
+	}()
+
+	go func() {
+		tracesResult, err := c.GetTraces(QueryFilter{
+			ChainId:             chainId,
+			BlockNumbers:        blockNumbers,
+			ForceConsistentData: true,
+		})
+		if err != nil {
+			tracesChan <- traceResult{err: err}
+			return
+		}
+
+		traceMap := make(map[string][]common.Trace)
+		for _, trace := range tracesResult.Data {
+			blockNum := trace.BlockNumber.String()
+			traceMap[blockNum] = append(traceMap[blockNum], trace)
+		}
+		tracesChan <- traceResult{traceMap: traceMap}
+	}()
+
+	// Wait for all results
+	blocksResult := <-blocksChan
+	logsResult := <-logsChan
+	txsResult := <-txsChan
+	tracesResult := <-tracesChan
+
+	// Check for errors
+	if blocksResult.err != nil {
+		return nil, fmt.Errorf("error fetching blocks: %v", blocksResult.err)
+	}
+	if logsResult.err != nil {
+		return nil, fmt.Errorf("error fetching logs: %v", logsResult.err)
+	}
+	if txsResult.err != nil {
+		return nil, fmt.Errorf("error fetching transactions: %v", txsResult.err)
+	}
+	if tracesResult.err != nil {
+		return nil, fmt.Errorf("error fetching traces: %v", tracesResult.err)
+	}
+
+	// Build BlockData slice
+	blockData := make([]common.BlockData, len(blocksResult.blocks))
+
+	// Build BlockData for each block
+	for i, block := range blocksResult.blocks {
+		blockNum := block.Number.String()
+		blockData[i] = common.BlockData{
+			Block:        block,
+			Logs:         logsResult.logMap[blockNum],
+			Transactions: txsResult.txMap[blockNum],
+			Traces:       tracesResult.traceMap[blockNum],
+		}
+	}
+
+	return blockData, nil
 }

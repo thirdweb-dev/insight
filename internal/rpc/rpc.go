@@ -49,6 +49,7 @@ type IRPCClient interface {
 	GetBlocksPerRequest() BlocksPerRequestConfig
 	IsWebsocket() bool
 	SupportsTraceBlock() bool
+	SupportsBlockReceipts() bool
 	HasCode(ctx context.Context, address string) (bool, error)
 	Close()
 }
@@ -133,6 +134,10 @@ func (rpc *Client) IsWebsocket() bool {
 
 func (rpc *Client) SupportsTraceBlock() bool {
 	return rpc.supportsTraceBlock
+}
+
+func (rpc *Client) SupportsBlockReceipts() bool {
+	return rpc.supportsBlockReceipts
 }
 
 func (rpc *Client) Close() {
