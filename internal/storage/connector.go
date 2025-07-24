@@ -95,6 +95,7 @@ type IMainStorage interface {
 	GetTraces(qf QueryFilter, fields ...string) (traces QueryResult[common.Trace], err error)
 	GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error)
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
+	GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (maxBlockNumber *big.Int, err error)
 	/**
 	 * Get block headers ordered from latest to oldest.
 	 */
@@ -111,6 +112,10 @@ type IMainStorage interface {
 	 * Finds missing block numbers in a range. Block numbers should be sequential.
 	 */
 	FindMissingBlockNumbers(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blockNumbers []*big.Int, err error)
+	/**
+	 * Gets full block data with transactions, logs and traces.
+	 */
+	GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) (blocks []common.BlockData, err error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
