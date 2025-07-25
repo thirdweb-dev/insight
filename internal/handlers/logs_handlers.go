@@ -117,9 +117,8 @@ func handleLogsRequest(c *gin.Context) {
 		eventABI, err = common.ConstructEventABI(signature)
 		if err != nil {
 			log.Debug().Err(err).Msgf("Unable to construct event ABI for %s", signature)
-		} else {
-			signatureHash = eventABI.ID.Hex()
 		}
+		signatureHash = eventABI.ID.Hex()
 	}
 
 	mainStorage, err := getMainStorage()
