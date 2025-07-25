@@ -41,6 +41,10 @@ reorgHandler:
 validation:
   mode: strict  # "disabled", "minimal", or "strict"
 
+api:
+  host: ":8080"
+  defaultTimeRangeDays: 7  # Default time range in days when no timestamp filters are provided
+
 storage:
   main:
     clickhouse:

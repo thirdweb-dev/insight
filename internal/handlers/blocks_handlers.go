@@ -63,6 +63,9 @@ func handleBlocksRequest(c *gin.Context) {
 		ForceConsistentData: queryParams.ForceConsistentData,
 	}
 
+	// Apply default time range if no block timestamp filters are provided
+	api.ApplyDefaultTimeRange(qf.FilterParams)
+
 	// Initialize the QueryResult
 	queryResult := api.QueryResponse{
 		Meta: api.Meta{
