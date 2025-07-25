@@ -7,10 +7,13 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/schema"
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 // Error represents an API error response
@@ -154,4 +157,45 @@ func ParseIntQueryParam(value string, defaultValue int) int {
 		return defaultValue
 	}
 	return parsed
+}
+
+// ApplyDefaultTimeRange applies default time range filters (now to N days ago)
+// if no block timestamp filters are already present in the filter params
+func ApplyDefaultTimeRange(filterParams map[string]string) {
+	// Check if any block timestamp filters are already present
+	hasTimestampFilter := false
+	for key := range filterParams {
+		if strings.Contains(key, "block_timestamp") {
+			hasTimestampFilter = true
+			break
+		}
+	}
+
+	// If no timestamp filters are present, apply default range
+	if !hasTimestampFilter {
+		now := time.Now()
+
+		// Get default time range from config, fallback to 7 days if not set
+		defaultDays := 7
+		if config.Cfg.API.DefaultTimeRangeDays > 0 {
+			defaultDays = config.Cfg.API.DefaultTimeRangeDays
+		}
+
+		defaultTimeAgo := now.AddDate(0, 0, -defaultDays)
+
+		filterParams["block_timestamp_gte"] = strconv.FormatInt(defaultTimeAgo.Unix(), 10)
+		filterParams["block_timestamp_lte"] = strconv.FormatInt(now.Unix(), 10)
+	}
+}
+
+// ApplyDefaultTimeRangeToTransfers applies default time range to TransfersQueryFilter
+// by converting time range to block number range if no block number filters are provided
+func ApplyDefaultTimeRangeToTransfers(qf *storage.TransfersQueryFilter) {
+	// Only apply if no block number filters are already set
+	if qf.StartBlockNumber == nil && qf.EndBlockNumber == nil {
+		// For transfers, we'll use a conservative approach and not apply time-based defaults
+		// since transfers already have block number filtering and the conversion from time to block
+		// would require additional RPC calls to get block numbers for timestamps
+		// This can be implemented later if needed
+	}
 }

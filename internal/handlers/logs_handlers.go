@@ -117,8 +117,9 @@ func handleLogsRequest(c *gin.Context) {
 		eventABI, err = common.ConstructEventABI(signature)
 		if err != nil {
 			log.Debug().Err(err).Msgf("Unable to construct event ABI for %s", signature)
+		} else {
+			signatureHash = eventABI.ID.Hex()
 		}
-		signatureHash = eventABI.ID.Hex()
 	}
 
 	mainStorage, err := getMainStorage()
@@ -140,6 +141,9 @@ func handleLogsRequest(c *gin.Context) {
 		Limit:               queryParams.Limit,
 		ForceConsistentData: queryParams.ForceConsistentData,
 	}
+
+	// Apply default time range if no block timestamp filters are provided
+	api.ApplyDefaultTimeRange(qf.FilterParams)
 
 	// Initialize the QueryResult
 	queryResult := api.QueryResponse{

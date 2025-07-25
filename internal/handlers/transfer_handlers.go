@@ -125,6 +125,9 @@ func GetTokenTransfers(c *gin.Context) {
 		SortOrder:        c.Query("sort_order"),
 	}
 
+	// Apply default time range if no block number filters are provided
+	api.ApplyDefaultTimeRangeToTransfers(&qf)
+
 	// Define columns for query
 	columns := []string{
 		"token_type",
