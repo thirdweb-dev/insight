@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	gethCommon "github.com/ethereum/go-ethereum/common"
@@ -28,6 +30,8 @@ import (
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
+// @Param from_time query int false "Start time for filtering (Unix timestamp)"
+// @Param to_time query int false "End time for filtering (Unix timestamp, defaults to current time)"
 // @Success 200 {object} api.QueryResponse{data=[]common.TransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -53,6 +57,8 @@ func GetTransactions(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
 // @Param decode query bool false "Decode transaction data"
+// @Param from_time query int false "Start time for filtering (Unix timestamp)"
+// @Param to_time query int false "End time for filtering (Unix timestamp, defaults to current time)"
 // @Success 200 {object} api.QueryResponse{data=[]common.DecodedTransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -78,6 +84,8 @@ func GetWalletTransactions(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
+// @Param from_time query int false "Start time for filtering (Unix timestamp)"
+// @Param to_time query int false "End time for filtering (Unix timestamp, defaults to current time)"
 // @Success 200 {object} api.QueryResponse{data=[]common.TransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -104,6 +112,8 @@ func GetTransactionsByContract(c *gin.Context) {
 // @Param limit query int false "Number of items per page" default(5)
 // @Param aggregate query []string false "List of aggregate functions to apply"
 // @Param force_consistent_data query bool false "Force consistent data at the expense of query speed"
+// @Param from_time query int false "Start time for filtering (Unix timestamp)"
+// @Param to_time query int false "End time for filtering (Unix timestamp, defaults to current time)"
 // @Success 200 {object} api.QueryResponse{data=[]common.DecodedTransactionModel}
 // @Failure 400 {object} api.Error
 // @Failure 401 {object} api.Error
@@ -127,6 +137,35 @@ func handleTransactionsRequest(c *gin.Context) {
 	if err != nil {
 		api.BadRequestErrorHandler(c, err)
 		return
+	}
+
+	// Parse and validate time parameters
+	fromTime := queryParams.FromTime
+	toTime := queryParams.ToTime
+
+	// If toTime is not provided, default to current time
+	if toTime == 0 {
+		toTime = time.Now().Unix()
+	}
+
+	// Validate time range
+	if fromTime > 0 && toTime > 0 {
+		timeRange := toTime - fromTime
+		maxTimeRange := int64(config.Cfg.API.TransactionMaxTimeRangeSeconds)
+		if maxTimeRange == 0 {
+			// Default to 1 week if not configured
+			maxTimeRange = 7 * 24 * 60 * 60 // 1 week in seconds
+		}
+
+		if timeRange > maxTimeRange {
+			api.BadRequestErrorHandler(c, fmt.Errorf("time range cannot exceed %d seconds (approximately %d days)", maxTimeRange, maxTimeRange/(24*60*60)))
+			return
+		}
+
+		if fromTime >= toTime {
+			api.BadRequestErrorHandler(c, fmt.Errorf("from_time must be less than to_time"))
+			return
+		}
 	}
 
 	var functionABI *abi.Method
@@ -158,6 +197,8 @@ func handleTransactionsRequest(c *gin.Context) {
 		Page:                queryParams.Page,
 		Limit:               queryParams.Limit,
 		ForceConsistentData: queryParams.ForceConsistentData,
+		FromTime:            fromTime,
+		ToTime:              toTime,
 	}
 
 	// Initialize the QueryResult

@@ -46,6 +46,10 @@ type QueryParams struct {
 	Decode bool `schema:"decode"`
 	// @Description Flag to force consistent data at the expense of query speed
 	ForceConsistentData bool `schema:"force_consistent_data"`
+	// @Description Start time for filtering (Unix timestamp)
+	FromTime int64 `schema:"from_time"`
+	// @Description End time for filtering (Unix timestamp)
+	ToTime int64 `schema:"to_time"`
 }
 
 // Meta represents metadata for a query response

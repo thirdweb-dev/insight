@@ -132,3 +132,47 @@ func TestMapClickHouseTypeToGoType(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateTimeRangeClause tests the createTimeRangeClause function
+func TestCreateTimeRangeClause(t *testing.T) {
+	testCases := []struct {
+		name     string
+		fromTime int64
+		toTime   int64
+		expected string
+	}{
+		{
+			name:     "both times provided",
+			fromTime: 1640995200, // 2022-01-01 00:00:00 UTC
+			toTime:   1641081600, // 2022-01-02 00:00:00 UTC
+			expected: "block_timestamp >= toDateTime(1640995200) AND block_timestamp <= toDateTime(1641081600)",
+		},
+		{
+			name:     "only from time",
+			fromTime: 1640995200,
+			toTime:   0,
+			expected: "block_timestamp >= toDateTime(1640995200)",
+		},
+		{
+			name:     "only to time",
+			fromTime: 0,
+			toTime:   1641081600,
+			expected: "block_timestamp <= toDateTime(1641081600)",
+		},
+		{
+			name:     "no times provided",
+			fromTime: 0,
+			toTime:   0,
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := createTimeRangeClause(tc.fromTime, tc.toTime)
+			if result != tc.expected {
+				t.Errorf("createTimeRangeClause(%d, %d) = %s, want %s", tc.fromTime, tc.toTime, result, tc.expected)
+			}
+		})
+	}
+}

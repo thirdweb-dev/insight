@@ -41,6 +41,10 @@ reorgHandler:
 validation:
   mode: strict  # "disabled", "minimal", or "strict"
 
+api:
+  host: ":8080"
+  transactionMaxTimeRangeSeconds: 604800  # 1 week in seconds
+
 storage:
   main:
     clickhouse:

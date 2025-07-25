@@ -24,6 +24,8 @@ type QueryFilter struct {
 	WalletAddress       string
 	Signature           string
 	ForceConsistentData bool
+	FromTime            int64
+	ToTime              int64
 }
 
 type TransfersQueryFilter struct {

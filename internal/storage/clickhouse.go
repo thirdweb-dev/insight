@@ -500,6 +500,10 @@ func (c *ClickHouseConnector) GetAggregations(table string, qf QueryFilter) (Que
 	if signatureClause != "" {
 		whereClauses = append(whereClauses, signatureClause)
 	}
+	timeRangeClause := createTimeRangeClause(qf.FromTime, qf.ToTime)
+	if timeRangeClause != "" {
+		whereClauses = append(whereClauses, timeRangeClause)
+	}
 	for key, value := range qf.FilterParams {
 		whereClauses = append(whereClauses, createFilterClause(key, strings.ToLower(value)))
 	}
@@ -641,6 +645,10 @@ func (c *ClickHouseConnector) buildQuery(table, columns string, qf QueryFilter) 
 	if signatureClause != "" {
 		whereClauses = append(whereClauses, signatureClause)
 	}
+	timeRangeClause := createTimeRangeClause(qf.FromTime, qf.ToTime)
+	if timeRangeClause != "" {
+		whereClauses = append(whereClauses, timeRangeClause)
+	}
 	// Add filter params
 	for key, value := range qf.FilterParams {
 		whereClauses = append(whereClauses, createFilterClause(key, strings.ToLower(value)))
@@ -747,6 +755,24 @@ func createSignatureClause(table, signature string) string {
 		return fmt.Sprintf("function_selector = '%s'", signature)
 	}
 	return ""
+}
+
+func createTimeRangeClause(fromTime, toTime int64) string {
+	clauses := []string{}
+
+	if fromTime > 0 {
+		clauses = append(clauses, fmt.Sprintf("block_timestamp >= toDateTime(%d)", fromTime))
+	}
+
+	if toTime > 0 {
+		clauses = append(clauses, fmt.Sprintf("block_timestamp <= toDateTime(%d)", toTime))
+	}
+
+	if len(clauses) == 0 {
+		return ""
+	}
+
+	return strings.Join(clauses, " AND ")
 }
 
 func getTopicValueFormat(topic string) string {

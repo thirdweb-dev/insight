@@ -124,12 +124,13 @@ type ContractApiRequestConfig struct {
 }
 
 type APIConfig struct {
-	Host                string                   `mapstructure:"host"`
-	BasicAuth           BasicAuthConfig          `mapstructure:"basicAuth"`
-	ThirdwebContractApi string                   `mapstructure:"thirdwebContractApi"`
-	ContractApiRequest  ContractApiRequestConfig `mapstructure:"contractApiRequest"`
-	AbiDecodingEnabled  bool                     `mapstructure:"abiDecodingEnabled"`
-	Thirdweb            ThirdwebConfig           `mapstructure:"thirdweb"`
+	Host                           string                   `mapstructure:"host"`
+	BasicAuth                      BasicAuthConfig          `mapstructure:"basicAuth"`
+	ThirdwebContractApi            string                   `mapstructure:"thirdwebContractApi"`
+	ContractApiRequest             ContractApiRequestConfig `mapstructure:"contractApiRequest"`
+	AbiDecodingEnabled             bool                     `mapstructure:"abiDecodingEnabled"`
+	Thirdweb                       ThirdwebConfig           `mapstructure:"thirdweb"`
+	TransactionMaxTimeRangeSeconds int                      `mapstructure:"transactionMaxTimeRangeSeconds"`
 }
 
 type BlockPublisherConfig struct {

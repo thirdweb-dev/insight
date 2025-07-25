@@ -462,3 +462,62 @@ storage:
       username: admin
       password: password
 ```
+
+## API Documentation
+
+### Transaction Queries with Time Range Filtering
+
+The transaction endpoints support time-based filtering using Unix timestamps. This allows you to query transactions within a specific time range.
+
+#### Time Range Parameters
+
+- `from_time` (optional): Start time for filtering (Unix timestamp)
+- `to_time` (optional): End time for filtering (Unix timestamp, defaults to current time)
+
+#### Configuration
+
+The maximum allowed time range is configurable via the `api.transactionMaxTimeRangeSeconds` setting:
+
+```yaml
+api:
+  host: ":8080"
+  transactionMaxTimeRangeSeconds: 604800  # 1 week in seconds (default)
+```
+
+#### Examples
+
+**Query transactions from a specific time to now:**
+```
+GET /{chainId}/transactions?from_time=1640995200
+```
+
+**Query transactions within a specific time range:**
+```
+GET /{chainId}/transactions?from_time=1640995200&to_time=1641081600
+```
+
+**Query wallet transactions with time filtering:**
+```
+GET /{chainId}/wallet-transactions/{wallet_address}?from_time=1640995200&to_time=1641081600
+```
+
+#### Validation Rules
+
+1. If `to_time` is not provided, it defaults to the current time
+2. The time range (`to_time - from_time`) cannot exceed the configured `maxTimeRangeSeconds`
+3. `from_time` must be less than `to_time`
+4. Both parameters are optional, but if provided, they must be valid Unix timestamps
+
+#### Error Responses
+
+- `400 Bad Request`: If the time range exceeds the maximum allowed duration
+- `400 Bad Request`: If `from_time` is greater than or equal to `to_time`
+- `400 Bad Request`: If timestamps are invalid
+
+#### Supported Endpoints
+
+Time range filtering is available on all transaction endpoints:
+- `GET /{chainId}/transactions`
+- `GET /{chainId}/wallet-transactions/{wallet_address}`
+- `GET /{chainId}/transactions/{to}`
+- `GET /{chainId}/transactions/{to}/{signature}`
