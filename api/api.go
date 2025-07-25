@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/schema"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
-	"github.com/thirdweb-dev/indexer/internal/storage"
 )
 
 // Error represents an API error response
@@ -185,17 +184,5 @@ func ApplyDefaultTimeRange(filterParams map[string]string) {
 
 		filterParams["block_timestamp_gte"] = strconv.FormatInt(defaultTimeAgo.Unix(), 10)
 		filterParams["block_timestamp_lte"] = strconv.FormatInt(now.Unix(), 10)
-	}
-}
-
-// ApplyDefaultTimeRangeToTransfers applies default time range to TransfersQueryFilter
-// by converting time range to block number range if no block number filters are provided
-func ApplyDefaultTimeRangeToTransfers(qf *storage.TransfersQueryFilter) {
-	// Only apply if no block number filters are already set
-	if qf.StartBlockNumber == nil && qf.EndBlockNumber == nil {
-		// For transfers, we'll use a conservative approach and not apply time-based defaults
-		// since transfers already have block number filtering and the conversion from time to block
-		// would require additional RPC calls to get block numbers for timestamps
-		// This can be implemented later if needed
 	}
 }
