@@ -3,8 +3,11 @@ package storage
 import (
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	config "github.com/thirdweb-dev/indexer/configs"
 )
 
 // TestMapClickHouseTypeToGoType tests the mapClickHouseTypeToGoType function
@@ -131,4 +134,144 @@ func TestMapClickHouseTypeToGoType(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUnionQueryLogic tests the UNION query logic for wallet addresses in transactions
+func TestUnionQueryLogic(t *testing.T) {
+	// Create a mock config with valid connection details
+	cfg := &config.ClickhouseConfig{
+		Database:     "default",
+		Host:         "localhost",
+		Port:         9000,
+		Username:     "default",
+		Password:     "",
+		MaxQueryTime: 30,
+	}
+
+	// Create connector
+	connector, err := NewClickHouseConnector(cfg)
+	if err != nil {
+		// Skip test if we can't connect to ClickHouse (likely in CI environment)
+		t.Skipf("Skipping test - cannot connect to ClickHouse: %v", err)
+	}
+
+	// Test case 1: Standard query without wallet address (should not use UNION)
+	t.Run("Standard query without wallet address", func(t *testing.T) {
+		qf := QueryFilter{
+			ChainId:   big.NewInt(8453),
+			Limit:     5,
+			SortBy:    "block_number",
+			SortOrder: "DESC",
+		}
+
+		query := connector.TestQueryGeneration("transactions", "*", qf)
+
+		// Should not contain UNION ALL
+		if strings.Contains(query, "UNION ALL") {
+			t.Errorf("Standard query should not contain UNION ALL: %s", query)
+		}
+
+		// Should contain standard WHERE clause
+		if !strings.Contains(query, "WHERE") {
+			t.Errorf("Query should contain WHERE clause: %s", query)
+		}
+	})
+
+	// Test case 2: UNION query with wallet address
+	t.Run("UNION query with wallet address", func(t *testing.T) {
+		qf := QueryFilter{
+			ChainId:       big.NewInt(8453),
+			WalletAddress: "0x0b230949b38fa651aefffcfa5e664554df8ae900",
+			Limit:         5,
+			SortBy:        "block_number",
+			SortOrder:     "DESC",
+		}
+
+		query := connector.TestQueryGeneration("transactions", "*", qf)
+
+		// Should contain UNION ALL
+		if !strings.Contains(query, "UNION ALL") {
+			t.Errorf("Query should contain UNION ALL: %s", query)
+		}
+
+		// Should contain from_address and to_address conditions
+		if !strings.Contains(query, "from_address = '0x0b230949b38fa651aefffcfa5e664554df8ae900'") {
+			t.Errorf("Query should contain from_address condition: %s", query)
+		}
+
+		if !strings.Contains(query, "to_address = '0x0b230949b38fa651aefffcfa5e664554df8ae900'") {
+			t.Errorf("Query should contain to_address condition: %s", query)
+		}
+
+		// Should have proper ORDER BY and LIMIT at the end
+		if !strings.Contains(query, "ORDER BY block_number DESC") {
+			t.Errorf("Query should contain ORDER BY clause: %s", query)
+		}
+
+		if !strings.Contains(query, "LIMIT 5") {
+			t.Errorf("Query should contain LIMIT clause: %s", query)
+		}
+
+		// Should have SETTINGS at the very end
+		if !strings.Contains(query, "SETTINGS max_execution_time = 30") {
+			t.Errorf("Query should contain SETTINGS clause: %s", query)
+		}
+	})
+
+	// Test case 3: Standard query for logs table (should not use UNION)
+	t.Run("Standard query for logs table", func(t *testing.T) {
+		qf := QueryFilter{
+			ChainId:       big.NewInt(8453),
+			WalletAddress: "0x0b230949b38fa651aefffcfa5e664554df8ae900",
+			Limit:         5,
+			SortBy:        "block_number",
+			SortOrder:     "DESC",
+		}
+
+		query := connector.TestQueryGeneration("logs", "*", qf)
+
+		// Should not contain UNION ALL (logs table doesn't use UNION)
+		if strings.Contains(query, "UNION ALL") {
+			t.Errorf("Logs query should not contain UNION ALL: %s", query)
+		}
+
+		// Logs table doesn't have wallet address clauses since it doesn't have from_address/to_address fields
+		// So it should just have the basic WHERE clause without wallet address
+		if !strings.Contains(query, "WHERE") {
+			t.Errorf("Logs query should contain WHERE clause: %s", query)
+		}
+
+		// Should not contain wallet address conditions since logs don't have those fields
+		if strings.Contains(query, "from_address") || strings.Contains(query, "to_address") {
+			t.Errorf("Logs query should not contain address conditions: %s", query)
+		}
+	})
+
+	// Test case 4: UNION query with GROUP BY
+	t.Run("UNION query with GROUP BY", func(t *testing.T) {
+		qf := QueryFilter{
+			ChainId:       big.NewInt(8453),
+			WalletAddress: "0x0b230949b38fa651aefffcfa5e664554df8ae900",
+			GroupBy:       []string{"block_number"},
+			Limit:         5,
+			SortBy:        "block_number",
+			SortOrder:     "DESC",
+		}
+
+		query := connector.TestQueryGeneration("transactions", "block_number, COUNT(*) as count", qf)
+
+		// Should contain UNION ALL
+		if !strings.Contains(query, "UNION ALL") {
+			t.Errorf("Query should contain UNION ALL: %s", query)
+		}
+
+		// Should contain GROUP BY wrapped in subquery
+		if !strings.Contains(query, "SELECT * FROM (") {
+			t.Errorf("Query should wrap UNION in subquery for GROUP BY: %s", query)
+		}
+
+		if !strings.Contains(query, "GROUP BY block_number") {
+			t.Errorf("Query should contain GROUP BY clause: %s", query)
+		}
+	})
 }
