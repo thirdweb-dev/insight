@@ -612,6 +612,24 @@ func (c *ClickHouseConnector) buildUnionQuery(table, columns string, qf QueryFil
 		toQuery += " WHERE to_address = '" + strings.ToLower(qf.WalletAddress) + "'"
 	}
 
+	// Apply ORDER BY to both queries for consistent results
+	if qf.SortBy != "" {
+		fromQuery += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+		toQuery += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+	}
+
+	// Apply LIMIT to each individual query to avoid loading too much data
+	// We use a higher limit to ensure we get enough results after UNION
+	individualLimit := qf.Limit * 2 // Double the limit to account for potential duplicates
+	if qf.Page >= 0 && qf.Limit > 0 {
+		offset := qf.Page * qf.Limit
+		fromQuery += fmt.Sprintf(" LIMIT %d OFFSET %d", individualLimit, offset)
+		toQuery += fmt.Sprintf(" LIMIT %d OFFSET %d", individualLimit, offset)
+	} else if qf.Limit > 0 {
+		fromQuery += fmt.Sprintf(" LIMIT %d", individualLimit)
+		toQuery += fmt.Sprintf(" LIMIT %d", individualLimit)
+	}
+
 	// Combine with UNION
 	unionQuery := fmt.Sprintf("(%s) UNION ALL (%s)", fromQuery, toQuery)
 
@@ -631,17 +649,30 @@ func (c *ClickHouseConnector) addPostQueryClauses(query string, qf QueryFilter) 
 		}
 	}
 
-	// Add ORDER BY clause
-	if qf.SortBy != "" {
-		query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
-	}
+	// For UNION queries, ORDER BY and LIMIT are already applied to individual queries
+	// For standard queries, apply ORDER BY and LIMIT
+	if !strings.Contains(query, "UNION ALL") {
+		// Add ORDER BY clause
+		if qf.SortBy != "" {
+			query += fmt.Sprintf(" ORDER BY %s %s", qf.SortBy, qf.SortOrder)
+		}
 
-	// Add limit clause
-	if qf.Page >= 0 && qf.Limit > 0 {
-		offset := qf.Page * qf.Limit
-		query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
-	} else if qf.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", qf.Limit)
+		// Add limit clause
+		if qf.Page >= 0 && qf.Limit > 0 {
+			offset := qf.Page * qf.Limit
+			query += fmt.Sprintf(" LIMIT %d OFFSET %d", qf.Limit, offset)
+		} else if qf.Limit > 0 {
+			query += fmt.Sprintf(" LIMIT %d", qf.Limit)
+		}
+	} else {
+		// For UNION queries, we need to apply final LIMIT after the UNION
+		// This ensures we get exactly the requested number of results
+		if qf.Page >= 0 && qf.Limit > 0 {
+			offset := qf.Page * qf.Limit
+			query = fmt.Sprintf("SELECT * FROM (%s) LIMIT %d OFFSET %d", query, qf.Limit, offset)
+		} else if qf.Limit > 0 {
+			query = fmt.Sprintf("SELECT * FROM (%s) LIMIT %d", query, qf.Limit)
+		}
 	}
 
 	// Add settings at the very end
