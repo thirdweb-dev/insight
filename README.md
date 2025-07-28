@@ -1,464 +1,444 @@
 # Insight
 
-Insight is a blockchain data processing tool designed to fetch, process, and store on-chain data. It provides a solution for indexing blockchain data, facilitating efficient querying of transactions and logs through a simple API.
+**Insight** is a high-performance, modular blockchain indexer and data API for EVM chains. It fetches, processes, and stores on-chain data—making it easy to query blocks, transactions, logs, token balances, and more via a robust HTTP API.
 
-Insight's architecture consists of five main components:
-<img width="728" alt="architecture-diagram" src="https://github.com/user-attachments/assets/8ad19477-c18f-442e-a899-0f502a00bae6">
+## 🚀 Getting Started
 
-1. **Poller**: The Poller is responsible for continuously fetching new blocks from the configured RPC and processing them. It uses multiple worker goroutines to concurrently retrieve block data, handles successful and failed results, and stores the processed block data and any failures.
-   
-2. **Worker**: The Worker is responsible for processing batches of block numbers, fetching block data, logs, and traces (if supported) from the configured RPC. It divides the work into chunks, processes them concurrently, and returns the results as a collection of WorkerResult structures, which contain the block data, transactions, logs, and traces for each processed block.
+**Quickstart (Local Development):**
 
-3. **Committer**: The Committer is responsible for periodically moving data from the staging storage to the main storage. It ensures that blocks are committed sequentially, handling any gaps in the data, and updates various metrics while performing concurrent inserts of blocks, logs, transactions, and traces into the main storage.
-
-4. **Failure Recoverer**: The FailureRecoverer is responsible for recovering from block processing failures. It periodically checks for failed blocks, attempts to reprocess them using a worker, and either removes successfully processed blocks from the failure list or updates the failure count for blocks that continue to fail.
-
-5. **Orchestrator**: The Orchestrator is responsible for coordinating and managing the poller, failure recoverer, and committer. It initializes these components based on configuration settings and starts them concurrently, ensuring they run independently while waiting for all of them to complete their tasks.
-
-Insight's modular architecture and configuration options allow for adaptation to various EVM chains and use cases.
-
-
-## Getting started
-
-### Pre-requites
-1. Golang v1.23
-2. Clickhouse instance (`docker-compose` includes it for local development)
-
-### Usage
-To run insight and the associated API, follow these steps:
-1. Clone the repo
-```
+```bash
+# 1. Clone the repo
 git clone https://github.com/thirdweb-dev/insight.git
-```
-2. ~~Run the migration scripts here~~
-2. Apply the migrations from [here](internal/tools/)
-3. Create `config.yml` from `config.example.yml` and set the values by following the [config guide](#supported-configurations)
-4. Create `secrets.yml` from `secrects.example.yml` and set the needed credentials
-5. Build an instance
-```
+cd insight
+
+# 2. Copy example configs and secrets
+cp configs/config.example.yml configs/config.yml
+cp configs/secrets.example.yml configs/secrets.yml
+
+# 3. (Optional) Start dependencies with Docker Compose
+docker-compose up -d clickhouse
+
+# 4. Apply ClickHouse migrations
+cat internal/tools/*.sql | docker exec -i <clickhouse-container> clickhouse-client --user admin --password password
+
+# 5. Build and run Insight
 go build -o main -tags=production
+./main orchestrator   # Starts the indexer
+./main api           # Starts the API server
+
+# 6. Access the API
+# Default: http://localhost:3000
 ```
-6. Run insight
+
+---
+
+## 🏗 How It Works
+
+Insight's architecture consists of five main components that work together to continuously index blockchain data:
+
+### 1. **Poller** 
+The Poller continuously fetches new blocks from the configured RPC endpoint. It uses multiple worker goroutines to concurrently retrieve block data, handles successful and failed results, and stores the processed block data and any failures in staging storage.
+
+### 2. **Worker** 
+The Worker processes batches of block numbers, fetching block data, logs, and traces (if supported) from the configured RPC. It divides the work into chunks, processes them concurrently, and returns the results as a collection of WorkerResult structures containing block data, transactions, logs, and traces for each processed block.
+
+### 3. **Committer** 
+The Committer periodically moves data from staging storage to main storage. It ensures blocks are committed sequentially, handling any gaps in the data, and updates various metrics while performing concurrent inserts of blocks, logs, transactions, and traces into the main storage.
+
+### 4. **Failure Recoverer** 
+The FailureRecoverer recovers from block processing failures. It periodically checks for failed blocks, attempts to reprocess them using a worker, and either removes successfully processed blocks from the failure list or updates the failure count for blocks that continue to fail.
+
+### 5. **Orchestrator** 
+The Orchestrator coordinates and manages the poller, failure recoverer, and committer. It initializes these components based on configuration settings and starts them concurrently, ensuring they run independently while waiting for all of them to complete their tasks.
+
+### Data Flow
+1. **Polling**: The Poller continuously checks for new blocks on the blockchain
+2. **Processing**: Workers fetch and process block data, transactions, logs, and traces
+3. **Staging**: Processed data is stored in staging storage for validation
+4. **Commitment**: The Committer moves validated data to main storage
+5. **Recovery**: Failed blocks are retried by the Failure Recoverer
+6. **API**: The HTTP API serves queries from the main storage
+
+### Work Modes
+Insight operates in two distinct work modes that automatically adapt based on how far behind the chain head the indexer is:
+
+**Backfill Mode** (Catching Up):
+- Used when the indexer is significantly behind the latest block
+- Processes blocks in large batches for maximum throughput
+- Optimized for an error-free indexing process over speed
+- Automatically switches to live mode when caught up
+
+**Live Mode** (Real-time):
+- Used when the indexer is close to the chain head (within ~500 blocks by default)
+- Processes blocks as they arrive with minimal latency
+- Optimized for real-time data availability
+- Switches back to backfill mode if falling behind
+
+The work mode threshold and check interval are configurable via `workMode.liveModeThreshold` and `workMode.checkIntervalMinutes` settings.
+
+This modular architecture allows for adaptation to various EVM chains and use cases, with configurable batch sizes, delays, and processing strategies.
+
+---
+
+## ⚙️ Installation / Setup
+
+### Prerequisites
+
+- **Go** 1.23+
+- **ClickHouse** database (Docker Compose included)
+- (Optional) **Redis**, **Kafka**, **Prometheus**, **Grafana** for advanced features
+
+### Environment Variables & Secrets
+
+Insight supports configuration via environment variables, which is especially useful for containerized deployments and CI/CD pipelines.
+
+**Environment Variable Naming Convention:**
+- Use uppercase letters and underscores
+- Nested YAML paths become underscore-separated variables
+- Example: `rpc.url` becomes `RPC_URL`
+- Example: `storage.main.clickhouse.host` becomes `STORAGE_MAIN_CLICKHOUSE_HOST`
+
+**Common Environment Variables:**
+
+**RPC Configuration:**
+```bash
+RPC_URL=https://1.rpc.thirdweb.com/your-client-id
+RPC_CHAIN_ID=1
+RPC_BLOCKS_BLOCKS_PER_REQUEST=500
+RPC_BLOCKS_BATCH_DELAY=100
+RPC_LOGS_BLOCKS_PER_REQUEST=250
+RPC_LOGS_BATCH_DELAY=100
+RPC_TRACES_ENABLED=false
 ```
+
+**Storage Configuration:**
+```bash
+STORAGE_MAIN_CLICKHOUSE_HOST=localhost
+STORAGE_MAIN_CLICKHOUSE_PORT=9000
+STORAGE_MAIN_CLICKHOUSE_USERNAME=admin
+STORAGE_MAIN_CLICKHOUSE_PASSWORD=your-password
+STORAGE_MAIN_CLICKHOUSE_DATABASE=main
+STORAGE_MAIN_CLICKHOUSE_DISABLE_TLS=false
+```
+
+**API Configuration:**
+```bash
+API_HOST=0.0.0.0
+API_PORT=3000
+API_THIRDWEB_CLIENT_ID=your-client-id
+API_BASIC_AUTH_USERNAME=admin
+API_BASIC_AUTH_PASSWORD=your-api-password
+```
+
+**Logging Configuration:**
+```bash
+LOG_LEVEL=info
+LOG_PRETTIFY=false
+```
+
+**Poller Configuration:**
+```bash
+POLLER_ENABLED=true
+POLLER_INTERVAL=1000
+POLLER_BLOCKS_PER_POLL=500
+POLLER_FROM_BLOCK=0
+```
+
+**Complete Example:**
+```bash
+# Set all configuration via environment variables
+export RPC_URL="https://1.rpc.thirdweb.com/your-client-id"
+export RPC_CHAIN_ID=1
+export STORAGE_MAIN_CLICKHOUSE_HOST="your-clickhouse-host"
+export STORAGE_MAIN_CLICKHOUSE_PASSWORD="your-password"
+export API_BASIC_AUTH_USERNAME="admin"
+export API_BASIC_AUTH_PASSWORD="your-api-password"
+export LOG_LEVEL="info"
+
+# Run without config files
 ./main orchestrator
-```
-7. Run the Data API
-```
 ./main api
 ```
-8. API is available at `http://localhost:3000`
 
-## Metrics
+**Secrets Management:**
+- For sensitive credentials, you can use environment variables instead of `configs/secrets.yml`
+- Environment variables take precedence over config files
+- See `configs/secrets.example.yml` for the complete structure
 
-Insight node exposes Prometheus metrics at `http://localhost:2112/metrics`. Here the exposed metrics [metrics.go](https://github.com/thirdweb-dev/insight/blob/main/internal/metrics/metrics.go)
+### Docker
 
-## Configuration
+- `docker-compose.yml` provides ClickHouse, Redis, Prometheus, and Grafana for local development.
+- Exposes:
+  - ClickHouse: `localhost:8123` (web UI), `localhost:9440` (native)
+  - Prometheus: `localhost:9090`
+  - Grafana: `localhost:4000`
+  - Redis: `localhost:6379`
 
-You can configure the application in 3 ways.
-The order of priority is
-1. Command line arguments
-2. Environment variables
-3. Configuration files
+### Database Migrations
 
-### Configuration using command line arguments
-You can configure the application using command line arguments.
-For example to configure the `rpc.url` configuration, you can use the `--rpc-url` command line argument.
-Only select arguments are implemented. More on this below.
+- SQL migration scripts are in `internal/tools/`.
+- Apply them to your ClickHouse instance before running the indexer.
 
-### Configuration using environment variables
-You can also configure the application using environment variables. You can configure any configuration in the `config.yml` file using environment variables by replacing the `.` in the configuration with `_` and making the variable name uppercase.  
-For example to configure the `rpc.url` configuration to `https://my-rpc.com`, you can set the `RPC_URL` environment variable to `https://my-rpc.com`.  
+---
 
-### Configuration using configuration files
-The default configuration should live in `configs/config.yml`. Copy `configs/config.example.yml` to get started.  
-Or you can use the `--config` flag to specify a different configuration file.  
-If you want to add secrets to the configuration file, you can copy `configs/secrets.example.yml` to `configs/secrets.yml` and add the secrets. They won't be committed to the repository or the built image.
+## 💡 Usage
 
-### Supported configurations:
+### CLI Commands
 
-#### RPC URL
-URL to use as the RPC client.
+- **Indexer (Orchestrator):**  
+  `./main orchestrator`  
+  Starts the block poller, committer, and failure recovery.
 
-cmd: `--rpc-url`
-env: `RPC_URL`
-yaml:
+- **API Server:**  
+  `./main api`  
+  Serves the HTTP API at `http://localhost:3000`.
+
+- **Validation & Utilities:**  
+  Additional commands: `validate`, `validate-and-fix`, `migrate-valid` (see `cmd/`).
+
+### API Endpoints
+
+All endpoints require HTTP Basic Auth (see `configs/secrets.yml`).
+
+- **Blocks:**  
+  `GET /{chainId}/blocks`  
+  Query blocks with filters, sorting, pagination, and aggregation.
+
+- **Transactions:**  
+  `GET /{chainId}/transactions`  
+  `GET /{chainId}/transactions/{to}`  
+  `GET /{chainId}/transactions/{to}/{signature}`  
+  `GET /{chainId}/wallet-transactions/{wallet_address}`
+
+- **Logs/Events:**  
+  `GET /{chainId}/events`  
+  `GET /{chainId}/events/{contract}`  
+  `GET /{chainId}/events/{contract}/{signature}`
+
+- **Token Balances & Holders:**  
+  `GET /{chainId}/balances/{owner}/{type}`  
+  `GET /{chainId}/holders/{address}`  
+  `GET /{chainId}/tokens/{address}`
+
+- **Token Transfers:**  
+  `GET /{chainId}/transfers`
+
+- **Search:**  
+  `GET /{chainId}/search/{input}`  
+  Search by block number, hash, address, or function signature.
+
+- **Health:**  
+  `GET /health`
+
+- **Swagger/OpenAPI:**  
+  `GET /swagger/index.html`  
+  `GET /openapi.json`
+
+See the [OpenAPI spec](docs/swagger.yaml) for full details.
+
+---
+
+## 🛠 Configuration
+
+Insight supports configuration via multiple methods with the following priority order:
+
+1. **Command-line flags** (highest priority)
+2. **Environment variables** 
+3. **YAML config files** (`configs/config.yml`)
+
+### Configuration Methods
+
+**1. YAML Config Files (Recommended for Development):**
 ```yaml
+# configs/config.yml
 rpc:
-  url: https://rpc.com
-```
-
-#### RPC Blocks Per Request
-How many blocks at a time to fetch from the RPC. Default is 1000.
-
-cmd: `--rpc-blocks-blocksPerRequest`
-env: `RPC_BLOCKS_BLOCKSPERREQUEST`
-yaml:
-```yaml
-rpc:
+  url: https://1.rpc.thirdweb.com/your-thirdweb-client-id
   blocks:
     blocksPerRequest: 1000
-```
-
-#### RPC Blocks Batch Delay
-Milliseconds to wait between batches of blocks when fetching from the RPC. Default is 0.
-
-cmd: `--rpc-blocks-batchDelay`
-env: `RPC_BLOCKS_BATCHDELAY`
-yaml:
-```yaml
-rpc:
-  blocks:
-    batchDelay: 100
-```
-
-#### RPC Logs Blocks Per Request
-How many blocks at a time to query logs for from the RPC. Default is 100.
-Has no effect if it's larger than RPC blocks per request.
-
-cmd: `--rpc-logs-blocksPerRequest`
-env: `RPC_LOGS_BLOCKSPERREQUEST`
-yaml:
-```yaml
-rpc:
+    batchDelay: 0
   logs:
-    blocksPerRequest: 100
-```
-
-#### RPC Logs Batch Delay
-Milliseconds to wait between batches of logs when fetching from the RPC. Default is 0.
-
-cmd: `--rpc-logs-batchDelay`
-env: `RPC_LOGS_BATCHDELAY`
-yaml:
-```yaml
-rpc:
-  logs:
+    blocksPerRequest: 400
     batchDelay: 100
-```
-
-#### RPC Block Receipts Enabled
-If this is `true`, will use `eth_getBlockReceipts` instead of `eth_getLogs` if the RPC supports it. Allows getting receipt data for transactions, but is not supported by every RPC. Default is `false`.
-
-cmd: `--rpc-block-receipts-enabled`
-env: `RPC_BLOCKRECEIPTS_ENABLED`
-yaml:
-```yaml
-rpc:
-  blockReceipts:
-    enabled: true
-```
-
-#### RPC Block Receipts Blocks Per Request
-How many blocks at a time to fetch block receipts for from the RPC. Default is 250.
-Has no effect if it's larger than RPC blocks per request.
-
-cmd: `--rpc-block-receipts-blocksPerRequest`
-env: `RPC_BLOCKRECEIPTS_BLOCKSPERREQUEST`
-yaml:
-```yaml
-rpc:
-  blockReceipts:
-    blocksPerRequest: 100
-```
-
-#### RPC Block Receipts Batch Delay
-Milliseconds to wait between batches of block receipts when fetching from the RPC. Default is 0.
-
-cmd: `--rpc-block-receipts-batchDelay`
-env: `RPC_BLOCKRECEIPTS_BATCHDELAY`
-yaml:
-```yaml
-rpc:
-  blockReceipts:
-    batchDelay: 100
-```
-
-#### RPC Traces Enabled
-Whether to enable fetching traces from the RPC. Default is `true`, but it will try to detect if the RPC supports traces automatically.
-
-cmd: `--rpc-traces-enabled`
-env: `RPC_TRACES_ENABLED`
-yaml:
-```yaml
-rpc:
   traces:
     enabled: true
-```
-
-#### RPC Traces Blocks Per Request
-How many blocks at a time to fetch traces for from the RPC. Default is 100.
-Has no effect if it's larger than RPC blocks per request.
-
-cmd: `--rpc-traces-blocksPerRequest`
-env: `RPC_TRACES_BLOCKSPERREQUEST`
-yaml:
-```yaml
-rpc:
-  traces:
-    blocksPerRequest: 100
-```
-
-#### RPC Traces Batch Delay
-Milliseconds to wait between batches of traces when fetching from the RPC. Default is 0.
-
-cmd: `--rpc-traces-batchDelay`
-env: `RPC_TRACES_BATCHDELAY`
-yaml:
-```yaml
-rpc:
-  traces:
+    blocksPerRequest: 200
     batchDelay: 100
-```
 
-#### Log Level
-Log level for the logger. Default is `warn`.
-
-cmd: `--log-level`
-env: `LOG_LEVEL`
-yaml:
-```yaml
 log:
   level: debug
-```
+  pretty: true
 
-#### Prettify logs
-Whether to print logs in a prettified format. Affects performance. Default is `false`.
-
-cmd: `--log-prettify`
-env: `LOG_PRETTIFY`
-yaml:
-```yaml
-log:
-  prettify: true
-```
-
-#### Poller
-Whether to enable the poller. Default is `true`.
-
-cmd: `--poller-enabled`
-env: `POLLER_ENABLED`
-yaml:
-```yaml
-poller:
-  enabled: true
-```
-
-#### Poller Interval
-Poller trigger interval in milliseconds. Default is `1000`.
-
-cmd: `--poller-interval`
-env: `POLLER_INTERVAL`
-yaml:
-```yaml
-poller:
-  interval: 3000
-```
-
-#### Poller Blocks Per Poll
-How many blocks to poll each interval. Default is `10`.
-
-cmd: `--poller-blocks-per-poll`
-env: `POLLER_BLOCKSPERPOLL`
-yaml:
-```yaml
-poller:
-  blocksPerPoll: 3
-```
-
-#### Poller From Block
-From which block to start polling. Default is `0`.
-
-cmd: `--poller-from-block`
-env: `POLLER_FROMBLOCK`
-yaml:
-```yaml
-poller:
-  fromBlock: 20000000
-```
-
-#### Poller Force Start Block
-From which block to start polling. Default is `false`.
-
-cmd: `--poller-force-from-block`
-env: `POLLER_FORCEFROMBLOCK`
-yaml:
-```yaml
-poller:
-  forceFromBlock: false
-```
-
-#### Poller Until Block
-Until which block to poll. If not set, it will poll until the latest block.
-
-cmd: `--poller-until-block`
-env: `POLLER_UNTILBLOCK`
-yaml:
-```yaml
-poller:
-  untilBlock: 20000010
-```
-
-#### Committer
-Whether to enable the committer. Default is `true`.
-
-cmd: `--committer-enabled`
-env: `COMMITTER_ENABLED`
-yaml:
-```yaml
-committer:
-  enabled: true
-```
-
-#### Committer Interval
-Committer trigger interval in milliseconds. Default is `250`.
-
-cmd: `--committer-interval`
-env: `COMMITTER_INTERVAL`
-yaml:
-```yaml
-committer:
-  interval: 3000
-```
-
-#### Committer Blocks Per Commit
-How many blocks to commit each interval. Default is `10`.
-
-cmd: `--committer-blocks-per-commit`
-env: `COMMITTER_BLOCKSPERCOMMIT`
-yaml:
-```yaml
-committer:
-  blocksPerCommit: 1000
-```
-
-#### Committer From Block
-From which block to start committing. Default is `0`.
-
-cmd: `--committer-from-block`
-env: `COMMITTER_FROMBLOCK`
-yaml:
-```yaml
-committer:
-  fromBlock: 20000000
-```
-
-#### Reorg Handler
-Whether to enable the reorg handler. Default is `true`.
-
-cmd: `--reorgHandler-enabled`
-env: `REORGHANDLER_ENABLED`
-yaml:
-```yaml
-reorgHandler:
-  enabled: true
-```
-
-#### Reorg Handler Interval
-Reorg handler trigger interval in milliseconds. Default is `1000`.
-
-cmd: `--reorgHandler-interval`
-env: `REORGHANDLER_INTERVAL`
-yaml:
-```yaml
-reorgHandler:
-  interval: 3000
-```
-
-#### Reorg Handler Blocks Per Scan
-How many blocks to scan for reorgs. Default is `100`.
-
-cmd: `--reorgHandler-blocks-per-scan`
-env: `REORGHANDLER_BLOCKSPERSCAN`
-yaml:
-```yaml
-reorgHandler:
-  blocksPerScan: 1000
-```
-
-#### Reorg Handler From Block
-From which block to start scanning for reorgs. Default is `0`.
-
-cmd: `--reorgHandler-from-block`
-env: `REORGHANDLER_FROMBLOCK`
-yaml:
-```yaml
-reorgHandler:
-  fromBlock: 20000000
-```
-
-#### Reorg Handler Force From Block
-Whether to force the reorg handler to start from the block specified in `reorgHandler-from-block`. Default is `false`.
-
-cmd: `--reorgHandler-force-from-block`
-env: `REORGHANDLER_FORCEFROMBLOCK`  
-yaml:
-```yaml
-reorgHandler:
-  forceFromBlock: true
-```
-
-#### Failure Recoverer
-Whether to enable the failure recoverer. Default is `true`.
-
-cmd: `--failure-recoverer-enabled`
-env: `FAILURERECOVERER_ENABLED`
-yaml:
-```yaml
-failureRecoverer:
-  enabled: true
-```
-
-#### Failure Recoverer Interval
-Failure recoverer trigger interval in milliseconds. Default is `1000`.
-
-cmd: `--failure-recoverer-interval`
-env: `FAILURERECOVERER_INTERVAL`
-yaml:
-```yaml
-failureRecoverer:
-  interval: 3000
-```
-
-#### Failure Recoverer Blocks Per Run
-How many blocks to recover each interval. Default is `10`.
-
-cmd: `--failure-recoverer-blocks-per-run`
-env: `FAILURERECOVERER_BLOCKSPERRUN`
-yaml:
-```yaml
-failureRecoverer:
-  blocksPerRun: 100
-```
-
-#### Storage
-This application has 3 kinds of storage: `main`, `staging` and `orchestrator`.
-Each of them takes similar configuration, slightly depending on the driver you want to use.
-There are no defaults, so this needs to be configured.
-
-For example, this can be a part of `config.yml`:
-```yaml
-storage:
-  main:
-    clickhouse:
-      port: 3000
-      database: "base"
-      disableTLS: true
-  staging:
-    clickhouse:
-      port: 3000
-      database: "staging"
-```
-With the corresponding `secrets.yml`:
-```yaml
 storage:
   main:
     clickhouse:
       host: localhost
-      user: admin
-      password: password
-  staging:
-    clickhouse:
-      host: localhost
+      port: 9440
+      database: "default"
       username: admin
       password: password
+      disableTLS: true
 ```
+
+**2. Environment Variables (Recommended for Production):**
+```bash
+# Set configuration via environment variables
+export RPC_URL="https://1.rpc.thirdweb.com/your-client-id"
+export RPC_BLOCKS_BLOCKS_PER_REQUEST=1000
+export RPC_BLOCKS_BATCH_DELAY=0
+export LOG_LEVEL="debug"
+export LOG_PRETTIFY=true
+export STORAGE_MAIN_CLICKHOUSE_HOST="localhost"
+export STORAGE_MAIN_CLICKHOUSE_PASSWORD="your-password"
+```
+
+**3. Command-line Flags:**
+```bash
+# Override specific settings via CLI flags
+./main orchestrator --rpc-url="https://1.rpc.thirdweb.com/your-client-id" --log-level=info
+./main api --api-host=0.0.0.0 --api-port=8080
+```
+
+### Environment Variable Reference
+
+**RPC Configuration:**
+| YAML Path | Environment Variable | Description | Default |
+|-----------|---------------------|-------------|---------|
+| `rpc.url` | `RPC_URL` | RPC endpoint URL | - |
+| `rpc.chainId` | `RPC_CHAIN_ID` | Blockchain network ID | 1 |
+| `rpc.blocks.blocksPerRequest` | `RPC_BLOCKS_BLOCKS_PER_REQUEST` | Blocks per RPC request | 500 |
+| `rpc.blocks.batchDelay` | `RPC_BLOCKS_BATCH_DELAY` | Delay between batches (ms) | 100 |
+| `rpc.logs.blocksPerRequest` | `RPC_LOGS_BLOCKS_PER_REQUEST` | Logs per RPC request | 250 |
+| `rpc.logs.batchDelay` | `RPC_LOGS_BATCH_DELAY` | Log batch delay (ms) | 100 |
+| `rpc.traces.enabled` | `RPC_TRACES_ENABLED` | Enable trace fetching | false |
+| `rpc.traces.blocksPerRequest` | `RPC_TRACES_BLOCKS_PER_REQUEST` | Traces per RPC request | 500 |
+
+**Storage Configuration:**
+| YAML Path | Environment Variable | Description | Default |
+|-----------|---------------------|-------------|---------|
+| `storage.main.clickhouse.host` | `STORAGE_MAIN_CLICKHOUSE_HOST` | ClickHouse host | localhost |
+| `storage.main.clickhouse.port` | `STORAGE_MAIN_CLICKHOUSE_PORT` | ClickHouse port | 9000 |
+| `storage.main.clickhouse.username` | `STORAGE_MAIN_CLICKHOUSE_USERNAME` | Database username | admin |
+| `storage.main.clickhouse.password` | `STORAGE_MAIN_CLICKHOUSE_PASSWORD` | Database password | password |
+| `storage.main.clickhouse.database` | `STORAGE_MAIN_CLICKHOUSE_DATABASE` | Database name | main |
+| `storage.main.clickhouse.disableTLS` | `STORAGE_MAIN_CLICKHOUSE_DISABLE_TLS` | Disable TLS | false |
+
+**API Configuration:**
+| YAML Path | Environment Variable | Description | Default |
+|-----------|---------------------|-------------|---------|
+| `api.host` | `API_HOST` | API server host | localhost |
+| `api.port` | `API_PORT` | API server port | 3000 |
+| `api.thirdweb.clientId` | `API_THIRDWEB_CLIENT_ID` | ThirdWeb client ID | - |
+| `api.basicAuth.username` | `API_BASIC_AUTH_USERNAME` | API username | admin |
+| `api.basicAuth.password` | `API_BASIC_AUTH_PASSWORD` | API password | admin |
+
+**Logging Configuration:**
+| YAML Path | Environment Variable | Description | Default |
+|-----------|---------------------|-------------|---------|
+| `log.level` | `LOG_LEVEL` | Log level (debug, info, warn, error) | debug |
+| `log.prettify` | `LOG_PRETTIFY` | Pretty print logs | true |
+
+**Poller Configuration:**
+| YAML Path | Environment Variable | Description | Default |
+|-----------|---------------------|-------------|---------|
+| `poller.enabled` | `POLLER_ENABLED` | Enable block polling | true |
+| `poller.interval` | `POLLER_INTERVAL` | Polling interval (ms) | 1000 |
+| `poller.blocksPerPoll` | `POLLER_BLOCKS_PER_POLL` | Blocks per poll | 500 |
+| `poller.fromBlock` | `POLLER_FROM_BLOCK` | Starting block number | 0 |
+
+### Configuration Best Practices
+
+**Development:**
+- Use YAML config files for easy configuration management
+- Keep sensitive data in `configs/secrets.yml` (gitignored)
+
+**Production:**
+- Use environment variables for security and flexibility
+- Set sensitive credentials via environment variables
+- Use container orchestration secrets management
+
+**Docker/Kubernetes:**
+```yaml
+# docker-compose.yml example
+environment:
+  - RPC_URL=https://1.rpc.thirdweb.com/your-client-id
+  - STORAGE_MAIN_CLICKHOUSE_HOST=clickhouse
+  - STORAGE_MAIN_CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+  - API_BASIC_AUTH_PASSWORD=${API_PASSWORD}
+```
+
+- See `configs/config.example.yml` and `configs/secrets.example.yml` for complete configuration options.
+- All config options can be overridden by environment variables or CLI flags.
+
+---
+
+## 📁 Project Structure
+
+```
+insight/
+  api/           # API layer
+  cmd/           # CLI commands (orchestrator, api, validation, etc.)
+  configs/       # Config and secrets templates
+  docs/          # Swagger/OpenAPI docs
+  internal/
+    common/      # Core blockchain models/utilities
+    handlers/    # HTTP API handlers
+    log/         # Logging setup
+    metrics/     # Prometheus metrics
+    middleware/  # API middleware (auth, CORS, logging)
+    orchestrator/# Indexer orchestration logic
+    publisher/   # Kafka publisher (optional)
+    rpc/         # RPC client logic
+    storage/     # ClickHouse connectors
+    tools/       # SQL migration scripts
+    validation/  # Data validation logic
+    worker/      # Block processing workers
+  test/          # Mocks and test helpers
+  main.go        # Entrypoint
+  Dockerfile     # Container build
+  docker-compose.yml
+```
+
+---
+
+## 🤝 Contributing
+
+1. **Fork & clone** the repo.
+2. **Install dependencies:**  
+   `go mod download`
+3. **Set up local ClickHouse:**  
+   `docker-compose up -d clickhouse`
+4. **Apply migrations** (see above).
+5. **Run tests:**  
+   `go test ./...`
+6. **Open a PR** with your changes!
+
+---
+
+## 🧪 Testing
+
+- All core logic is covered by unit tests (see `test/` and `internal/handlers/*_test.go`).
+- Run the full suite:
+  ```bash
+  go test ./...
+  ```
+
+---
+
+## 📚 Documentation
+
+- **API Reference:**  
+  - [Swagger UI](http://localhost:3000/swagger/index.html) (when running)
+  - [OpenAPI Spec](docs/swagger.yaml)
+- **Metrics:**  
+  - Prometheus metrics at [http://localhost:2112/metrics](http://localhost:2112/metrics)
+  - See `internal/metrics/metrics.go` for all exposed metrics.
+- **Architecture & Design:**  
+  - See the top of this README and code comments for architectural details.
+
+---
+
+**License:** Apache 2.0
+
+---
+
+Let me know if you want this written to your `README.md` or if you want to further tailor any section!
