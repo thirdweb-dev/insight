@@ -1,59 +1,246 @@
+# RPC Configuration - Settings for connecting to blockchain RPC endpoints
 rpc:
+  # URL of the blockchain RPC endpoint to connect to
+  url: https://1.rpc.thirdweb.com
+  
+  # Block fetching configuration
   blocks:
-    blocksPerRequest: 1000
-    batchDelay: 0
-  logs:
-    blocksPerRequest: 400
-    batchDelay: 100
-  blockReceipts:
-    enabled: true
+    # Number of blocks to request in a single RPC call
     blocksPerRequest: 500
+    # Delay in milliseconds between batch requests to avoid rate limiting
     batchDelay: 100
-  traces:
+  
+  # Log fetching configuration
+  logs:
+    # Number of blocks to fetch logs for in a single request
+    blocksPerRequest: 250
+    # Delay in milliseconds between log batch requests
+    batchDelay: 100
+  
+  # Block receipts fetching configuration
+  blockReceipts:
+    # Whether to fetch block receipts (transaction receipts for all transactions in a block)
     enabled: true
-    blocksPerRequest: 200
+    # Number of blocks to fetch receipts for in a single request
+    blocksPerRequest: 250
+    # Delay in milliseconds between receipt batch requests
     batchDelay: 100
+  
+  # Trace fetching configuration (for debugging and detailed transaction analysis)
+  traces:
+    # Whether to fetch transaction traces (disabled by default due to high resource usage)
+    enabled: false
+    # Number of blocks to fetch traces for in a single request
+    blocksPerRequest: 500
+    # Delay in milliseconds between trace batch requests
+    batchDelay: 100
+  
+  # Blockchain network identifier (1 = Ethereum mainnet). Optional. If RPC URL is omitted, will use thirdweb RPC with this chainId.
+  chainId: 1
 
+# Logging configuration
 log:
+  # Log level: debug, info, warn, error
   level: debug
-  pretty: true
+  # Whether to format logs in a human-readable way (vs JSON)
+  prettify: true
 
+# Poller configuration - Controls how blocks are fetched from the blockchain
 poller:
+  # Whether the poller is enabled
   enabled: true
-  interval: 3000
-  blocksPerPoll: 10000
+  # Interval in milliseconds between polling cycles
+  interval: 1000
+  # Number of blocks to fetch in each polling cycle
+  blocksPerPoll: 500
+  # Starting block number to begin polling from (0 = start from latest)
+  fromBlock: 0
+  # Whether to force starting from fromBlock even if a cursor exists
+  forceFromBlock: false
+  # Ending block number (0 = poll indefinitely)
+  untilBlock: 0
+  # Number of parallel poller instances to run
+  parallelPollers: 1
 
+# Committer configuration - Controls how data is committed to storage
 committer:
+  # Whether the committer is enabled
   enabled: true
+  # Interval in milliseconds between commit cycles
   interval: 1000
-  blocksPerCommit: 10000
+  # Number of blocks to commit in each cycle
+  blocksPerCommit: 1000
+  # Starting block number for commits (0 = start from latest)
+  fromBlock: 0
 
+# Failure recovery configuration - Handles failed block processing
 failureRecoverer:
-  enabled: true
+  # Whether failure recovery is enabled
+  enabled: false
+  # Interval in milliseconds between recovery attempts
   interval: 10000
-  blocksPerRun: 100
+  # Number of failed blocks to process in each recovery cycle
+  blocksPerRun: 50
 
+# Reorganization handler configuration - Detects and handles blockchain reorganizations
 reorgHandler:
+  # Whether reorg detection is enabled
   enabled: true
-  interval: 1000
-  blocksPerScan: 50
+  # Interval in milliseconds between reorg scans
+  interval: 10000
+  # Number of blocks to scan for reorgs in each cycle
+  blocksPerScan: 200
+  # Starting block number for reorg detection (0 = start from latest)
+  fromBlock: 1000000
+  # Whether to force starting from fromBlock for reorg detection
+  forceFromBlock: false
 
-validation:
-  mode: strict  # "disabled", "minimal", or "strict"
-
+# Storage configuration for different components
 storage:
+  # Main storage configuration - Primary data storage
   main:
     clickhouse:
-      port: 9440
-      database: "default"
-      disableTLS: true
+      # ClickHouse database host
+      host: localhost
+      # ClickHouse database port
+      port: 9000
+      # Database username
+      username: admin
+      # Database password
+      password: password
+      # Database name
+      database: main
+      # Whether to disable TLS encryption
+      disableTLS: false
+      # Whether to use async inserts for better performance
+      asyncInsert: true
+      # Maximum number of rows to insert in a single query
+      maxRowsPerInsert: 1000
+      # Maximum number of open database connections
+      maxOpenConns: 100
+      # Maximum number of idle database connections
+      maxIdleConns: 100
+      # Chain-specific configuration
+      chainBasedConfig:
+        "1": # Chain ID 1 (Ethereum mainnet)
+          # Table name for this chain's data
+          tableName: main
+          # Default fields to select when querying blocks
+          defaultSelectFields:
+            - block_number
+            - block_hash
+            - block_timestamp
+            - block_gas_limit
+            - block_gas_used
+      # Whether to enable parallel processing of materialized views
+      enableParallelViewProcessing: true
+      # Maximum query execution time in seconds
+      maxQueryTime: 60
+  
+  # Staging storage configuration - Temporary storage for data processing
   staging:
     clickhouse:
-      port: 9440
-      database: "default"
-      disableTLS: true
+      host: localhost
+      port: 9000
+      username: admin
+      password: password
+      database: main
+      disableTLS: false
+      asyncInsert: true
+  
+  # Orchestrator storage configuration - Storage for orchestration metadata
   orchestrator:
     clickhouse:
-      port: 9440
-      database: "default"
-      disableTLS: true
+      host: localhost
+      port: 9000
+      username: admin
+      password: password
+      database: main
+      disableTLS: false
+      asyncInsert: true
+
+# API configuration - Settings for the HTTP API server
+api:
+  # Host address to bind the API server to
+  host: localhost
+  # ThirdWeb contract API endpoint for contract metadata
+  thirdwebContractApi: https://contract.thirdweb.com
+  # HTTP client configuration for contract API requests
+  contractApiRequest:
+    # Maximum number of idle connections in the connection pool
+    maxIdleConns: 100
+    # Maximum number of idle connections per host
+    maxIdleConnsPerHost: 10
+    # Maximum number of connections per host
+    maxConnsPerHost: 10
+    # Timeout for idle connections in seconds
+    idleConnTimeout: 60
+    # Whether to disable HTTP compression
+    disableCompression: false
+    # Request timeout in seconds
+    timeout: 120
+  # Whether to enable ABI decoding for contract events
+  abiDecodingEnabled: true
+  # ThirdWeb client configuration
+  thirdweb:
+    # ThirdWeb client ID for API access
+    clientId: 123abc
+
+# Publisher configuration - Settings for publishing data to message queues
+publisher:
+  # Whether the publisher is enabled
+  enabled: true
+  # Kafka broker addresses (comma-separated)
+  brokers: localhost:9092
+  
+  # Block publishing configuration
+  blocks:
+    # Whether to publish block data
+    enabled: true
+    # Kafka topic name for block data
+    topicName: blocks
+  
+  # Transaction publishing configuration
+  transactions:
+    # Whether to publish transaction data
+    enabled: true
+    # Kafka topic name for transaction data
+    topicName: transactions
+    # Filter transactions by destination address (empty = no filter)
+    toFilter:
+      - 0x0000000000000000000000000000000000000000
+    # Filter transactions by source address (empty = no filter)
+    fromFilter:
+      - 0x0000000000000000000000000000000000000000
+  
+  # Trace publishing configuration
+  traces:
+    # Whether to publish transaction trace data
+    enabled: true
+    # Kafka topic name for trace data
+    topicName: traces
+  
+  # Event publishing configuration
+  events:
+    # Whether to publish contract event data
+    enabled: true
+    # Kafka topic name for event data
+    topicName: events
+    # Filter events by contract address (empty = no filter)
+    addressFilter:
+      - 0x0000000000000000000000000000000000000000
+    # Filter events by topic0 (event signature) (empty = no filter)
+    topic0Filter:
+      - 0x0000000000000000000000000000000000000000
+
+# Work mode configuration - Controls system behavior based on blockchain state
+workMode:
+  # Interval in minutes to check if system should switch between live/historical mode
+  checkIntervalMinutes: 10
+  # Block number threshold to determine if system is in "live mode" (near chain head)
+  liveModeThreshold: 1000000
+
+# Validation configuration - Controls data validation strictness
+validation:
+  # Validation mode: "disabled" (no validation), "minimal" (basic checks), or "strict" (comprehensive validation)
+  mode: strict
