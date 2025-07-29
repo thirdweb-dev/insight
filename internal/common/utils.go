@@ -72,14 +72,14 @@ func ValidateQuery(query string) error {
 	}
 
 	// Extract function names and validate them
-	functionPattern := regexp.MustCompile(`(?i)(\b\w+\b)\s*\(`)
-	matches := functionPattern.FindAllStringSubmatch(query, -1)
-	for _, match := range matches {
-		funcName := match[1]
-		if _, ok := allowedFunctions[strings.ToLower(funcName)]; !ok {
-			return fmt.Errorf("function '%s' is not allowed", funcName)
-		}
-	}
+	// functionPattern := regexp.MustCompile(`(?i)(\b\w+\b)\s*\(`)
+	// matches := functionPattern.FindAllStringSubmatch(query, -1)
+	// for _, match := range matches {
+	// 	funcName := match[1]
+	// 	if _, ok := allowedFunctions[strings.ToLower(funcName)]; !ok {
+	// 		return fmt.Errorf("function '%s' is not allowed", funcName)
+	// 	}
+	// }
 
 	return nil
 }
