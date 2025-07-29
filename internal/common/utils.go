@@ -49,7 +49,7 @@ var allowedFunctions = map[string]struct{}{
 }
 
 var disallowedPatterns = []string{
-	`(?i)\b(UNION|INSERT|DELETE|UPDATE|DROP|CREATE|ALTER|TRUNCATE|EXEC|;|--)`,
+	`(?i)\b(INSERT|DELETE|UPDATE|DROP|CREATE|ALTER|TRUNCATE|EXEC|;|--)`,
 }
 
 // ValidateQuery checks the query for disallowed patterns and ensures only allowed functions are used.
