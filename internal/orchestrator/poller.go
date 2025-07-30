@@ -85,8 +85,20 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOptio
 		if err != nil || highestBlockFromStaging == nil || highestBlockFromStaging.Sign() <= 0 {
 			log.Warn().Err(err).Msgf("No last polled block found, setting to %s", lastPolledBlock.String())
 		} else {
-			lastPolledBlock = highestBlockFromStaging
 			log.Debug().Msgf("Last polled block found in staging: %s", lastPolledBlock.String())
+			if highestBlockFromStaging.Cmp(pollFromBlock) > 0 {
+				log.Debug().Msgf("Staging block %s is higher than configured start block %s", highestBlockFromStaging.String(), pollFromBlock.String())
+				lastPolledBlock = highestBlockFromStaging
+			}
+		}
+		highestBlockFromMainStorage, err := storage.MainStorage.GetMaxBlockNumber(rpc.GetChainID())
+		if err != nil {
+			log.Error().Err(err).Msg("Error getting last block in main storage")
+		} else {
+			if highestBlockFromMainStorage.Cmp(pollFromBlock) > 0 {
+				log.Debug().Msgf("Main storage block %s is higher than configured start block %s", highestBlockFromMainStorage.String(), pollFromBlock.String())
+				lastPolledBlock = highestBlockFromMainStorage
+			}
 		}
 	}
 	poller.lastPolledBlock = lastPolledBlock
