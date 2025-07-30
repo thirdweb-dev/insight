@@ -129,6 +129,12 @@ func handleTransactionsRequest(c *gin.Context) {
 		return
 	}
 
+	// Validate GroupBy and SortBy fields
+	if err := api.ValidateGroupByAndSortBy("transactions", queryParams.GroupBy, queryParams.SortBy, queryParams.Aggregates); err != nil {
+		api.BadRequestErrorHandler(c, err)
+		return
+	}
+
 	var functionABI *abi.Method
 	signatureHash := ""
 	if signature != "" {

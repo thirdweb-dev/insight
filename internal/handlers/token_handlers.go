@@ -86,6 +86,13 @@ func GetTokenIdsByType(c *gin.Context) {
 	// We only care about token_id and token_type
 	columns := []string{"token_id", "token_type"}
 	groupBy := []string{"token_id", "token_type"}
+	sortBy := c.Query("sort_by")
+
+	// Validate GroupBy and SortBy fields
+	if err := api.ValidateGroupByAndSortBy("balances", groupBy, sortBy, nil); err != nil {
+		api.BadRequestErrorHandler(c, err)
+		return
+	}
 
 	tokenIds, err := getTokenIdsFromReq(c)
 	if err != nil {
@@ -100,7 +107,7 @@ func GetTokenIdsByType(c *gin.Context) {
 		ZeroBalance:  hideZeroBalances,
 		TokenIds:     tokenIds,
 		GroupBy:      groupBy,
-		SortBy:       c.Query("sort_by"),
+		SortBy:       sortBy,
 		SortOrder:    c.Query("sort_order"),
 		Page:         api.ParseIntQueryParam(c.Query("page"), 0),
 		Limit:        api.ParseIntQueryParam(c.Query("limit"), 0),
@@ -189,6 +196,14 @@ func GetTokenBalancesByType(c *gin.Context) {
 		groupBy = []string{"address", "token_id", "token_type"}
 	}
 
+	sortBy := c.Query("sort_by")
+
+	// Validate GroupBy and SortBy fields
+	if err := api.ValidateGroupByAndSortBy("balances", groupBy, sortBy, nil); err != nil {
+		api.BadRequestErrorHandler(c, err)
+		return
+	}
+
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
 		Owner:        owner,
@@ -197,7 +212,7 @@ func GetTokenBalancesByType(c *gin.Context) {
 		ZeroBalance:  hideZeroBalances,
 		TokenIds:     tokenIds,
 		GroupBy:      groupBy,
-		SortBy:       c.Query("sort_by"),
+		SortBy:       sortBy,
 		SortOrder:    c.Query("sort_order"),
 		Page:         api.ParseIntQueryParam(c.Query("page"), 0),
 		Limit:        api.ParseIntQueryParam(c.Query("limit"), 0),
@@ -280,6 +295,15 @@ func GetTokenHoldersByType(c *gin.Context) {
 		api.BadRequestErrorHandler(c, fmt.Errorf("invalid token ids '%s'", err))
 		return
 	}
+
+	sortBy := c.Query("sort_by")
+
+	// Validate GroupBy and SortBy fields
+	if err := api.ValidateGroupByAndSortBy("balances", groupBy, sortBy, nil); err != nil {
+		api.BadRequestErrorHandler(c, err)
+		return
+	}
+
 	qf := storage.BalancesQueryFilter{
 		ChainId:      chainId,
 		TokenTypes:   tokenTypes,

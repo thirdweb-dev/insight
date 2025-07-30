@@ -109,6 +109,15 @@ func GetTokenTransfers(c *gin.Context) {
 		}
 	}
 
+	// Validate SortBy field (transfers don't use GroupBy or Aggregates)
+	sortBy := c.Query("sort_by")
+	if sortBy != "" {
+		if err := api.ValidateGroupByAndSortBy("transfers", nil, sortBy, nil); err != nil {
+			api.BadRequestErrorHandler(c, err)
+			return
+		}
+	}
+
 	// Define query filter
 	qf := storage.TransfersQueryFilter{
 		ChainId:          chainId,
@@ -121,7 +130,7 @@ func GetTokenTransfers(c *gin.Context) {
 		EndBlockNumber:   endBlockNumber,
 		Page:             api.ParseIntQueryParam(c.Query("page"), 0),
 		Limit:            api.ParseIntQueryParam(c.Query("limit"), 20),
-		SortBy:           c.Query("sort_by"),
+		SortBy:           sortBy,
 		SortOrder:        c.Query("sort_order"),
 	}
 

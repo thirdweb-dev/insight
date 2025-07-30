@@ -111,6 +111,12 @@ func handleLogsRequest(c *gin.Context) {
 		return
 	}
 
+	// Validate GroupBy and SortBy fields
+	if err := api.ValidateGroupByAndSortBy("logs", queryParams.GroupBy, queryParams.SortBy, queryParams.Aggregates); err != nil {
+		api.BadRequestErrorHandler(c, err)
+		return
+	}
+
 	var eventABI *abi.Event
 	signatureHash := ""
 	if signature != "" {
