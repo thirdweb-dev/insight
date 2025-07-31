@@ -45,6 +45,12 @@ func handleBlocksRequest(c *gin.Context) {
 		return
 	}
 
+	// Validate GroupBy and SortBy fields
+	if err := api.ValidateGroupByAndSortBy("blocks", queryParams.GroupBy, queryParams.SortBy, queryParams.Aggregates); err != nil {
+		api.BadRequestErrorHandler(c, err)
+		return
+	}
+
 	mainStorage, err := getMainStorage()
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting main storage")
