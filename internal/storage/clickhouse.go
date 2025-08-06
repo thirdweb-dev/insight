@@ -85,13 +85,13 @@ func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector,
 
 	// Test the connection
 	zLog.Info().Msg("ClickHouse: Testing connection with a simple query")
-	var result int
+	var result uint8
 	err = conn.QueryRow(context.Background(), "SELECT 1").Scan(&result)
 	if err != nil {
 		zLog.Error().Err(err).Msg("ClickHouse: Test query failed")
 		return nil, fmt.Errorf("ClickHouse test query failed: %w", err)
 	}
-	zLog.Info().Int("testResult", result).Msg("ClickHouse: Test query successful")
+	zLog.Info().Int("testResult", int(result)).Msg("ClickHouse: Test query successful")
 
 	if cfg.MaxRowsPerInsert == 0 {
 		cfg.MaxRowsPerInsert = DEFAULT_MAX_ROWS_PER_INSERT
@@ -906,6 +906,16 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 
 	zLog.Info().Str("chainId", chainId.String()).Str("maxBlockNumber", maxBlockNumber.String()).Msg("ClickHouse GetMaxBlockNumber: Query successful")
 	return maxBlockNumber, nil
+}
+
+// TestConnection tests the ClickHouse connection with a simple query
+func (c *ClickHouseConnector) TestConnection() error {
+	var result uint8
+	err := c.conn.QueryRow(context.Background(), "SELECT 1").Scan(&result)
+	if err != nil {
+		return fmt.Errorf("ClickHouse test query failed: %w", err)
+	}
+	return nil
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (maxBlockNumber *big.Int, err error) {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/thirdweb-dev/indexer/internal/handlers"
 	"github.com/thirdweb-dev/indexer/internal/middleware"
+	"github.com/thirdweb-dev/indexer/internal/storage"
 
 	// Import the generated Swagger docs
 	config "github.com/thirdweb-dev/indexer/configs"
@@ -107,6 +108,12 @@ func RunApi(cmd *cobra.Command, args []string) {
 		c.String(http.StatusOK, "ok")
 	})
 
+	// Database health check endpoint
+	r.GET("/health/db", func(c *gin.Context) {
+		health := checkDatabaseHealth()
+		c.JSON(http.StatusOK, health)
+	})
+
 	srv := &http.Server{
 		Addr:    ":3000",
 		Handler: r,
@@ -136,4 +143,107 @@ func RunApi(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info().Msg("API server exiting")
+}
+
+type DatabaseHealth struct {
+	PostgreSQL struct {
+		Status  string `json:"status"`
+		Error   string `json:"error,omitempty"`
+		Details string `json:"details,omitempty"`
+	} `json:"postgresql"`
+	ClickHouse struct {
+		Status  string `json:"status"`
+		Error   string `json:"error,omitempty"`
+		Details string `json:"details,omitempty"`
+	} `json:"clickhouse"`
+	Overall struct {
+		Status string `json:"status"`
+		Time   string `json:"time"`
+	} `json:"overall"`
+}
+
+func checkDatabaseHealth() DatabaseHealth {
+	health := DatabaseHealth{}
+	overallHealthy := true
+
+	// Check PostgreSQL
+	postgresHealthy := checkPostgreSQLHealth(&health.PostgreSQL)
+	if !postgresHealthy {
+		overallHealthy = false
+	}
+
+	// Check ClickHouse
+	clickhouseHealthy := checkClickHouseHealth(&health.ClickHouse)
+	if !clickhouseHealthy {
+		overallHealthy = false
+	}
+
+	// Set overall status
+	if overallHealthy {
+		health.Overall.Status = "healthy"
+	} else {
+		health.Overall.Status = "unhealthy"
+	}
+	health.Overall.Time = time.Now().Format(time.RFC3339)
+
+	return health
+}
+
+func checkPostgreSQLHealth(postgres *struct {
+	Status  string `json:"status"`
+	Error   string `json:"error,omitempty"`
+	Details string `json:"details,omitempty"`
+}) bool {
+	// Try to create a PostgreSQL connector
+	postgresConfig := config.Cfg.Storage.Orchestrator.Postgres
+	connector, err := storage.NewPostgresConnector(postgresConfig)
+	if err != nil {
+		postgres.Status = "unhealthy"
+		postgres.Error = err.Error()
+		postgres.Details = "Failed to create PostgreSQL connector"
+		return false
+	}
+	defer connector.Close()
+
+	// Test the connection with a simple query
+	_, err = connector.GetBlockFailures(storage.QueryFilter{})
+	if err != nil {
+		postgres.Status = "unhealthy"
+		postgres.Error = err.Error()
+		postgres.Details = "Failed to execute test query"
+		return false
+	}
+
+	postgres.Status = "healthy"
+	postgres.Details = "Connection and query test successful"
+	return true
+}
+
+func checkClickHouseHealth(clickhouse *struct {
+	Status  string `json:"status"`
+	Error   string `json:"error,omitempty"`
+	Details string `json:"details,omitempty"`
+}) bool {
+	// Try to create a ClickHouse connector
+	clickhouseConfig := config.Cfg.Storage.Main.Clickhouse
+	connector, err := storage.NewClickHouseConnector(clickhouseConfig)
+	if err != nil {
+		clickhouse.Status = "unhealthy"
+		clickhouse.Error = err.Error()
+		clickhouse.Details = "Failed to create ClickHouse connector"
+		return false
+	}
+
+	// Test the connection with a simple query
+	err = connector.TestConnection()
+	if err != nil {
+		clickhouse.Status = "unhealthy"
+		clickhouse.Error = err.Error()
+		clickhouse.Details = "Failed to execute test query"
+		return false
+	}
+
+	clickhouse.Status = "healthy"
+	clickhouse.Details = "Connection and query test successful"
+	return true
 }
