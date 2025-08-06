@@ -30,3 +30,6 @@ cmd/api/__debug_bin*
 
 configs/secrets*
 !configs/secrets.example.yml
+
+indexer
+main

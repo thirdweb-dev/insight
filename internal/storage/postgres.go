@@ -1,0 +1,417 @@
+package storage
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
+
+	_ "github.com/lib/pq"
+	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/common"
+)
+
+type PostgresConnector struct {
+	db  *sql.DB
+	cfg *config.PostgresConfig
+}
+
+func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error) {
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s",
+		cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database)
+
+	if cfg.SSLMode != "" {
+		connStr += fmt.Sprintf(" sslmode=%s", cfg.SSLMode)
+	} else {
+		connStr += " sslmode=disable"
+	}
+
+	if cfg.ConnectTimeout > 0 {
+		connStr += fmt.Sprintf(" connect_timeout=%d", cfg.ConnectTimeout)
+	}
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+	}
+
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+
+	if cfg.MaxConnLifetime > 0 {
+		db.SetConnMaxLifetime(time.Duration(cfg.MaxConnLifetime) * time.Second)
+	}
+
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping postgres: %w", err)
+	}
+
+	return &PostgresConnector{
+		db:  db,
+		cfg: cfg,
+	}, nil
+}
+
+// Orchestrator Storage Implementation
+
+func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
+	query := `SELECT chain_id, block_number, last_error_timestamp, failure_count, reason 
+	          FROM block_failures 
+	          WHERE is_deleted = FALSE`
+
+	args := []interface{}{}
+	argCount := 0
+
+	if qf.ChainId != nil && qf.ChainId.Sign() > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND chain_id = $%d", argCount)
+		args = append(args, qf.ChainId.String())
+	}
+
+	if len(qf.BlockNumbers) > 0 {
+		blockNumberStrs := make([]string, len(qf.BlockNumbers))
+		for i, bn := range qf.BlockNumbers {
+			blockNumberStrs[i] = bn.String()
+		}
+		query += fmt.Sprintf(" AND block_number IN (%s)", strings.Join(blockNumberStrs, ","))
+	}
+
+	if qf.SortBy != "" {
+		query += fmt.Sprintf(" ORDER BY %s", qf.SortBy)
+		if qf.SortOrder != "" {
+			query += " " + qf.SortOrder
+		}
+	} else {
+		query += " ORDER BY block_number DESC"
+	}
+
+	if qf.Limit > 0 {
+		argCount++
+		query += fmt.Sprintf(" LIMIT $%d", argCount)
+		args = append(args, qf.Limit)
+	}
+
+	if qf.Offset > 0 {
+		argCount++
+		query += fmt.Sprintf(" OFFSET $%d", argCount)
+		args = append(args, qf.Offset)
+	}
+
+	rows, err := p.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var failures []common.BlockFailure
+	for rows.Next() {
+		var failure common.BlockFailure
+		var chainIdStr, blockNumberStr string
+		var timestamp int64
+		var count int
+
+		// NUMERIC columns are scanned as strings by pq driver
+		err := rows.Scan(&chainIdStr, &blockNumberStr, &timestamp, &count, &failure.FailureReason)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning block failure: %w", err)
+		}
+
+		// Convert NUMERIC string to big.Int
+		failure.ChainId, _ = new(big.Int).SetString(chainIdStr, 10)
+		failure.BlockNumber, _ = new(big.Int).SetString(blockNumberStr, 10)
+		failure.FailureTime = time.Unix(timestamp, 0)
+		failure.FailureCount = count
+
+		failures = append(failures, failure)
+	}
+
+	return failures, rows.Err()
+}
+
+func (p *PostgresConnector) StoreBlockFailures(failures []common.BlockFailure) error {
+	if len(failures) == 0 {
+		return nil
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `INSERT INTO block_failures (chain_id, block_number, last_error_timestamp, failure_count, reason)
+	          VALUES ($1, $2, $3, $4, $5)
+	          ON CONFLICT (chain_id, block_number) 
+	          DO UPDATE SET 
+	              last_error_timestamp = EXCLUDED.last_error_timestamp,
+	              failure_count = EXCLUDED.failure_count,
+	              reason = EXCLUDED.reason,
+	              is_deleted = FALSE,
+	              deleted_at = NULL,
+	              updated_at = NOW()`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, failure := range failures {
+		_, err := stmt.Exec(
+			failure.ChainId.String(),
+			failure.BlockNumber.String(),
+			failure.FailureTime.Unix(),
+			failure.FailureCount,
+			failure.FailureReason,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (p *PostgresConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
+	if len(failures) == 0 {
+		return nil
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `UPDATE block_failures 
+	          SET is_deleted = TRUE, deleted_at = NOW(), updated_at = NOW()
+	          WHERE chain_id = $1 AND block_number = $2`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, failure := range failures {
+		_, err := stmt.Exec(failure.ChainId.String(), failure.BlockNumber.String())
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (p *PostgresConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	query := `SELECT cursor_value FROM cursors 
+	          WHERE cursor_type = 'reorg' AND chain_id = $1 AND is_deleted = FALSE
+	          ORDER BY updated_at DESC LIMIT 1`
+
+	var blockNumberString string
+	err := p.db.QueryRow(query, chainId.String()).Scan(&blockNumberString)
+	if err != nil {
+		return nil, err
+	}
+
+	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberString)
+	}
+
+	return blockNumber, nil
+}
+
+func (p *PostgresConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	query := `INSERT INTO cursors (chain_id, cursor_type, cursor_value)
+	          VALUES ($1, 'reorg', $2)
+	          ON CONFLICT (chain_id, cursor_type) 
+	          DO UPDATE SET cursor_value = EXCLUDED.cursor_value, updated_at = NOW()`
+
+	_, err := p.db.Exec(query, chainId.String(), blockNumber.String())
+	return err
+}
+
+// Staging Storage Implementation
+
+func (p *PostgresConnector) InsertStagingData(data []common.BlockData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `INSERT INTO block_data (chain_id, block_number, data)
+	          VALUES ($1, $2, $3)
+	          ON CONFLICT (chain_id, block_number) 
+	          DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, blockData := range data {
+		blockDataJSON, err := json.Marshal(blockData)
+		if err != nil {
+			return err
+		}
+
+		_, err = stmt.Exec(
+			blockData.Block.ChainId.String(),
+			blockData.Block.Number.String(),
+			string(blockDataJSON),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (p *PostgresConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
+	// No need to check is_deleted since we're using hard deletes for staging data
+	query := `SELECT data FROM block_data WHERE 1=1`
+
+	args := []interface{}{}
+	argCount := 0
+
+	if qf.ChainId != nil && qf.ChainId.Sign() > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND chain_id = $%d", argCount)
+		args = append(args, qf.ChainId.String())
+	}
+
+	if len(qf.BlockNumbers) > 0 {
+		placeholders := make([]string, len(qf.BlockNumbers))
+		for i, bn := range qf.BlockNumbers {
+			argCount++
+			placeholders[i] = fmt.Sprintf("$%d", argCount)
+			args = append(args, bn.String())
+		}
+		query += fmt.Sprintf(" AND block_number IN (%s)", strings.Join(placeholders, ","))
+	}
+
+	query += " ORDER BY block_number ASC"
+
+	if qf.Limit > 0 {
+		argCount++
+		query += fmt.Sprintf(" LIMIT $%d", argCount)
+		args = append(args, qf.Limit)
+	}
+
+	rows, err := p.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Initialize as empty slice to match ClickHouse behavior
+	blockDataList := make([]common.BlockData, 0)
+	for rows.Next() {
+		var blockDataJson string
+		if err := rows.Scan(&blockDataJson); err != nil {
+			return nil, fmt.Errorf("error scanning block data: %w", err)
+		}
+
+		var blockData common.BlockData
+		if err := json.Unmarshal([]byte(blockDataJson), &blockData); err != nil {
+			return nil, err
+		}
+
+		blockDataList = append(blockDataList, blockData)
+	}
+
+	return blockDataList, rows.Err()
+}
+
+func (p *PostgresConnector) DeleteStagingData(data []common.BlockData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Hard delete for staging data to save disk space
+	query := `DELETE FROM block_data 
+	          WHERE chain_id = $1 AND block_number = $2`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, blockData := range data {
+		_, err := stmt.Exec(
+			blockData.Block.ChainId.String(),
+			blockData.Block.Number.String(),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (p *PostgresConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
+	// Use MAX() for better performance with B-tree index from Primary Key
+	query := `SELECT MAX(block_number) FROM block_data WHERE 1=1`
+
+	args := []interface{}{}
+	argCount := 0
+
+	if chainId != nil && chainId.Sign() > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND chain_id = $%d", argCount)
+		args = append(args, chainId.String())
+	}
+
+	if rangeStart != nil && rangeStart.Sign() > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND block_number >= $%d", argCount)
+		args = append(args, rangeStart.String())
+	}
+
+	if rangeEnd != nil && rangeEnd.Sign() > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND block_number <= $%d", argCount)
+		args = append(args, rangeEnd.String())
+	}
+
+	var blockNumberStr sql.NullString
+	err := p.db.QueryRow(query, args...).Scan(&blockNumberStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// MAX returns NULL when no rows match
+	if !blockNumberStr.Valid {
+		return big.NewInt(0), nil
+	}
+
+	blockNumber, ok := new(big.Int).SetString(blockNumberStr.String, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr.String)
+	}
+
+	return blockNumber, nil
+}
+
+// Close closes the database connection
+func (p *PostgresConnector) Close() error {
+	return p.db.Close()
+}

@@ -19,7 +19,10 @@ cp configs/secrets.example.yml configs/secrets.yml
 docker-compose up -d clickhouse
 
 # 4. Apply ClickHouse migrations
-cat internal/tools/*.sql | docker exec -i <clickhouse-container> clickhouse-client --user admin --password password
+cat internal/tools/clickhouse/*.sql | docker exec -i <clickhouse-container> clickhouse-client --user admin --password password
+
+# 4b. Apply Postgres migrations (if using Postgres for orchestration and staging)
+psql -h localhost -U postgres -d postgres -f internal/tools/postgres/postgres_schema.sql
 
 # 5. Build and run Insight
 go build -o main -tags=production
@@ -438,7 +441,3 @@ insight/
 ---
 
 **License:** Apache 2.0
-
----
-
-Let me know if you want this written to your `README.md` or if you want to further tailor any section!

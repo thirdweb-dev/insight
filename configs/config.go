@@ -61,6 +61,7 @@ const (
 
 type StorageConnectionConfig struct {
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
+	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 }
 
 type TableConfig struct {
@@ -84,6 +85,19 @@ type ClickhouseConfig struct {
 	ChainBasedConfig             map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
 	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
 	MaxQueryTime                 int                            `mapstructure:"maxQueryTime"`
+}
+
+type PostgresConfig struct {
+	Host            string `mapstructure:"host"`
+	Port            int    `mapstructure:"port"`
+	Username        string `mapstructure:"username"`
+	Password        string `mapstructure:"password"`
+	Database        string `mapstructure:"database"`
+	SSLMode         string `mapstructure:"sslMode"`
+	MaxOpenConns    int    `mapstructure:"maxOpenConns"`
+	MaxIdleConns    int    `mapstructure:"maxIdleConns"`
+	MaxConnLifetime int    `mapstructure:"maxConnLifetime"`
+	ConnectTimeout  int    `mapstructure:"connectTimeout"`
 }
 
 type RPCBatchRequestConfig struct {
