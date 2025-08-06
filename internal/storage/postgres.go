@@ -61,8 +61,7 @@ func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error
 
 func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
 	query := `SELECT chain_id, block_number, last_error_timestamp, failure_count, reason 
-	          FROM block_failures 
-	          WHERE is_deleted = FALSE`
+	          FROM block_failures`
 
 	args := []interface{}{}
 	argCount := 0
@@ -164,8 +163,6 @@ func (p *PostgresConnector) StoreBlockFailures(failures []common.BlockFailure) e
 	              last_error_timestamp = EXCLUDED.last_error_timestamp,
 	              failure_count = EXCLUDED.failure_count,
 	              reason = EXCLUDED.reason,
-	              is_deleted = FALSE,
-	              deleted_at = NULL,
 	              updated_at = NOW()`
 
 	stmt, err := tx.Prepare(query)
@@ -223,8 +220,7 @@ func (p *PostgresConnector) DeleteBlockFailures(failures []common.BlockFailure) 
 
 func (p *PostgresConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
 	query := `SELECT cursor_value FROM cursors 
-	          WHERE cursor_type = 'reorg' AND chain_id = $1 AND is_deleted = FALSE
-	          ORDER BY updated_at DESC LIMIT 1`
+	          WHERE cursor_type = 'reorg' AND chain_id = $1`
 
 	var blockNumberString string
 	err := p.db.QueryRow(query, chainId.String()).Scan(&blockNumberString)
@@ -388,7 +384,6 @@ func (p *PostgresConnector) DeleteStagingData(data []common.BlockData) error {
 }
 
 func (p *PostgresConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
-	// Use MAX() for better performance with B-tree index from Primary Key
 	query := `SELECT MAX(block_number) FROM block_data WHERE 1=1`
 
 	args := []interface{}{}
