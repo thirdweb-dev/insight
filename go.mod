@@ -8,6 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gorilla/schema v1.4.1
 	github.com/holiman/uint256 v1.3.2
+	github.com/lib/pq v1.10.9
 	github.com/prometheus/client_golang v1.20.4
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.8.1

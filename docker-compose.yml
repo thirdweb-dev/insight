@@ -9,6 +9,18 @@ services:
     profiles:
       - redis
 
+  # PostgreSQL database
+  postgres:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: insight
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   # http://localhost:8123/play <- web ui
   clickhouse:
     image: clickhouse/clickhouse-server:latest
@@ -81,6 +93,7 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
   clickhouse_data:
   grafana_data:
 

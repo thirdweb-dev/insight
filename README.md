@@ -19,7 +19,10 @@ cp configs/secrets.example.yml configs/secrets.yml
 docker-compose up -d clickhouse
 
 # 4. Apply ClickHouse migrations
-cat internal/tools/*.sql | docker exec -i <clickhouse-container> clickhouse-client --user admin --password password
+cat internal/tools/clickhouse/*.sql | docker exec -i <clickhouse-container> clickhouse-client --user admin --password password
+
+# 4b. Apply Postgres migrations (if using Postgres for orchestration and staging)
+psql -h localhost -U postgres -d postgres -f internal/tools/postgres/postgres_schema.sql
 
 # 5. Build and run Insight
 go build -o main -tags=production
@@ -29,6 +32,33 @@ go build -o main -tags=production
 # 6. Access the API
 # Default: http://localhost:3000
 ```
+
+### 🏃‍♂️ Quick Start with Hybrid Setup (PostgreSQL + ClickHouse)
+
+For testing the staging flow with PostgreSQL for orchestration/staging and ClickHouse for main storage:
+
+```bash
+# 1. Build the application
+go build -o insight .
+
+# 2. Start databases (PostgreSQL + ClickHouse)
+docker compose up -d
+
+# 3. Run the orchestrator with test configuration
+./insight orchestrator --config configs/test_config.yml
+
+# 4. (Optional) Start the API server
+./insight api --config configs/test_config.yml
+
+# 5. Monitor the databases
+# PostgreSQL (staging): docker exec insight-postgres-1 psql -U admin -d insight
+# ClickHouse (main): clickhouse-client --host localhost --port 9440 --user admin --password password
+```
+
+**Database Connections:**
+- **PostgreSQL**: `localhost:5432` (staging & orchestrator storage)
+- **ClickHouse**: `localhost:9440` (main storage)
+- **Credentials**: `admin` / `password`
 
 ---
 
@@ -438,7 +468,3 @@ insight/
 ---
 
 **License:** Apache 2.0
-
----
-
-Let me know if you want this written to your `README.md` or if you want to further tailor any section!

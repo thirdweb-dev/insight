@@ -143,7 +143,9 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var conn interface{}
 	var err error
-	if cfg.Clickhouse != nil {
+	if cfg.Postgres != nil {
+		conn, err = NewPostgresConnector(cfg.Postgres)
+	} else if cfg.Clickhouse != nil {
 		conn, err = NewClickHouseConnector(cfg.Clickhouse)
 	} else {
 		return *new(T), fmt.Errorf("no storage driver configured")
