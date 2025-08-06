@@ -64,11 +64,35 @@ var defaultTraceFields = []string{
 }
 
 func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector, error) {
+	zLog.Info().
+		Str("host", cfg.Host).
+		Int("port", cfg.Port).
+		Str("database", cfg.Database).
+		Str("username", cfg.Username).
+		Int("maxOpenConns", cfg.MaxOpenConns).
+		Int("maxIdleConns", cfg.MaxIdleConns).
+		Bool("disableTLS", cfg.DisableTLS).
+		Msg("ClickHouse: Attempting to connect")
+
 	conn, err := connectDB(cfg)
 	// Question: Should we add the table setup here?
 	if err != nil {
+		zLog.Error().Err(err).Msg("ClickHouse: Connection failed")
 		return nil, err
 	}
+
+	zLog.Info().Msg("ClickHouse: Connection established successfully")
+
+	// Test the connection
+	zLog.Info().Msg("ClickHouse: Testing connection with a simple query")
+	var result int
+	err = conn.QueryRow(context.Background(), "SELECT 1").Scan(&result)
+	if err != nil {
+		zLog.Error().Err(err).Msg("ClickHouse: Test query failed")
+		return nil, fmt.Errorf("ClickHouse test query failed: %w", err)
+	}
+	zLog.Info().Int("testResult", result).Msg("ClickHouse: Test query successful")
+
 	if cfg.MaxRowsPerInsert == 0 {
 		cfg.MaxRowsPerInsert = DEFAULT_MAX_ROWS_PER_INSERT
 	}
@@ -860,16 +884,16 @@ func scanTrace(rows driver.Rows) (common.Trace, error) {
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
 	zLog.Info().Str("chainId", chainId.String()).Msg("ClickHouse GetMaxBlockNumber: Starting query")
-	
+
 	tableName := c.getTableName(chainId, "blocks")
 	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1", c.cfg.Database, tableName)
-	
+
 	zLog.Info().
 		Str("query", query).
 		Str("chainId", chainId.String()).
 		Str("tableName", tableName).
 		Msg("ClickHouse GetMaxBlockNumber: Executing query")
-	
+
 	err = c.conn.QueryRow(context.Background(), query, chainId).Scan(&maxBlockNumber)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -879,7 +903,7 @@ func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumbe
 		zLog.Error().Err(err).Str("query", query).Str("chainId", chainId.String()).Msg("ClickHouse GetMaxBlockNumber: Query failed")
 		return nil, err
 	}
-	
+
 	zLog.Info().Str("chainId", chainId.String()).Str("maxBlockNumber", maxBlockNumber.String()).Msg("ClickHouse GetMaxBlockNumber: Query successful")
 	return maxBlockNumber, nil
 }
