@@ -91,6 +91,25 @@ func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error
 	}
 	log.Info().Int("testResult", result).Msg("PostgreSQL test query successful")
 
+	// Add connection pool monitoring
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			stats := db.Stats()
+			log.Info().
+				Int("maxOpenConnections", stats.MaxOpenConnections).
+				Int("openConnections", stats.OpenConnections).
+				Int("inUse", stats.InUse).
+				Int("idle", stats.Idle).
+				Int64("waitCount", stats.WaitCount).
+				Int64("waitDuration", stats.WaitDuration.Nanoseconds()).
+				Int64("maxIdleClosed", stats.MaxIdleClosed).
+				Int64("maxLifetimeClosed", stats.MaxLifetimeClosed).
+				Msg("PostgreSQL connection pool stats")
+		}
+	}()
+
 	return &PostgresConnector{
 		db:  db,
 		cfg: cfg,
@@ -148,6 +167,14 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 		Interface("args", args).
 		Msg("GetBlockFailures: Executing query")
 
+	// Log connection pool stats before query
+	stats := p.db.Stats()
+	log.Info().
+		Int("openConnections", stats.OpenConnections).
+		Int("inUse", stats.InUse).
+		Int("idle", stats.Idle).
+		Msg("GetBlockFailures: Connection pool stats before query")
+
 	rows, err := p.db.Query(query, args...)
 	if err != nil {
 		log.Error().Err(err).Str("query", query).Msg("GetBlockFailures: Query execution failed")
@@ -157,6 +184,8 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 	defer func() {
 		if err := rows.Close(); err != nil {
 			log.Error().Err(err).Msg("Failed to close rows in GetBlockFailures")
+		} else {
+			log.Info().Msg("GetBlockFailures: Rows closed successfully")
 		}
 	}()
 
@@ -273,14 +302,29 @@ func (p *PostgresConnector) DeleteBlockFailures(failures []common.BlockFailure) 
 }
 
 func (p *PostgresConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	log.Info().Str("chainId", chainId.String()).Msg("GetLastReorgCheckedBlockNumber: Starting query")
+	
 	query := `SELECT cursor_value FROM cursors 
 	          WHERE cursor_type = 'reorg' AND chain_id = $1`
+
+	// Log connection pool stats before query
+	stats := p.db.Stats()
+	log.Info().
+		Int("openConnections", stats.OpenConnections).
+		Int("inUse", stats.InUse).
+		Int("idle", stats.Idle).
+		Str("query", query).
+		Str("chainId", chainId.String()).
+		Msg("GetLastReorgCheckedBlockNumber: Connection pool stats before query")
 
 	var blockNumberString string
 	err := p.db.QueryRow(query, chainId.String()).Scan(&blockNumberString)
 	if err != nil {
+		log.Error().Err(err).Str("query", query).Str("chainId", chainId.String()).Msg("GetLastReorgCheckedBlockNumber: Query failed")
 		return nil, err
 	}
+
+	log.Info().Str("blockNumberString", blockNumberString).Msg("GetLastReorgCheckedBlockNumber: Query successful")
 
 	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
 	if !ok {

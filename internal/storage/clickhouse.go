@@ -859,15 +859,28 @@ func scanTrace(rows driver.Rows) (common.Trace, error) {
 }
 
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
+	zLog.Info().Str("chainId", chainId.String()).Msg("ClickHouse GetMaxBlockNumber: Starting query")
+	
 	tableName := c.getTableName(chainId, "blocks")
 	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1", c.cfg.Database, tableName)
+	
+	zLog.Info().
+		Str("query", query).
+		Str("chainId", chainId.String()).
+		Str("tableName", tableName).
+		Msg("ClickHouse GetMaxBlockNumber: Executing query")
+	
 	err = c.conn.QueryRow(context.Background(), query, chainId).Scan(&maxBlockNumber)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			zLog.Info().Str("chainId", chainId.String()).Msg("ClickHouse GetMaxBlockNumber: No rows found, returning 0")
 			return big.NewInt(0), nil
 		}
+		zLog.Error().Err(err).Str("query", query).Str("chainId", chainId.String()).Msg("ClickHouse GetMaxBlockNumber: Query failed")
 		return nil, err
 	}
+	
+	zLog.Info().Str("chainId", chainId.String()).Str("maxBlockNumber", maxBlockNumber.String()).Msg("ClickHouse GetMaxBlockNumber: Query successful")
 	return maxBlockNumber, nil
 }
 
