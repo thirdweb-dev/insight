@@ -1,0 +1,77 @@
+rpc:
+  url: https://1.rpc.thirdweb.com
+  chainId: "1"
+
+log:
+  level: debug
+  prettify: true
+
+poller:
+  enabled: true
+  interval: 2000
+  blocksPerPoll: 100
+
+committer:
+  enabled: true
+  interval: 2000
+  blocksPerCommit: 100
+
+storage:
+  main:
+    clickhouse:
+      host: localhost
+      port: 9440
+      username: admin
+      password: password
+      database: default
+      disableTLS: true
+      asyncInsert: true
+      maxRowsPerInsert: 1000
+      maxOpenConns: 50
+      maxIdleConns: 10
+  
+  staging:
+    postgres:
+      host: localhost
+      port: 5432
+      username: admin
+      password: password
+      database: insight
+      sslMode: disable
+      maxOpenConns: 50
+      maxIdleConns: 10
+      maxConnLifetime: 300
+      connectTimeout: 10
+  
+  orchestrator:
+    postgres:
+      host: localhost
+      port: 5432
+      username: admin
+      password: password
+      database: insight
+      sslMode: disable
+      maxOpenConns: 50
+      maxIdleConns: 10
+      maxConnLifetime: 300
+      connectTimeout: 10
+
+api:
+  host: localhost:3000
+  basicAuth:
+    username: admin
+    password: admin
+
+publisher:
+  enabled: false
+
+validation:
+  mode: minimal 
+
+# Work mode configuration - Controls system behavior based on blockchain state
+workMode:
+  # Interval in minutes to check if system should switch between live/historical mode
+  checkIntervalMinutes: 10
+  # Block number threshold to determine if system is in "live mode" (near chain head)
+  # Setting this very high forces backfill mode for testing
+  liveModeThreshold: 1000000 

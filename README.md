@@ -33,6 +33,33 @@ go build -o main -tags=production
 # Default: http://localhost:3000
 ```
 
+### 🏃‍♂️ Quick Start with Hybrid Setup (PostgreSQL + ClickHouse)
+
+For testing the staging flow with PostgreSQL for orchestration/staging and ClickHouse for main storage:
+
+```bash
+# 1. Build the application
+go build -o insight .
+
+# 2. Start databases (PostgreSQL + ClickHouse)
+docker compose up -d
+
+# 3. Run the orchestrator with test configuration
+./insight orchestrator --config configs/test_config.yml
+
+# 4. (Optional) Start the API server
+./insight api --config configs/test_config.yml
+
+# 5. Monitor the databases
+# PostgreSQL (staging): docker exec insight-postgres-1 psql -U admin -d insight
+# ClickHouse (main): clickhouse-client --host localhost --port 9440 --user admin --password password
+```
+
+**Database Connections:**
+- **PostgreSQL**: `localhost:5432` (staging & orchestrator storage)
+- **ClickHouse**: `localhost:9440` (main storage)
+- **Credentials**: `admin` / `password`
+
 ---
 
 ## 🏗 How It Works
