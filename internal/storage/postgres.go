@@ -131,12 +131,12 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 		if !ok {
 			return nil, fmt.Errorf("failed to parse chain_id '%s' as big.Int", chainIdStr)
 		}
-		
+
 		failure.BlockNumber, ok = new(big.Int).SetString(blockNumberStr, 10)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse block_number '%s' as big.Int", blockNumberStr)
 		}
-		
+
 		failure.FailureTime = time.Unix(timestamp, 0)
 		failure.FailureCount = count
 
