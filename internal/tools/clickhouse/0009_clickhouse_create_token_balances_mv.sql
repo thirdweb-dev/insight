@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS token_balances
 )
 ENGINE = SummingMergeTree
 ORDER BY (token_type, chain_id, owner, address, token_id)
-SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild';
+SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild', deduplicate_merge_projection_mode = 'rebuild';
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS single_token_transfers_mv TO token_balances AS
 SELECT chain_id, owner, address, token_type, token_id, sum(amount) as balance
