@@ -9,6 +9,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
@@ -22,11 +23,13 @@ func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database)
 
-	if cfg.SSLMode != "" {
-		connStr += fmt.Sprintf(" sslmode=%s", cfg.SSLMode)
-	} else {
-		connStr += " sslmode=disable"
+	// Default to "require" for security if SSL mode not specified
+	sslMode := cfg.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+		log.Info().Msg("No SSL mode specified, defaulting to 'require' for secure connection")
 	}
+	connStr += fmt.Sprintf(" sslmode=%s", sslMode)
 
 	if cfg.ConnectTimeout > 0 {
 		connStr += fmt.Sprintf(" connect_timeout=%d", cfg.ConnectTimeout)
@@ -103,7 +106,11 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close rows in GetBlockFailures")
+		}
+	}()
 
 	var failures []common.BlockFailure
 	for rows.Next() {
@@ -119,8 +126,17 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 		}
 
 		// Convert NUMERIC string to big.Int
-		failure.ChainId, _ = new(big.Int).SetString(chainIdStr, 10)
-		failure.BlockNumber, _ = new(big.Int).SetString(blockNumberStr, 10)
+		var ok bool
+		failure.ChainId, ok = new(big.Int).SetString(chainIdStr, 10)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse chain_id '%s' as big.Int", chainIdStr)
+		}
+		
+		failure.BlockNumber, ok = new(big.Int).SetString(blockNumberStr, 10)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse block_number '%s' as big.Int", blockNumberStr)
+		}
+		
 		failure.FailureTime = time.Unix(timestamp, 0)
 		failure.FailureCount = count
 
@@ -312,7 +328,11 @@ func (p *PostgresConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close rows in GetStagingData")
+		}
+	}()
 
 	// Initialize as empty slice to match ClickHouse behavior
 	blockDataList := make([]common.BlockData, 0)
