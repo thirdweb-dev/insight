@@ -20,6 +20,18 @@ type PostgresConnector struct {
 }
 
 func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error) {
+	log.Info().
+		Str("host", cfg.Host).
+		Int("port", cfg.Port).
+		Str("username", cfg.Username).
+		Str("database", cfg.Database).
+		Str("sslMode", cfg.SSLMode).
+		Int("maxOpenConns", cfg.MaxOpenConns).
+		Int("maxIdleConns", cfg.MaxIdleConns).
+		Int("maxConnLifetime", cfg.MaxConnLifetime).
+		Int("connectTimeout", cfg.ConnectTimeout).
+		Msg("Attempting to connect to PostgreSQL")
+
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database)
 
@@ -35,21 +47,49 @@ func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error
 		connStr += fmt.Sprintf(" connect_timeout=%d", cfg.ConnectTimeout)
 	}
 
+	// Log the connection string (without password for security)
+	debugConnStr := fmt.Sprintf("host=%s port=%d user=%s password=*** dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.Username, cfg.Database, sslMode)
+	if cfg.ConnectTimeout > 0 {
+		debugConnStr += fmt.Sprintf(" connect_timeout=%d", cfg.ConnectTimeout)
+	}
+	log.Info().Str("connectionString", debugConnStr).Msg("PostgreSQL connection string (password hidden)")
+
+	log.Info().Msg("Calling sql.Open for PostgreSQL")
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to call sql.Open for PostgreSQL")
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
 	}
+	log.Info().Msg("sql.Open completed successfully")
 
+	log.Info().Int("maxOpenConns", cfg.MaxOpenConns).Msg("Setting MaxOpenConns")
 	db.SetMaxOpenConns(cfg.MaxOpenConns)
+
+	log.Info().Int("maxIdleConns", cfg.MaxIdleConns).Msg("Setting MaxIdleConns")
 	db.SetMaxIdleConns(cfg.MaxIdleConns)
 
 	if cfg.MaxConnLifetime > 0 {
+		log.Info().Int("maxConnLifetime", cfg.MaxConnLifetime).Msg("Setting MaxConnLifetime")
 		db.SetConnMaxLifetime(time.Duration(cfg.MaxConnLifetime) * time.Second)
 	}
 
+	log.Info().Msg("Attempting to ping PostgreSQL database")
 	if err := db.Ping(); err != nil {
+		log.Error().Err(err).Msg("Failed to ping PostgreSQL database")
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
+	log.Info().Msg("PostgreSQL ping successful - connection established")
+
+	// Test a simple query to verify the connection works
+	log.Info().Msg("Testing PostgreSQL connection with a simple query")
+	var result int
+	err = db.QueryRow("SELECT 1").Scan(&result)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to execute test query on PostgreSQL")
+		return nil, fmt.Errorf("failed to execute test query on postgres: %w", err)
+	}
+	log.Info().Int("testResult", result).Msg("PostgreSQL test query successful")
 
 	return &PostgresConnector{
 		db:  db,
@@ -60,6 +100,8 @@ func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error
 // Orchestrator Storage Implementation
 
 func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
+	log.Info().Msg("GetBlockFailures: Starting query execution")
+
 	query := `SELECT chain_id, block_number, last_error_timestamp, failure_count, reason 
 	          FROM block_failures`
 
@@ -101,10 +143,17 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 		args = append(args, qf.Offset)
 	}
 
+	log.Info().
+		Str("query", query).
+		Interface("args", args).
+		Msg("GetBlockFailures: Executing query")
+
 	rows, err := p.db.Query(query, args...)
 	if err != nil {
+		log.Error().Err(err).Str("query", query).Msg("GetBlockFailures: Query execution failed")
 		return nil, err
 	}
+	log.Info().Msg("GetBlockFailures: Query executed successfully, processing rows")
 	defer func() {
 		if err := rows.Close(); err != nil {
 			log.Error().Err(err).Msg("Failed to close rows in GetBlockFailures")
@@ -112,6 +161,7 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 	}()
 
 	var failures []common.BlockFailure
+	rowCount := 0
 	for rows.Next() {
 		var failure common.BlockFailure
 		var chainIdStr, blockNumberStr string
@@ -121,8 +171,10 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 		// NUMERIC columns are scanned as strings by pq driver
 		err := rows.Scan(&chainIdStr, &blockNumberStr, &timestamp, &count, &failure.FailureReason)
 		if err != nil {
+			log.Error().Err(err).Int("rowCount", rowCount).Msg("GetBlockFailures: Error scanning row")
 			return nil, fmt.Errorf("error scanning block failure: %w", err)
 		}
+		rowCount++
 
 		// Convert NUMERIC string to big.Int
 		var ok bool
@@ -141,6 +193,8 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 
 		failures = append(failures, failure)
 	}
+
+	log.Info().Int("rowCount", rowCount).Int("failureCount", len(failures)).Msg("GetBlockFailures: Query completed successfully")
 
 	return failures, rows.Err()
 }
