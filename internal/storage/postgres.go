@@ -185,8 +185,8 @@ func (p *PostgresConnector) DeleteBlockFailures(failures []common.BlockFailure) 
 	}
 	defer tx.Rollback()
 
-	query := `UPDATE block_failures 
-	          SET is_deleted = TRUE, deleted_at = NOW(), updated_at = NOW()
+	// Hard delete for block failures
+	query := `DELETE FROM block_failures 
 	          WHERE chain_id = $1 AND block_number = $2`
 
 	stmt, err := tx.Prepare(query)
