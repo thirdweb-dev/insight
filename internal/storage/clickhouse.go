@@ -858,6 +858,89 @@ func scanTrace(rows driver.Rows) (common.Trace, error) {
 	return trace, nil
 }
 
+func (c *ClickHouseConnector) CheckBlocksExist(chainId *big.Int, blockNumbers []*big.Int) (map[string]bool, error) {
+	if len(blockNumbers) == 0 {
+		return make(map[string]bool), nil
+	}
+
+	// Convert block numbers to strings for the query
+	blockNumberStrings := make([]string, len(blockNumbers))
+	for i, bn := range blockNumbers {
+		blockNumberStrings[i] = bn.String()
+	}
+
+	// First check blocks table
+	blocksQuery := fmt.Sprintf(`
+		SELECT DISTINCT toString(block_number) as block_number_str
+		FROM %s.blocks
+		WHERE chain_id = '%s' 
+		AND block_number IN (%s)
+		AND sign = 1`, c.cfg.Database, chainId.String(), strings.Join(blockNumberStrings, ","))
+
+	blocksRows, err := c.conn.Query(context.Background(), blocksQuery)
+	if err != nil {
+		return nil, fmt.Errorf("error querying blocks table: %v", err)
+	}
+	defer blocksRows.Close()
+
+	// Create a map of all block numbers initially set to false
+	exists := make(map[string]bool)
+	for _, bn := range blockNumbers {
+		exists[bn.String()] = false
+	}
+
+	// Mark blocks that exist in blocks table as true
+	for blocksRows.Next() {
+		var blockNumberStr string
+		if err := blocksRows.Scan(&blockNumberStr); err != nil {
+			return nil, fmt.Errorf("error scanning blocks table: %v", err)
+		}
+		exists[blockNumberStr] = true
+	}
+
+	if err := blocksRows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating blocks table: %v", err)
+	}
+
+	// Then check inserts_null_table for any remaining blocks
+	var remainingBlocks []string
+	for blockNum, found := range exists {
+		if !found {
+			remainingBlocks = append(remainingBlocks, blockNum)
+		}
+	}
+
+	if len(remainingBlocks) > 0 {
+		nullQuery := fmt.Sprintf(`
+			SELECT DISTINCT toString(block.block_number) as block_number_str
+			FROM %s.inserts_null_table
+			WHERE chain_id = '%s' 
+			AND block.block_number IN (%s)
+			AND sign = 1`, c.cfg.Database, chainId.String(), strings.Join(remainingBlocks, ","))
+
+		nullRows, err := c.conn.Query(context.Background(), nullQuery)
+		if err != nil {
+			return nil, fmt.Errorf("error querying inserts_null_table: %v", err)
+		}
+		defer nullRows.Close()
+
+		// Mark blocks that exist in inserts_null_table as true
+		for nullRows.Next() {
+			var blockNumberStr string
+			if err := nullRows.Scan(&blockNumberStr); err != nil {
+				return nil, fmt.Errorf("error scanning inserts_null_table: %v", err)
+			}
+			exists[blockNumberStr] = true
+		}
+
+		if err := nullRows.Err(); err != nil {
+			return nil, fmt.Errorf("error iterating inserts_null_table: %v", err)
+		}
+	}
+
+	return exists, nil
+}
+
 func (c *ClickHouseConnector) GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
 	tableName := c.getTableName(chainId, "blocks")
 	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1", c.cfg.Database, tableName)

@@ -61,7 +61,7 @@ func NewPostgresConnector(cfg *config.PostgresConfig) (*PostgresConnector, error
 
 func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
 	query := `SELECT chain_id, block_number, last_error_timestamp, failure_count, reason 
-	          FROM block_failures`
+	          FROM block_failures WHERE 1=1`
 
 	args := []interface{}{}
 	argCount := 0
@@ -73,11 +73,13 @@ func (p *PostgresConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFail
 	}
 
 	if len(qf.BlockNumbers) > 0 {
-		blockNumberStrs := make([]string, len(qf.BlockNumbers))
+		placeholders := make([]string, len(qf.BlockNumbers))
 		for i, bn := range qf.BlockNumbers {
-			blockNumberStrs[i] = bn.String()
+			argCount++
+			placeholders[i] = fmt.Sprintf("$%d", argCount)
+			args = append(args, bn.String())
 		}
-		query += fmt.Sprintf(" AND block_number IN (%s)", strings.Join(blockNumberStrs, ","))
+		query += fmt.Sprintf(" AND block_number IN (%s)", strings.Join(placeholders, ","))
 	}
 
 	if qf.SortBy != "" {
@@ -261,6 +263,40 @@ func (p *PostgresConnector) InsertStagingData(data []common.BlockData) error {
 
 	_, err := p.db.Exec(query, valueArgs...)
 	return err
+}
+
+func (p *PostgresConnector) GetBlockNumbersLessThan(chainId *big.Int, blockNumber *big.Int) ([]*big.Int, error) {
+	query := `SELECT DISTINCT block_number 
+	          FROM block_data 
+	          WHERE chain_id = $1 
+	          AND block_number < $2
+	          ORDER BY block_number ASC`
+
+	rows, err := p.db.Query(query, chainId.String(), blockNumber.String())
+	if err != nil {
+		return nil, fmt.Errorf("error querying block_data: %v", err)
+	}
+	defer rows.Close()
+
+	var blockNumbers []*big.Int
+	for rows.Next() {
+		var blockNumberStr string
+		if err := rows.Scan(&blockNumberStr); err != nil {
+			return nil, fmt.Errorf("error scanning block number: %v", err)
+		}
+
+		blockNum, ok := new(big.Int).SetString(blockNumberStr, 10)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
+		}
+		blockNumbers = append(blockNumbers, blockNum)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %v", err)
+	}
+
+	return blockNumbers, nil
 }
 
 func (p *PostgresConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
