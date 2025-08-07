@@ -229,6 +229,10 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 		}
 	}
 
+	if len(blocksData) == 0 {
+		return nil, nil
+	}
+
 	// Sort blocks by block number
 	sort.Slice(blocksData, func(i, j int) bool {
 		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
