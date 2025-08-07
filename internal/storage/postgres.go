@@ -153,11 +153,11 @@ func (p *PostgresConnector) StoreBlockFailures(failures []common.BlockFailure) e
 	// Build multi-row INSERT without transaction for better performance
 	valueStrings := make([]string, 0, len(failures))
 	valueArgs := make([]interface{}, 0, len(failures)*5)
-	
+
 	for i, failure := range failures {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)", 
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)",
 			i*5+1, i*5+2, i*5+3, i*5+4, i*5+5))
-		valueArgs = append(valueArgs, 
+		valueArgs = append(valueArgs,
 			failure.ChainId.String(),
 			failure.BlockNumber.String(),
 			failure.FailureTime.Unix(),
@@ -187,15 +187,15 @@ func (p *PostgresConnector) DeleteBlockFailures(failures []common.BlockFailure) 
 	// Build single DELETE query with all tuples
 	tuples := make([]string, 0, len(failures))
 	args := make([]interface{}, 0, len(failures)*2)
-	
+
 	for i, failure := range failures {
 		tuples = append(tuples, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
 		args = append(args, failure.ChainId.String(), failure.BlockNumber.String())
 	}
-	
+
 	query := fmt.Sprintf(`DELETE FROM block_failures 
 	          WHERE (chain_id, block_number) IN (%s)`, strings.Join(tuples, ","))
-	
+
 	_, err := p.db.Exec(query, args...)
 	return err
 }
@@ -238,14 +238,14 @@ func (p *PostgresConnector) InsertStagingData(data []common.BlockData) error {
 	// Build multi-row INSERT without transaction for better performance
 	valueStrings := make([]string, 0, len(data))
 	valueArgs := make([]interface{}, 0, len(data)*3)
-	
+
 	for i, blockData := range data {
 		blockDataJSON, err := json.Marshal(blockData)
 		if err != nil {
 			return err
 		}
-		
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", 
+
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)",
 			i*3+1, i*3+2, i*3+3))
 		valueArgs = append(valueArgs,
 			blockData.Block.ChainId.String(),
@@ -331,15 +331,15 @@ func (p *PostgresConnector) DeleteStagingData(data []common.BlockData) error {
 	// Build single DELETE query with all tuples
 	tuples := make([]string, 0, len(data))
 	args := make([]interface{}, 0, len(data)*2)
-	
+
 	for i, blockData := range data {
 		tuples = append(tuples, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
 		args = append(args, blockData.Block.ChainId.String(), blockData.Block.Number.String())
 	}
-	
+
 	query := fmt.Sprintf(`DELETE FROM block_data 
 	          WHERE (chain_id, block_number) IN (%s)`, strings.Join(tuples, ","))
-	
+
 	_, err := p.db.Exec(query, args...)
 	return err
 }
