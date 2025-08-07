@@ -92,7 +92,7 @@ func (c *Committer) cleanupStrandedBlocks() error {
 		return nil
 	}
 
-	// Get block numbers from PostgreSQL that are less than or equal to the latest committed block
+	// Get block numbers from PostgreSQL that are less than latest committed block
 	psqlBlockNumbers, err := c.storage.StagingStorage.(*storage.PostgresConnector).GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
 	if err != nil {
 		return fmt.Errorf("error getting block numbers from PostgreSQL: %v", err)
@@ -231,7 +231,7 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 		}
 	}
 
-	// Get block numbers from PostgreSQL that are less than or equal to the latest committed block
+	// Get block numbers from PostgreSQL that are less than latest committed block
 	psqlBlockNumbers, err := c.storage.StagingStorage.(*storage.PostgresConnector).GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("error getting block numbers from PostgreSQL: %v", err)
