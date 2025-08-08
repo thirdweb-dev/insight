@@ -2114,6 +2114,53 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	return blockData, nil
 }
 
+func (c *ClickHouseConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+	// First, get all the block numbers that need to be deleted
+	query := fmt.Sprintf(`
+		SELECT DISTINCT chain_id, block_number
+		FROM %s.block_data 
+		WHERE chain_id = ? AND block_number <= ? AND is_deleted = 0
+	`, c.cfg.Database)
+
+	rows, err := c.conn.Query(context.Background(), query, chainId, blockNumber)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// Prepare batch for deletion
+	deleteQuery := fmt.Sprintf(`
+		INSERT INTO %s.block_data (
+			chain_id, block_number, is_deleted
+		) VALUES (?, ?, ?)
+	`, c.cfg.Database)
+
+	batch, err := c.conn.PrepareBatch(context.Background(), deleteQuery)
+	if err != nil {
+		return err
+	}
+	defer batch.Close()
+
+	// Add each block to the deletion batch
+	for rows.Next() {
+		var chainIdVal, blockNumberVal *big.Int
+		if err := rows.Scan(&chainIdVal, &blockNumberVal); err != nil {
+			return err
+		}
+
+		err := batch.Append(
+			chainIdVal,
+			blockNumberVal,
+			1, // is_deleted = 1
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return batch.Send()
+}
+
 // Helper function to test query generation
 func (c *ClickHouseConnector) TestQueryGeneration(table, columns string, qf QueryFilter) string {
 	return c.buildQuery(table, columns, qf)

@@ -387,6 +387,12 @@ func (p *PostgresConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStar
 	return blockNumber, nil
 }
 
+func (p *PostgresConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+	query := `DELETE FROM block_data WHERE chain_id = $1 AND block_number < $2`
+	_, err := p.db.Exec(query, chainId.String(), blockNumber.String())
+	return err
+}
+
 // Close closes the database connection
 func (p *PostgresConnector) Close() error {
 	return p.db.Close()
