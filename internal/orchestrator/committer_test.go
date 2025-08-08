@@ -404,6 +404,9 @@ func TestStartCommitter(t *testing.T) {
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
 
+	// Add expectation for DeleteOlderThan call during cleanup
+	mockStagingStorage.On("DeleteOlderThan", chainID, big.NewInt(100)).Return(nil)
+
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
 		{Block: common.Block{Number: big.NewInt(102)}},
@@ -437,6 +440,9 @@ func TestCommitterRespectsSIGTERM(t *testing.T) {
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+
+	// Add expectation for DeleteOlderThan call during cleanup
+	mockStagingStorage.On("DeleteOlderThan", chainID, big.NewInt(100)).Return(nil)
 
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
