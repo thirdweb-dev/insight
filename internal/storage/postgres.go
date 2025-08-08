@@ -388,7 +388,7 @@ func (p *PostgresConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStar
 }
 
 func (p *PostgresConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
-	query := `DELETE FROM block_data WHERE chain_id = $1 AND block_number < $2`
+	query := `DELETE FROM block_data WHERE chain_id = $1 AND block_number <= $2`
 	_, err := p.db.Exec(query, chainId.String(), blockNumber.String())
 	return err
 }
