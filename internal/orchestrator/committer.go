@@ -72,11 +72,6 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 		opt(committer)
 	}
 
-	// Clean up any stranded blocks in staging
-	if err := committer.cleanupStrandedBlocks(); err != nil {
-		log.Error().Err(err).Msg("Failed to clean up stranded blocks during initialization")
-	}
-
 	return committer
 }
 
@@ -93,7 +88,7 @@ func (c *Committer) cleanupStrandedBlocks() error {
 	}
 
 	// Get block numbers from PostgreSQL that are less than latest committed block
-	psqlBlockNumbers, err := c.storage.StagingStorage.(*storage.PostgresConnector).GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
+	psqlBlockNumbers, err := c.storage.StagingStorage.GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
 	if err != nil {
 		return fmt.Errorf("error getting block numbers from PostgreSQL: %v", err)
 	}
@@ -109,15 +104,48 @@ func (c *Committer) cleanupStrandedBlocks() error {
 		Str("max_block", psqlBlockNumbers[len(psqlBlockNumbers)-1].String()).
 		Msg("Found stranded blocks in staging")
 
+	// Process blocks in batches of c.blocksPerCommit, but max 1000 to avoid ClickHouse query limits
+	batchSize := c.blocksPerCommit
+	if batchSize > 1000 {
+		batchSize = 1000
+	}
+
+	for i := 0; i < len(psqlBlockNumbers); i += batchSize {
+		end := i + batchSize
+		if end > len(psqlBlockNumbers) {
+			end = len(psqlBlockNumbers)
+		}
+
+		batchBlockNumbers := psqlBlockNumbers[i:end]
+
+		if err := c.processStrandedBlocksBatch(batchBlockNumbers); err != nil {
+			return fmt.Errorf("error processing stranded blocks batch %d-%d: %v", i, end-1, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Committer) processStrandedBlocksBatch(blockNumbers []*big.Int) error {
+	if len(blockNumbers) == 0 {
+		return nil
+	}
+
+	log.Debug().
+		Int("batch_size", len(blockNumbers)).
+		Str("min_block", blockNumbers[0].String()).
+		Str("max_block", blockNumbers[len(blockNumbers)-1].String()).
+		Msg("Processing stranded blocks batch")
+
 	// Check which blocks exist in ClickHouse
-	existsInClickHouse, err := c.storage.MainStorage.(*storage.ClickHouseConnector).CheckBlocksExist(c.rpc.GetChainID(), psqlBlockNumbers)
+	existsInClickHouse, err := c.storage.MainStorage.CheckBlocksExist(c.rpc.GetChainID(), blockNumbers)
 	if err != nil {
 		return fmt.Errorf("error checking blocks in ClickHouse: %v", err)
 	}
 
 	// Get block data from PostgreSQL for blocks that don't exist in ClickHouse
 	var blocksToCommit []common.BlockData
-	for _, blockNum := range psqlBlockNumbers {
+	for _, blockNum := range blockNumbers {
 		if !existsInClickHouse[blockNum.String()] {
 			data, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{
 				BlockNumbers: []*big.Int{blockNum},
@@ -147,7 +175,7 @@ func (c *Committer) cleanupStrandedBlocks() error {
 
 	// Delete all blocks from PostgreSQL that were checked (whether they existed in ClickHouse or not)
 	var blocksToDelete []common.BlockData
-	for _, blockNum := range psqlBlockNumbers {
+	for _, blockNum := range blockNumbers {
 		blocksToDelete = append(blocksToDelete, common.BlockData{
 			Block: common.Block{
 				ChainId: c.rpc.GetChainID(),
@@ -232,14 +260,14 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 	}
 
 	// Get block numbers from PostgreSQL that are less than latest committed block
-	psqlBlockNumbers, err := c.storage.StagingStorage.(*storage.PostgresConnector).GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
+	psqlBlockNumbers, err := c.storage.StagingStorage.GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("error getting block numbers from PostgreSQL: %v", err)
 	}
 
 	if len(psqlBlockNumbers) > 0 {
 		// Check which blocks exist in ClickHouse
-		existsInClickHouse, err := c.storage.MainStorage.(*storage.ClickHouseConnector).CheckBlocksExist(c.rpc.GetChainID(), psqlBlockNumbers)
+		existsInClickHouse, err := c.storage.MainStorage.CheckBlocksExist(c.rpc.GetChainID(), psqlBlockNumbers)
 		if err != nil {
 			return nil, fmt.Errorf("error checking blocks in ClickHouse: %v", err)
 		}

@@ -1158,6 +1158,37 @@ func (c *ClickHouseConnector) DeleteStagingData(data []common.BlockData) error {
 	return batch.Send()
 }
 
+func (c *ClickHouseConnector) GetBlockNumbersLessThan(chainId *big.Int, blockNumber *big.Int) ([]*big.Int, error) {
+	query := fmt.Sprintf(`
+		SELECT DISTINCT block_number 
+		FROM %s.block_data FINAL
+		WHERE chain_id = ? 
+		AND block_number < ?
+		AND is_deleted = 0
+		ORDER BY block_number ASC`, c.cfg.Database)
+
+	rows, err := c.conn.Query(context.Background(), query, chainId, blockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("error querying block_data: %v", err)
+	}
+	defer rows.Close()
+
+	var blockNumbers []*big.Int
+	for rows.Next() {
+		var blockNum *big.Int
+		if err := rows.Scan(&blockNum); err != nil {
+			return nil, fmt.Errorf("error scanning block number: %v", err)
+		}
+		blockNumbers = append(blockNumbers, blockNum)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %v", err)
+	}
+
+	return blockNumbers, nil
+}
+
 func (c *ClickHouseConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
 	query := fmt.Sprintf("SELECT cursor_value FROM %s.cursors FINAL WHERE cursor_type = 'reorg'", c.cfg.Database)
 	if chainId.Sign() > 0 {

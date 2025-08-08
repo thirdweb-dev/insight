@@ -46,6 +46,7 @@ func TestGetBlockNumbersToCommit(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(100)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -70,6 +71,7 @@ func TestGetBlockNumbersToCommitWithoutConfiguredAndNotStored(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(-1)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -97,6 +99,7 @@ func TestGetBlockNumbersToCommitWithConfiguredAndNotStored(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(49)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -124,6 +127,7 @@ func TestGetBlockNumbersToCommitWithConfiguredAndStored(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(2000)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -148,6 +152,7 @@ func TestGetBlockNumbersToCommitWithoutConfiguredAndStored(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(2000)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -175,6 +180,7 @@ func TestGetBlockNumbersToCommitWithStoredHigherThanInMemory(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(2000)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -227,6 +233,7 @@ func TestGetBlockNumbersToCommitWithStoredEqualThanInMemory(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(2000), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(2000)).Return([]*big.Int{}, nil)
 
 	blockNumbers, err := committer.getBlockNumbersToCommit(context.Background())
 
@@ -253,6 +260,7 @@ func TestGetSequentialBlockDataToCommit(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(100)).Return([]*big.Int{}, nil)
 
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
@@ -288,6 +296,7 @@ func TestGetSequentialBlockDataToCommitWithDuplicateBlocks(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(100)).Return([]*big.Int{}, nil)
 
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
@@ -403,6 +412,7 @@ func TestStartCommitter(t *testing.T) {
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(100)).Return([]*big.Int{}, nil)
 
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
@@ -437,6 +447,7 @@ func TestCommitterRespectsSIGTERM(t *testing.T) {
 	chainID := big.NewInt(1)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(100)).Return([]*big.Int{}, nil)
 
 	blockData := []common.BlockData{
 		{Block: common.Block{Number: big.NewInt(101)}},
@@ -502,6 +513,7 @@ func TestHandleMissingStagingData(t *testing.T) {
 	mockStagingStorage.EXPECT().InsertStagingData(mock.Anything).Return(nil)
 
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(-1)).Return([]*big.Int{}, nil)
 	expectedEndBlock := big.NewInt(4)
 	mockStagingStorage.EXPECT().GetLastStagedBlockNumber(chainID, expectedEndBlock, big.NewInt(0)).Return(big.NewInt(20), nil)
 
@@ -547,6 +559,7 @@ func TestHandleMissingStagingDataIsPolledWithCorrectBatchSize(t *testing.T) {
 	mockStagingStorage.EXPECT().InsertStagingData(mock.Anything).Return(nil)
 
 	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(0), nil)
+	mockStagingStorage.EXPECT().GetBlockNumbersLessThan(chainID, big.NewInt(-1)).Return([]*big.Int{}, nil)
 	expectedEndBlock := big.NewInt(4)
 	mockStagingStorage.EXPECT().GetLastStagedBlockNumber(chainID, expectedEndBlock, big.NewInt(0)).Return(big.NewInt(20), nil)
 

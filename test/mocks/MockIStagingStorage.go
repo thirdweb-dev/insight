@@ -236,6 +236,65 @@ func (_c *MockIStagingStorage_InsertStagingData_Call) RunAndReturn(run func([]co
 	return _c
 }
 
+// GetBlockNumbersLessThan provides a mock function with given fields: chainId, blockNumber
+func (_m *MockIStagingStorage) GetBlockNumbersLessThan(chainId *big.Int, blockNumber *big.Int) ([]*big.Int, error) {
+	ret := _m.Called(chainId, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBlockNumbersLessThan")
+	}
+
+	var r0 []*big.Int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) ([]*big.Int, error)); ok {
+		return rf(chainId, blockNumber)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) []*big.Int); ok {
+		r0 = rf(chainId, blockNumber)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int) error); ok {
+		r1 = rf(chainId, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIStagingStorage_GetBlockNumbersLessThan_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBlockNumbersLessThan'
+type MockIStagingStorage_GetBlockNumbersLessThan_Call struct {
+	*mock.Call
+}
+
+// GetBlockNumbersLessThan is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - blockNumber *big.Int
+func (_e *MockIStagingStorage_Expecter) GetBlockNumbersLessThan(chainId interface{}, blockNumber interface{}) *MockIStagingStorage_GetBlockNumbersLessThan_Call {
+	return &MockIStagingStorage_GetBlockNumbersLessThan_Call{Call: _e.mock.On("GetBlockNumbersLessThan", chainId, blockNumber)}
+}
+
+func (_c *MockIStagingStorage_GetBlockNumbersLessThan_Call) Run(run func(chainId *big.Int, blockNumber *big.Int)) *MockIStagingStorage_GetBlockNumbersLessThan_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIStagingStorage_GetBlockNumbersLessThan_Call) Return(_a0 []*big.Int, _a1 error) *MockIStagingStorage_GetBlockNumbersLessThan_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIStagingStorage_GetBlockNumbersLessThan_Call) RunAndReturn(run func(*big.Int, *big.Int) ([]*big.Int, error)) *MockIStagingStorage_GetBlockNumbersLessThan_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockIStagingStorage creates a new instance of MockIStagingStorage. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockIStagingStorage(t interface {

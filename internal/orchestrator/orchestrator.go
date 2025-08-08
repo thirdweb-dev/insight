@@ -87,6 +87,14 @@ func (o *Orchestrator) Start() {
 			defer workModeMonitor.UnregisterChannel(committerWorkModeChan)
 			validator := NewValidator(o.rpc, o.storage)
 			committer := NewCommitter(o.rpc, o.storage, WithCommitterWorkModeChan(committerWorkModeChan), WithValidator(validator))
+
+			// Clean up any stranded blocks in staging in a separate goroutine
+			go func() {
+				if err := committer.cleanupStrandedBlocks(); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up stranded blocks during initialization")
+				}
+			}()
+
 			committer.Start(ctx)
 		}()
 	}
