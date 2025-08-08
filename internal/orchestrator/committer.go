@@ -79,6 +79,10 @@ func (c *Committer) Start(ctx context.Context) {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 
 	log.Debug().Msgf("Committer running")
+
+	// Clean up staging data before starting the committer
+	c.cleanupStagingData()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -110,6 +114,28 @@ func (c *Committer) Start(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (c *Committer) cleanupStagingData() {
+	// Get the last committed block number from main storage
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
+	if err != nil {
+		log.Error().Msgf("Error getting latest committed block number: %v", err)
+		return
+	}
+
+	if latestCommittedBlockNumber.Sign() == 0 {
+		log.Debug().Msg("No blocks committed yet, skipping staging data cleanup")
+		return
+	}
+
+	// Delete all staging data older than the latest committed block number
+	if err := c.storage.StagingStorage.DeleteOlderThan(c.rpc.GetChainID(), latestCommittedBlockNumber); err != nil {
+		log.Error().Msgf("Error deleting staging data older than %v: %v", latestCommittedBlockNumber, err)
+		return
+	}
+
+	log.Info().Msgf("Deleted staging data older than or equal to %v", latestCommittedBlockNumber)
 }
 
 func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, error) {

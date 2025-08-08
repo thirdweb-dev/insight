@@ -2114,6 +2114,17 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	return blockData, nil
 }
 
+func (c *ClickHouseConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+	query := fmt.Sprintf(`
+		INSERT INTO %s.block_data (chain_id, block_number, is_deleted)
+		SELECT chain_id, block_number, 1
+		FROM %s.block_data
+		WHERE chain_id = ? AND block_number <= ? AND is_deleted = 0
+		GROUP BY chain_id, block_number
+	`, c.cfg.Database, c.cfg.Database)
+	return c.conn.Exec(context.Background(), query, chainId, blockNumber)
+}
+
 // Helper function to test query generation
 func (c *ClickHouseConnector) TestQueryGeneration(table, columns string, qf QueryFilter) string {
 	return c.buildQuery(table, columns, qf)

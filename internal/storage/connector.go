@@ -83,6 +83,7 @@ type IStagingStorage interface {
 	GetStagingData(qf QueryFilter) (data []common.BlockData, err error)
 	DeleteStagingData(data []common.BlockData) error
 	GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
+	DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error
 }
 
 type IMainStorage interface {
