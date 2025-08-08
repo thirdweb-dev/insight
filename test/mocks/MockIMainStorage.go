@@ -970,6 +970,65 @@ func (_c *MockIMainStorage_ReplaceBlockData_Call) RunAndReturn(run func([]common
 	return _c
 }
 
+// CheckBlocksExist provides a mock function with given fields: chainId, blockNumbers
+func (_m *MockIMainStorage) CheckBlocksExist(chainId *big.Int, blockNumbers []*big.Int) (map[string]bool, error) {
+	ret := _m.Called(chainId, blockNumbers)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CheckBlocksExist")
+	}
+
+	var r0 map[string]bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) (map[string]bool, error)); ok {
+		return rf(chainId, blockNumbers)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int, []*big.Int) map[string]bool); ok {
+		r0 = rf(chainId, blockNumbers)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]bool)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int, []*big.Int) error); ok {
+		r1 = rf(chainId, blockNumbers)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIMainStorage_CheckBlocksExist_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CheckBlocksExist'
+type MockIMainStorage_CheckBlocksExist_Call struct {
+	*mock.Call
+}
+
+// CheckBlocksExist is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - blockNumbers []*big.Int
+func (_e *MockIMainStorage_Expecter) CheckBlocksExist(chainId interface{}, blockNumbers interface{}) *MockIMainStorage_CheckBlocksExist_Call {
+	return &MockIMainStorage_CheckBlocksExist_Call{Call: _e.mock.On("CheckBlocksExist", chainId, blockNumbers)}
+}
+
+func (_c *MockIMainStorage_CheckBlocksExist_Call) Run(run func(chainId *big.Int, blockNumbers []*big.Int)) *MockIMainStorage_CheckBlocksExist_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].([]*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIMainStorage_CheckBlocksExist_Call) Return(_a0 map[string]bool, _a1 error) *MockIMainStorage_CheckBlocksExist_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIMainStorage_CheckBlocksExist_Call) RunAndReturn(run func(*big.Int, []*big.Int) (map[string]bool, error)) *MockIMainStorage_CheckBlocksExist_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockIMainStorage creates a new instance of MockIMainStorage. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockIMainStorage(t interface {

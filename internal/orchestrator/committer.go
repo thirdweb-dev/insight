@@ -75,6 +75,130 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 	return committer
 }
 
+func (c *Committer) cleanupStrandedBlocks() error {
+	// Get the current max block from main storage
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
+	if err != nil {
+		return fmt.Errorf("error getting max block number from main storage: %v", err)
+	}
+
+	if latestCommittedBlockNumber.Sign() == 0 {
+		// No blocks in main storage yet, nothing to clean up
+		return nil
+	}
+
+	// Get block numbers from PostgreSQL that are less than latest committed block
+	psqlBlockNumbers, err := c.storage.StagingStorage.GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
+	if err != nil {
+		return fmt.Errorf("error getting block numbers from PostgreSQL: %v", err)
+	}
+
+	if len(psqlBlockNumbers) == 0 {
+		// No stranded blocks in staging
+		return nil
+	}
+
+	log.Info().
+		Int("block_count", len(psqlBlockNumbers)).
+		Str("min_block", psqlBlockNumbers[0].String()).
+		Str("max_block", psqlBlockNumbers[len(psqlBlockNumbers)-1].String()).
+		Msg("Found stranded blocks in staging")
+
+	// Process blocks in batches of c.blocksPerCommit, but max 1000 to avoid ClickHouse query limits
+	batchSize := c.blocksPerCommit
+	if batchSize > 1000 {
+		batchSize = 1000
+	}
+
+	for i := 0; i < len(psqlBlockNumbers); i += batchSize {
+		end := i + batchSize
+		if end > len(psqlBlockNumbers) {
+			end = len(psqlBlockNumbers)
+		}
+
+		batchBlockNumbers := psqlBlockNumbers[i:end]
+
+		if err := c.processStrandedBlocksBatch(batchBlockNumbers); err != nil {
+			return fmt.Errorf("error processing stranded blocks batch %d-%d: %v", i, end-1, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Committer) processStrandedBlocksBatch(blockNumbers []*big.Int) error {
+	if len(blockNumbers) == 0 {
+		return nil
+	}
+
+	log.Debug().
+		Int("batch_size", len(blockNumbers)).
+		Str("min_block", blockNumbers[0].String()).
+		Str("max_block", blockNumbers[len(blockNumbers)-1].String()).
+		Msg("Processing stranded blocks batch")
+
+	// Check which blocks exist in ClickHouse
+	existsInClickHouse, err := c.storage.MainStorage.CheckBlocksExist(c.rpc.GetChainID(), blockNumbers)
+	if err != nil {
+		return fmt.Errorf("error checking blocks in ClickHouse: %v", err)
+	}
+
+	// Get block data from PostgreSQL for blocks that don't exist in ClickHouse
+	var blocksToCommit []common.BlockData
+	for _, blockNum := range blockNumbers {
+		if !existsInClickHouse[blockNum.String()] {
+			data, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{
+				BlockNumbers: []*big.Int{blockNum},
+				ChainId:      c.rpc.GetChainID(),
+			})
+			if err != nil {
+				return fmt.Errorf("error getting block data from PostgreSQL: %v", err)
+			}
+			if len(data) > 0 {
+				blocksToCommit = append(blocksToCommit, data[0])
+			}
+		}
+	}
+
+	// Insert blocks into ClickHouse
+	if len(blocksToCommit) > 0 {
+		log.Info().
+			Int("block_count", len(blocksToCommit)).
+			Str("min_block", blocksToCommit[0].Block.Number.String()).
+			Str("max_block", blocksToCommit[len(blocksToCommit)-1].Block.Number.String()).
+			Msg("Committing stranded blocks to ClickHouse")
+
+		if err := c.storage.MainStorage.InsertBlockData(blocksToCommit); err != nil {
+			return fmt.Errorf("error inserting blocks into ClickHouse: %v", err)
+		}
+	}
+
+	// Delete all blocks from PostgreSQL that were checked (whether they existed in ClickHouse or not)
+	var blocksToDelete []common.BlockData
+	for _, blockNum := range blockNumbers {
+		blocksToDelete = append(blocksToDelete, common.BlockData{
+			Block: common.Block{
+				ChainId: c.rpc.GetChainID(),
+				Number:  blockNum,
+			},
+		})
+	}
+
+	if len(blocksToDelete) > 0 {
+		log.Info().
+			Int("block_count", len(blocksToDelete)).
+			Str("min_block", blocksToDelete[0].Block.Number.String()).
+			Str("max_block", blocksToDelete[len(blocksToDelete)-1].Block.Number.String()).
+			Msg("Deleting stranded blocks from PostgreSQL")
+
+		if err := c.storage.StagingStorage.DeleteStagingData(blocksToDelete); err != nil {
+			return fmt.Errorf("error deleting blocks from PostgreSQL: %v", err)
+		}
+	}
+
+	return nil
+}
+
 func (c *Committer) Start(ctx context.Context) {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 
@@ -135,6 +259,68 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 		}
 	}
 
+	// Get block numbers from PostgreSQL that are less than latest committed block
+	psqlBlockNumbers, err := c.storage.StagingStorage.GetBlockNumbersLessThan(c.rpc.GetChainID(), latestCommittedBlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("error getting block numbers from PostgreSQL: %v", err)
+	}
+
+	if len(psqlBlockNumbers) > 0 {
+		// Check which blocks exist in ClickHouse
+		existsInClickHouse, err := c.storage.MainStorage.CheckBlocksExist(c.rpc.GetChainID(), psqlBlockNumbers)
+		if err != nil {
+			return nil, fmt.Errorf("error checking blocks in ClickHouse: %v", err)
+		}
+
+		// Get block data from PostgreSQL for blocks that don't exist in ClickHouse
+		var blocksToCommit []common.BlockData
+		for _, blockNum := range psqlBlockNumbers {
+			if !existsInClickHouse[blockNum.String()] {
+				data, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{
+					BlockNumbers: []*big.Int{blockNum},
+					ChainId:      c.rpc.GetChainID(),
+				})
+				if err != nil {
+					return nil, fmt.Errorf("error getting block data from PostgreSQL: %v", err)
+				}
+				if len(data) > 0 {
+					blocksToCommit = append(blocksToCommit, data[0])
+				}
+			}
+		}
+
+		// Insert blocks into ClickHouse
+		if len(blocksToCommit) > 0 {
+			if err := c.storage.MainStorage.InsertBlockData(blocksToCommit); err != nil {
+				return nil, fmt.Errorf("error inserting blocks into ClickHouse: %v", err)
+			}
+		}
+
+		// Delete all blocks from PostgreSQL that were checked (whether they existed in ClickHouse or not)
+		var blocksToDelete []common.BlockData
+		for _, blockNum := range psqlBlockNumbers {
+			blocksToDelete = append(blocksToDelete, common.BlockData{
+				Block: common.Block{
+					ChainId: c.rpc.GetChainID(),
+					Number:  blockNum,
+				},
+			})
+		}
+
+		if len(blocksToDelete) > 0 {
+			log.Info().
+				Int("block_count", len(blocksToDelete)).
+				Str("min_block", blocksToDelete[0].Block.Number.String()).
+				Str("max_block", blocksToDelete[len(blocksToDelete)-1].Block.Number.String()).
+				Msg("Deleting stranded blocks from PostgreSQL")
+
+			if err := c.storage.StagingStorage.DeleteStagingData(blocksToDelete); err != nil {
+				log.Error().Err(err).Msg("Failed to delete blocks from PostgreSQL")
+			}
+		}
+	}
+
+	// Continue with normal block range processing
 	startBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(1))
 	endBlock, err := c.getBlockToCommitUntil(ctx, latestCommittedBlockNumber)
 	if err != nil {

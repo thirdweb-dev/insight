@@ -83,6 +83,7 @@ type IStagingStorage interface {
 	GetStagingData(qf QueryFilter) (data []common.BlockData, err error)
 	DeleteStagingData(data []common.BlockData) error
 	GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
+	GetBlockNumbersLessThan(chainId *big.Int, blockNumber *big.Int) ([]*big.Int, error)
 }
 
 type IMainStorage interface {
@@ -116,6 +117,10 @@ type IMainStorage interface {
 	 * Gets full block data with transactions, logs and traces.
 	 */
 	GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) (blocks []common.BlockData, err error)
+	/**
+	 * Checks if blocks exist in the storage.
+	 */
+	CheckBlocksExist(chainId *big.Int, blockNumbers []*big.Int) (map[string]bool, error)
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
