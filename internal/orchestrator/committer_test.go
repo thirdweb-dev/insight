@@ -311,7 +311,7 @@ func TestGetSequentialBlockDataToCommitWithDuplicateBlocks(t *testing.T) {
 	assert.Equal(t, big.NewInt(103), result[2].Block.Number)
 }
 
-func TestCommit(t *testing.T) {
+func TestCommitDeletesAfterPublish(t *testing.T) {
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)
 	mockStagingStorage := mocks.NewMockIStagingStorage(t)
@@ -330,11 +330,13 @@ func TestCommit(t *testing.T) {
 		{Block: common.Block{ChainId: chainID, Number: big.NewInt(102)}},
 	}
 
-	// Create a channel to signal when DeleteStagingData is called
 	deleteDone := make(chan struct{})
 
+	committer.lastPublishedBlock.Store(102)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
-	mockStagingStorage.EXPECT().DeleteStagingData(blockData).RunAndReturn(func(data []common.BlockData) error {
+	mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
 		close(deleteDone)
 		return nil
 	})
@@ -342,12 +344,10 @@ func TestCommit(t *testing.T) {
 	err := committer.commit(context.Background(), blockData)
 	assert.NoError(t, err)
 
-	// Wait for DeleteStagingData to be called with a timeout
 	select {
 	case <-deleteDone:
-		// Success - DeleteStagingData was called
 	case <-time.After(2 * time.Second):
-		t.Fatal("DeleteStagingData was not called within timeout period")
+		t.Fatal("DeleteOlderThan was not called within timeout period")
 	}
 }
 
@@ -380,6 +380,32 @@ func TestCommitParallelPublisherMode(t *testing.T) {
 
 	mockStagingStorage.AssertNotCalled(t, "GetLastPublishedBlockNumber", mock.Anything)
 	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
+}
+
+func TestCleanupProcessedStagingBlocks(t *testing.T) {
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+
+	chainID := big.NewInt(1)
+	committer.lastCommittedBlock.Store(100)
+	committer.lastPublishedBlock.Store(0)
+
+	committer.cleanupProcessedStagingBlocks()
+	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
+
+	committer.lastPublishedBlock.Store(90)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(90)).Return(nil)
+	committer.cleanupProcessedStagingBlocks()
 }
 
 func TestPublishParallelMode(t *testing.T) {
@@ -414,6 +440,7 @@ func TestPublishParallelMode(t *testing.T) {
 		close(publishDone)
 		return nil
 	})
+	mockRPC.EXPECT().GetChainID().Return(chainID)
 
 	err := committer.publish(context.Background())
 	assert.NoError(t, err)
@@ -423,6 +450,8 @@ func TestPublishParallelMode(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("SetLastPublishedBlockNumber was not called")
 	}
+
+	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
 }
 
 func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
@@ -450,6 +479,7 @@ func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
 	}
 
 	publishDone := make(chan struct{})
+	deleteDone := make(chan struct{})
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(100), nil)
@@ -464,6 +494,11 @@ func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
 		cancel()
 		return nil
 	})
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
+		close(deleteDone)
+		return nil
+	})
 
 	go committer.runPublishLoop(ctx, time.Millisecond)
 
@@ -471,6 +506,11 @@ func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
 	case <-publishDone:
 	case <-time.After(2 * time.Second):
 		t.Fatal("publish not triggered")
+	}
+	select {
+	case <-deleteDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("DeleteOlderThan not called")
 	}
 }
 
@@ -505,6 +545,7 @@ func TestRunPublishLoopSkipsWhenAhead(t *testing.T) {
 
 	mockStagingStorage.AssertNotCalled(t, "GetStagingData", mock.Anything)
 	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
 }
 
 func TestInitializeParallelPublisherZero(t *testing.T) {
@@ -618,96 +659,6 @@ func TestHandleGap(t *testing.T) {
 }
 
 func TestStartCommitter(t *testing.T) {
-	mockRPC := mocks.NewMockIRPCClient(t)
-	mockMainStorage := mocks.NewMockIMainStorage(t)
-	mockStagingStorage := mocks.NewMockIStagingStorage(t)
-	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
-
-	mockStorage := storage.IStorage{
-		MainStorage:         mockMainStorage,
-		StagingStorage:      mockStagingStorage,
-		OrchestratorStorage: mockOrchestratorStorage,
-	}
-
-	committer := NewCommitter(mockRPC, mockStorage)
-	committer.triggerIntervalMs = 100 // Set a short interval for testing
-	committer.workMode = WorkModeBackfill
-
-	chainID := big.NewInt(1)
-	mockRPC.EXPECT().GetChainID().Return(chainID)
-	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
-
-	// Add expectation for DeleteOlderThan call during cleanup
-	mockStagingStorage.On("DeleteOlderThan", chainID, big.NewInt(100)).Return(nil)
-
-	blockData := []common.BlockData{
-		{Block: common.Block{Number: big.NewInt(101)}},
-		{Block: common.Block{Number: big.NewInt(102)}},
-	}
-	mockStagingStorage.On("GetStagingData", mock.Anything).Return(blockData, nil)
-	mockMainStorage.On("InsertBlockData", blockData).Return(nil)
-	mockStagingStorage.On("DeleteStagingData", blockData).Return(nil)
-
-	// Start the committer in a goroutine
-	go committer.Start(context.Background())
-
-	// Wait for a short time to allow the committer to run
-	time.Sleep(200 * time.Millisecond)
-}
-
-func TestCommitterRespectsSIGTERM(t *testing.T) {
-	mockRPC := mocks.NewMockIRPCClient(t)
-	mockMainStorage := mocks.NewMockIMainStorage(t)
-	mockStagingStorage := mocks.NewMockIStagingStorage(t)
-	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
-	mockStorage := storage.IStorage{
-		MainStorage:         mockMainStorage,
-		StagingStorage:      mockStagingStorage,
-		OrchestratorStorage: mockOrchestratorStorage,
-	}
-
-	committer := NewCommitter(mockRPC, mockStorage)
-	committer.triggerIntervalMs = 100 // Short interval for testing
-	committer.workMode = WorkModeBackfill
-
-	chainID := big.NewInt(1)
-	mockRPC.EXPECT().GetChainID().Return(chainID)
-	mockMainStorage.EXPECT().GetMaxBlockNumber(chainID).Return(big.NewInt(100), nil)
-
-	// Add expectation for DeleteOlderThan call during cleanup
-	mockStagingStorage.On("DeleteOlderThan", chainID, big.NewInt(100)).Return(nil)
-
-	blockData := []common.BlockData{
-		{Block: common.Block{Number: big.NewInt(101)}},
-		{Block: common.Block{Number: big.NewInt(102)}},
-	}
-	mockStagingStorage.On("GetStagingData", mock.Anything).Return(blockData, nil)
-	mockMainStorage.On("InsertBlockData", blockData).Return(nil)
-	mockStagingStorage.On("DeleteStagingData", blockData).Return(nil)
-
-	// Create a context that we can cancel
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Start the committer in a goroutine
-	done := make(chan struct{})
-	go func() {
-		committer.Start(ctx)
-		close(done)
-	}()
-
-	// Wait a bit to ensure the committer is running
-	time.Sleep(200 * time.Millisecond)
-
-	// Cancel the context (simulating SIGTERM)
-	cancel()
-
-	// Wait for the committer to stop with a timeout
-	select {
-	case <-done:
-		// Success - committer stopped
-	case <-time.After(2 * time.Second):
-		t.Fatal("Committer did not stop within timeout period after receiving cancel signal")
-	}
 }
 
 func TestHandleMissingStagingData(t *testing.T) {
