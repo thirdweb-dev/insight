@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -352,9 +351,40 @@ func TestCommit(t *testing.T) {
 	}
 }
 
-func TestCommitPreCommitPublisherMode(t *testing.T) {
+func TestCommitParallelPublisherMode(t *testing.T) {
 	defer func() { config.Cfg = config.Config{} }()
-	config.Cfg.Publisher.Mode = "pre-commit"
+	config.Cfg.Publisher.Mode = "parallel"
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeLive
+
+	chainID := big.NewInt(1)
+	blockData := []common.BlockData{
+		{Block: common.Block{ChainId: chainID, Number: big.NewInt(101)}},
+		{Block: common.Block{ChainId: chainID, Number: big.NewInt(102)}},
+	}
+
+	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
+
+	err := committer.commit(context.Background(), blockData)
+	assert.NoError(t, err)
+
+	mockStagingStorage.AssertNotCalled(t, "GetLastPublishedBlockNumber", mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
+}
+
+func TestPublishParallelMode(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Publisher.Mode = "parallel"
 
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)
@@ -378,13 +408,14 @@ func TestCommitPreCommitPublisherMode(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetStagingData(mock.Anything).Return(blockData, nil)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockStagingStorage.EXPECT().SetLastPublishedBlockNumber(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
 		close(publishDone)
 		return nil
 	})
-	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
 
-	err := committer.commit(context.Background(), blockData)
+	err := committer.publish(context.Background())
 	assert.NoError(t, err)
 
 	select {
@@ -392,39 +423,6 @@ func TestCommitPreCommitPublisherMode(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("SetLastPublishedBlockNumber was not called")
 	}
-}
-
-func TestCommitPreCommitPublisherModeFallback(t *testing.T) {
-	defer func() { config.Cfg = config.Config{} }()
-	config.Cfg.Publisher.Mode = "pre-commit"
-
-	mockRPC := mocks.NewMockIRPCClient(t)
-	mockMainStorage := mocks.NewMockIMainStorage(t)
-	mockStagingStorage := mocks.NewMockIStagingStorage(t)
-	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
-	mockStorage := storage.IStorage{
-		MainStorage:         mockMainStorage,
-		StagingStorage:      mockStagingStorage,
-		OrchestratorStorage: mockOrchestratorStorage,
-	}
-	committer := NewCommitter(mockRPC, mockStorage)
-	committer.workMode = WorkModeLive
-
-	chainID := big.NewInt(1)
-	blockData := []common.BlockData{
-		{Block: common.Block{ChainId: chainID, Number: big.NewInt(101)}},
-		{Block: common.Block{ChainId: chainID, Number: big.NewInt(102)}},
-	}
-
-	mockRPC.EXPECT().GetChainID().Return(chainID)
-	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(nil, errors.New("boom"))
-	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
-
-	err := committer.commit(context.Background(), blockData)
-	assert.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
-	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
 }
 
 func TestHandleGap(t *testing.T) {

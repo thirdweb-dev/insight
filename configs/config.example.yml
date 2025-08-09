@@ -190,8 +190,8 @@ api:
 publisher:
   # Whether the publisher is enabled
   enabled: true
-  # Publisher mode: "pre-commit" publishes before writing to storage, "post-commit" publishes after commit
-  mode: post-commit
+  # Publisher mode: "default" publishes after storage commit, "parallel" runs publishing alongside committing
+  mode: default
   # Kafka broker addresses (comma-separated)
   brokers: localhost:9092
 

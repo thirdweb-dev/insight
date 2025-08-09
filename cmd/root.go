@@ -135,7 +135,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("api-contractApiRequest-disableCompression", false, "Disable compression for contract API request")
 	rootCmd.PersistentFlags().Int("api-contractApiRequest-timeout", 10, "Timeout in seconds for contract API request")
 	rootCmd.PersistentFlags().Bool("publisher-enabled", false, "Toggle publisher")
-	rootCmd.PersistentFlags().String("publisher-mode", "post-commit", "Publisher mode: pre-commit or post-commit")
+	rootCmd.PersistentFlags().String("publisher-mode", "default", "Publisher mode: default or parallel")
 	rootCmd.PersistentFlags().String("publisher-brokers", "", "Kafka brokers")
 	rootCmd.PersistentFlags().Bool("publisher-blocks-enabled", false, "Toggle block publisher")
 	rootCmd.PersistentFlags().String("publisher-blocks-topicName", "", "Kafka topic name for blocks")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -83,11 +84,33 @@ func (c *Committer) Start(ctx context.Context) {
 	// Clean up staging data before starting the committer
 	c.cleanupStagingData()
 
+	if config.Cfg.Publisher.Mode == "parallel" {
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			c.runCommitLoop(ctx, interval)
+		}()
+		go func() {
+			defer wg.Done()
+			c.runPublishLoop(ctx, interval)
+		}()
+		<-ctx.Done()
+		wg.Wait()
+		log.Info().Msg("Committer shutting down")
+		c.publisher.Close()
+		return
+	}
+
+	c.runCommitLoop(ctx, interval)
+	log.Info().Msg("Committer shutting down")
+	c.publisher.Close()
+}
+
+func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().Msg("Committer shutting down")
-			c.publisher.Close()
 			return
 		case workMode := <-c.workModeChan:
 			if workMode != c.workMode && workMode != "" {
@@ -111,6 +134,24 @@ func (c *Committer) Start(ctx context.Context) {
 			}
 			if err := c.commit(ctx, blockDataToCommit); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
+			}
+		}
+	}
+}
+
+func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(interval)
+			if c.workMode == "" {
+				log.Debug().Msg("Committer work mode not set, skipping publish")
+				continue
+			}
+			if err := c.publish(ctx); err != nil {
+				log.Error().Err(err).Msg("Error publishing blocks")
 			}
 		}
 	}
@@ -293,6 +334,78 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 	return sequentialBlockData, nil
 }
 
+func (c *Committer) getSequentialBlockDataToPublish(ctx context.Context) ([]common.BlockData, error) {
+	chainID := c.rpc.GetChainID()
+	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last published block number: %v", err)
+	}
+
+	startBlock := new(big.Int).Set(c.commitFromBlock)
+	if lastPublished != nil && lastPublished.Sign() > 0 {
+		startBlock = new(big.Int).Add(lastPublished, big.NewInt(1))
+	}
+
+	endBlock := new(big.Int).Add(startBlock, big.NewInt(int64(c.blocksPerCommit-1)))
+	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
+	blockNumbers := make([]*big.Int, blockCount)
+	for i := int64(0); i < blockCount; i++ {
+		blockNumbers[i] = new(big.Int).Add(startBlock, big.NewInt(i))
+	}
+
+	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{ChainId: chainID, BlockNumbers: blockNumbers})
+	if err != nil {
+		return nil, fmt.Errorf("error fetching blocks to publish: %v", err)
+	}
+	if len(blocksData) == 0 {
+		return nil, nil
+	}
+
+	sort.Slice(blocksData, func(i, j int) bool {
+		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
+	})
+	if blocksData[0].Block.Number.Cmp(startBlock) != 0 {
+		log.Debug().Msgf("First block to publish %s does not match expected %s", blocksData[0].Block.Number.String(), startBlock.String())
+		return nil, nil
+	}
+
+	sequential := []common.BlockData{blocksData[0]}
+	expected := new(big.Int).Add(blocksData[0].Block.Number, big.NewInt(1))
+	for i := 1; i < len(blocksData); i++ {
+		if blocksData[i].Block.Number.Cmp(blocksData[i-1].Block.Number) == 0 {
+			continue
+		}
+		if blocksData[i].Block.Number.Cmp(expected) != 0 {
+			break
+		}
+		sequential = append(sequential, blocksData[i])
+		expected.Add(expected, big.NewInt(1))
+	}
+
+	return sequential, nil
+}
+
+func (c *Committer) publish(ctx context.Context) error {
+	blockData, err := c.getSequentialBlockDataToPublish(ctx)
+	if err != nil {
+		return err
+	}
+	if len(blockData) == 0 {
+		return nil
+	}
+
+	if err := c.publisher.PublishBlockData(blockData); err != nil {
+		return err
+	}
+
+	chainID := c.rpc.GetChainID()
+	highest := blockData[len(blockData)-1].Block.Number
+	if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) error {
 	blockNumbers := make([]*big.Int, len(blockData))
 	highestBlock := blockData[0].Block
@@ -303,31 +416,6 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 		}
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
-
-	shouldPostCommitPublish := true
-
-	if config.Cfg.Publisher.Mode == "pre-commit" {
-		chainID := c.rpc.GetChainID()
-		lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to get last published block number, falling back to post-commit")
-		} else if lastPublished == nil || lastPublished.Cmp(highestBlock.Number) < 0 {
-			go func() {
-				if err := c.publisher.PublishBlockData(blockData); err != nil {
-					log.Error().Err(err).Msg("Failed to publish block data to kafka")
-					return
-				}
-				if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, highestBlock.Number); err != nil {
-					log.Error().Err(err).Msg("Failed to set last published block number")
-				}
-			}()
-			shouldPostCommitPublish = false
-		} else {
-			log.Debug().Msgf("Skipping publish, latest published block %s >= current %s", lastPublished.String(), highestBlock.Number.String())
-			shouldPostCommitPublish = false
-		}
-	}
-
 	mainStorageStart := time.Now()
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
 		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
@@ -336,7 +424,7 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
 	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
 
-	if shouldPostCommitPublish {
+	if config.Cfg.Publisher.Mode == "default" {
 		go func() {
 			if err := c.publisher.PublishBlockData(blockData); err != nil {
 				log.Error().Err(err).Msg("Failed to publish block data to kafka")
