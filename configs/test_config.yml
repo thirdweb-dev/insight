@@ -64,6 +64,7 @@ api:
 
 publisher:
   enabled: false
+  mode: post-commit
 
 validation:
   mode: minimal 

@@ -190,9 +190,11 @@ api:
 publisher:
   # Whether the publisher is enabled
   enabled: true
+  # Publisher mode: "pre-commit" publishes before writing to storage, "post-commit" publishes after commit
+  mode: post-commit
   # Kafka broker addresses (comma-separated)
   brokers: localhost:9092
-  
+
   # Block publishing configuration
   blocks:
     # Whether to publish block data

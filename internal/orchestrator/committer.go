@@ -295,10 +295,38 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 
 func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) error {
 	blockNumbers := make([]*big.Int, len(blockData))
+	highestBlock := blockData[0].Block
 	for i, block := range blockData {
 		blockNumbers[i] = block.Block.Number
+		if block.Block.Number.Cmp(highestBlock.Number) > 0 {
+			highestBlock = block.Block
+		}
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
+
+	shouldPostCommitPublish := true
+
+	if config.Cfg.Publisher.Mode == "pre-commit" {
+		chainID := c.rpc.GetChainID()
+		lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to get last published block number, falling back to post-commit")
+		} else if lastPublished == nil || lastPublished.Cmp(highestBlock.Number) < 0 {
+			go func() {
+				if err := c.publisher.PublishBlockData(blockData); err != nil {
+					log.Error().Err(err).Msg("Failed to publish block data to kafka")
+					return
+				}
+				if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, highestBlock.Number); err != nil {
+					log.Error().Err(err).Msg("Failed to set last published block number")
+				}
+			}()
+			shouldPostCommitPublish = false
+		} else {
+			log.Debug().Msgf("Skipping publish, latest published block %s >= current %s", lastPublished.String(), highestBlock.Number.String())
+			shouldPostCommitPublish = false
+		}
+	}
 
 	mainStorageStart := time.Now()
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
@@ -308,11 +336,13 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
 	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
 
-	go func() {
-		if err := c.publisher.PublishBlockData(blockData); err != nil {
-			log.Error().Err(err).Msg("Failed to publish block data to kafka")
-		}
-	}()
+	if shouldPostCommitPublish {
+		go func() {
+			if err := c.publisher.PublishBlockData(blockData); err != nil {
+				log.Error().Err(err).Msg("Failed to publish block data to kafka")
+			}
+		}()
+	}
 
 	if c.workMode == WorkModeBackfill {
 		go func() {
@@ -325,13 +355,6 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 		}()
 	}
 
-	// Find highest block number from committed blocks
-	highestBlock := blockData[0].Block
-	for _, block := range blockData {
-		if block.Block.Number.Cmp(highestBlock.Number) > 0 {
-			highestBlock = block.Block
-		}
-	}
 	c.lastCommittedBlock = new(big.Int).Set(highestBlock.Number)
 
 	// Update metrics for successful commits
