@@ -425,6 +425,88 @@ func TestPublishParallelMode(t *testing.T) {
 	}
 }
 
+func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Publisher.Mode = "parallel"
+	config.Cfg.Publisher.Enabled = false
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeLive
+	committer.setLastCommittedBlock(big.NewInt(102))
+
+	chainID := big.NewInt(1)
+	blockData := []common.BlockData{
+		{Block: common.Block{ChainId: chainID, Number: big.NewInt(101)}},
+		{Block: common.Block{ChainId: chainID, Number: big.NewInt(102)}},
+	}
+
+	publishDone := make(chan struct{})
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetStagingData(mock.Anything).Return(blockData, nil)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	mockStagingStorage.EXPECT().SetLastPublishedBlockNumber(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
+		close(publishDone)
+		cancel()
+		return nil
+	})
+
+	go committer.runPublishLoop(ctx, time.Millisecond)
+
+	select {
+	case <-publishDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("publish not triggered")
+	}
+}
+
+func TestRunPublishLoopSkipsWhenAhead(t *testing.T) {
+	defer func() { config.Cfg = config.Config{} }()
+	config.Cfg.Publisher.Mode = "parallel"
+	config.Cfg.Publisher.Enabled = false
+
+	mockRPC := mocks.NewMockIRPCClient(t)
+	mockMainStorage := mocks.NewMockIMainStorage(t)
+	mockStagingStorage := mocks.NewMockIStagingStorage(t)
+	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
+	mockStorage := storage.IStorage{
+		MainStorage:         mockMainStorage,
+		StagingStorage:      mockStagingStorage,
+		OrchestratorStorage: mockOrchestratorStorage,
+	}
+	committer := NewCommitter(mockRPC, mockStorage)
+	committer.workMode = WorkModeLive
+	committer.setLastCommittedBlock(big.NewInt(102))
+
+	chainID := big.NewInt(1)
+
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(105), nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go committer.runPublishLoop(ctx, time.Millisecond)
+	time.Sleep(2 * time.Millisecond)
+	cancel()
+	time.Sleep(10 * time.Millisecond)
+
+	mockStagingStorage.AssertNotCalled(t, "GetStagingData", mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
+}
+
 func TestInitializeParallelPublisherZero(t *testing.T) {
 	defer func() { config.Cfg = config.Config{} }()
 	config.Cfg.Publisher.Mode = "parallel"

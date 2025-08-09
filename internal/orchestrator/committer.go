@@ -27,6 +27,7 @@ type Committer struct {
 	commitFromBlock    *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock *big.Int
+	lastCommittedLock  sync.RWMutex
 	publisher          *publisher.Publisher
 	workMode           WorkMode
 	workModeChan       chan WorkMode
@@ -76,6 +77,18 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 	return committer
 }
 
+func (c *Committer) getLastCommittedBlock() *big.Int {
+	c.lastCommittedLock.RLock()
+	defer c.lastCommittedLock.RUnlock()
+	return new(big.Int).Set(c.lastCommittedBlock)
+}
+
+func (c *Committer) setLastCommittedBlock(b *big.Int) {
+	c.lastCommittedLock.Lock()
+	c.lastCommittedBlock = new(big.Int).Set(b)
+	c.lastCommittedLock.Unlock()
+}
+
 func (c *Committer) initializeParallelPublisher() {
 	chainID := c.rpc.GetChainID()
 	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
@@ -115,14 +128,20 @@ func (c *Committer) Start(ctx context.Context) {
 	if config.Cfg.Publisher.Mode == "parallel" {
 		c.initializeParallelPublisher()
 		var wg sync.WaitGroup
+		publishInterval := interval / 2
+		if publishInterval <= 0 {
+			publishInterval = interval
+		}
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			c.runCommitLoop(ctx, interval)
+			c.runPublishLoop(ctx, publishInterval)
 		}()
+		// allow the publisher to start before the committer
+		time.Sleep(publishInterval)
 		go func() {
 			defer wg.Done()
-			c.runPublishLoop(ctx, interval)
+			c.runCommitLoop(ctx, interval)
 		}()
 		<-ctx.Done()
 		wg.Wait()
@@ -169,6 +188,7 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 }
 
 func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) {
+	chainID := c.rpc.GetChainID()
 	for {
 		select {
 		case <-ctx.Done():
@@ -177,6 +197,15 @@ func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) 
 			time.Sleep(interval)
 			if c.workMode == "" {
 				log.Debug().Msg("Committer work mode not set, skipping publish")
+				continue
+			}
+			lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to get last published block number")
+				continue
+			}
+			lastCommitted := c.getLastCommittedBlock()
+			if lastPublished != nil && lastPublished.Cmp(lastCommitted) >= 0 {
 				continue
 			}
 			if err := c.publish(ctx); err != nil {
@@ -225,8 +254,9 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 		// If no blocks have been committed yet, start from the fromBlock specified in the config
 		latestCommittedBlockNumber = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
 	} else {
-		if latestCommittedBlockNumber.Cmp(c.lastCommittedBlock) < 0 {
-			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), c.lastCommittedBlock.String())
+		lastCommitted := c.getLastCommittedBlock()
+		if latestCommittedBlockNumber.Cmp(lastCommitted) < 0 {
+			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), lastCommitted.String())
 			return []*big.Int{}, nil
 		}
 	}
@@ -472,7 +502,7 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 		}()
 	}
 
-	c.lastCommittedBlock = new(big.Int).Set(highestBlock.Number)
+	c.setLastCommittedBlock(highestBlock.Number)
 
 	// Update metrics for successful commits
 	metrics.SuccessfulCommits.Add(float64(len(blockData)))
