@@ -72,6 +72,111 @@ func (_c *MockIStagingStorage_DeleteStagingData_Call) RunAndReturn(run func([]co
 	return _c
 }
 
+// GetLastPublishedBlockNumber provides a mock function with given fields: chainId
+func (_m *MockIStagingStorage) GetLastPublishedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	ret := _m.Called(chainId)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetLastPublishedBlockNumber")
+	}
+
+	var r0 *big.Int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*big.Int) (*big.Int, error)); ok {
+		return rf(chainId)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int) *big.Int); ok {
+		r0 = rf(chainId)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int) error); ok {
+		r1 = rf(chainId)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIStagingStorage_GetLastPublishedBlockNumber_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLastPublishedBlockNumber'
+type MockIStagingStorage_GetLastPublishedBlockNumber_Call struct {
+	*mock.Call
+}
+
+// GetLastPublishedBlockNumber is a helper method to define mock.On call
+//   - chainId *big.Int
+func (_e *MockIStagingStorage_Expecter) GetLastPublishedBlockNumber(chainId interface{}) *MockIStagingStorage_GetLastPublishedBlockNumber_Call {
+	return &MockIStagingStorage_GetLastPublishedBlockNumber_Call{Call: _e.mock.On("GetLastPublishedBlockNumber", chainId)}
+}
+
+func (_c *MockIStagingStorage_GetLastPublishedBlockNumber_Call) Run(run func(chainId *big.Int)) *MockIStagingStorage_GetLastPublishedBlockNumber_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIStagingStorage_GetLastPublishedBlockNumber_Call) Return(maxBlockNumber *big.Int, err error) *MockIStagingStorage_GetLastPublishedBlockNumber_Call {
+	_c.Call.Return(maxBlockNumber, err)
+	return _c
+}
+
+func (_c *MockIStagingStorage_GetLastPublishedBlockNumber_Call) RunAndReturn(run func(*big.Int) (*big.Int, error)) *MockIStagingStorage_GetLastPublishedBlockNumber_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetLastPublishedBlockNumber provides a mock function with given fields: chainId, blockNumber
+func (_m *MockIStagingStorage) SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	ret := _m.Called(chainId, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetLastPublishedBlockNumber")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) error); ok {
+		r0 = rf(chainId, blockNumber)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockIStagingStorage_SetLastPublishedBlockNumber_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetLastPublishedBlockNumber'
+type MockIStagingStorage_SetLastPublishedBlockNumber_Call struct {
+	*mock.Call
+}
+
+// SetLastPublishedBlockNumber is a helper method to define mock.On call
+//   - chainId *big.Int
+//   - blockNumber *big.Int
+func (_e *MockIStagingStorage_Expecter) SetLastPublishedBlockNumber(chainId interface{}, blockNumber interface{}) *MockIStagingStorage_SetLastPublishedBlockNumber_Call {
+	return &MockIStagingStorage_SetLastPublishedBlockNumber_Call{Call: _e.mock.On("SetLastPublishedBlockNumber", chainId, blockNumber)}
+}
+
+func (_c *MockIStagingStorage_SetLastPublishedBlockNumber_Call) Run(run func(chainId *big.Int, blockNumber *big.Int)) *MockIStagingStorage_SetLastPublishedBlockNumber_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int), args[1].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIStagingStorage_SetLastPublishedBlockNumber_Call) Return(_a0 error) *MockIStagingStorage_SetLastPublishedBlockNumber_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIStagingStorage_SetLastPublishedBlockNumber_Call) RunAndReturn(run func(*big.Int, *big.Int) error) *MockIStagingStorage_SetLastPublishedBlockNumber_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetLastStagedBlockNumber provides a mock function with given fields: chainId, rangeStart, rangeEnd
 func (_m *MockIStagingStorage) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
 	ret := _m.Called(chainId, rangeStart, rangeEnd)
