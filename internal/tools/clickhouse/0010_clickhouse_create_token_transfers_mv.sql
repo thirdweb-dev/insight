@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS token_transfers
     `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
 
-    INDEX minmax_block_number block_number TYPE minmax GRANULARITY 16,
-    INDEX minmax_block_timestamp block_timestamp TYPE minmax GRANULARITY 16,
+    INDEX minmax_block_number block_number TYPE minmax GRANULARITY 4,
+    INDEX minmax_block_timestamp block_timestamp TYPE minmax GRANULARITY 4,
 
     PROJECTION from_address_projection
     (
