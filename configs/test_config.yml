@@ -64,6 +64,7 @@ api:
 
 publisher:
   enabled: false
+  mode: default
 
 validation:
   mode: minimal 
