@@ -1077,7 +1077,7 @@ func (c *ClickHouseConnector) DeleteStagingData(data []common.BlockData) error {
 
 func (c *ClickHouseConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*big.Int, error) {
 	query := fmt.Sprintf("SELECT cursor_value FROM %s.cursors FINAL WHERE cursor_type = 'publish'", c.cfg.Database)
-	if chainId.Sign() > 0 {
+	if chainId != nil && chainId.Sign() > 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
 	}
 	var blockNumberString string
