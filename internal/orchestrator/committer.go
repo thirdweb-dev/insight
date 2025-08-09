@@ -174,31 +174,21 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 }
 
 func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) {
-	chainID := c.rpc.GetChainID()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			time.Sleep(interval)
-			if c.workMode == "" {
-				log.Debug().Msg("Committer work mode not set, skipping publish")
-				continue
-			}
-			lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to get last published block number")
-				continue
-			}
-			lastCommitted := c.lastCommittedBlock.Load()
-			if lastPublished != nil && lastPublished.Uint64() >= lastCommitted {
-				continue
-			}
-			if err := c.publish(ctx); err != nil {
-				log.Error().Err(err).Msg("Error publishing blocks")
-			}
-		}
-	}
+        for {
+                select {
+                case <-ctx.Done():
+                        return
+                default:
+                        time.Sleep(interval)
+                        if c.workMode == "" {
+                                log.Debug().Msg("Committer work mode not set, skipping publish")
+                                continue
+                        }
+                        if err := c.publish(ctx); err != nil {
+                                log.Error().Err(err).Msg("Error publishing blocks")
+                        }
+                }
+        }
 }
 
 func (c *Committer) cleanupProcessedStagingBlocks() {
