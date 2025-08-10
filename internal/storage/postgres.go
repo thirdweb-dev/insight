@@ -286,11 +286,9 @@ func (p *PostgresConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, 
 		query += fmt.Sprintf(" AND block_number IN (%s)", strings.Join(placeholders, ","))
 	} else if qf.StartBlock != nil && qf.EndBlock != nil {
 		argCount++
-		query += fmt.Sprintf(" AND block_number >= $%d", argCount)
-		args = append(args, qf.StartBlock.String())
-		argCount++
-		query += fmt.Sprintf(" AND block_number <= $%d", argCount)
-		args = append(args, qf.EndBlock.String())
+		query += fmt.Sprintf(" AND block_number BETWEEN $%d AND $%d", argCount, argCount+1)
+		args = append(args, qf.StartBlock.String(), qf.EndBlock.String())
+		argCount++ // Increment once more since we used two args
 	}
 
 	query += " ORDER BY block_number ASC"
