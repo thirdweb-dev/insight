@@ -11,6 +11,8 @@ import (
 type QueryFilter struct {
 	ChainId             *big.Int
 	BlockNumbers        []*big.Int
+	StartBlock          *big.Int
+	EndBlock            *big.Int
 	FilterParams        map[string]string
 	GroupBy             []string
 	SortBy              string
@@ -83,6 +85,8 @@ type IStagingStorage interface {
 	GetStagingData(qf QueryFilter) (data []common.BlockData, err error)
 	DeleteStagingData(data []common.BlockData) error
 	GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
+	GetLastPublishedBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
+	SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
 	DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error
 }
 

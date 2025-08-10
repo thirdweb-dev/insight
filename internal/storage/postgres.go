@@ -284,6 +284,11 @@ func (p *PostgresConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, 
 			args = append(args, bn.String())
 		}
 		query += fmt.Sprintf(" AND block_number IN (%s)", strings.Join(placeholders, ","))
+	} else if qf.StartBlock != nil && qf.EndBlock != nil {
+		argCount++
+		query += fmt.Sprintf(" AND block_number BETWEEN $%d AND $%d", argCount, argCount+1)
+		args = append(args, qf.StartBlock.String(), qf.EndBlock.String())
+		argCount++ // Increment once more since we used two args
 	}
 
 	query += " ORDER BY block_number ASC"
@@ -341,6 +346,35 @@ func (p *PostgresConnector) DeleteStagingData(data []common.BlockData) error {
 	          WHERE (chain_id, block_number) IN (%s)`, strings.Join(tuples, ","))
 
 	_, err := p.db.Exec(query, args...)
+	return err
+}
+
+func (p *PostgresConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	query := `SELECT cursor_value FROM cursors WHERE cursor_type = 'publish' AND chain_id = $1`
+
+	var blockNumberString string
+	err := p.db.QueryRow(query, chainId.String()).Scan(&blockNumberString)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+
+	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberString)
+	}
+	return blockNumber, nil
+}
+
+func (p *PostgresConnector) SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	query := `INSERT INTO cursors (chain_id, cursor_type, cursor_value)
+                 VALUES ($1, 'publish', $2)
+                 ON CONFLICT (chain_id, cursor_type)
+                 DO UPDATE SET cursor_value = EXCLUDED.cursor_value, updated_at = NOW()`
+
+	_, err := p.db.Exec(query, chainId.String(), blockNumber.String())
 	return err
 }
 

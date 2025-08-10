@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -25,7 +27,8 @@ type Committer struct {
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
 	rpc                rpc.IRPCClient
-	lastCommittedBlock *big.Int
+	lastCommittedBlock atomic.Uint64
+	lastPublishedBlock atomic.Uint64
 	publisher          *publisher.Publisher
 	workMode           WorkMode
 	workModeChan       chan WorkMode
@@ -58,15 +61,17 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
-		triggerIntervalMs:  triggerInterval,
-		blocksPerCommit:    blocksPerCommit,
-		storage:            storage,
-		commitFromBlock:    commitFromBlock,
-		rpc:                rpc,
-		lastCommittedBlock: commitFromBlock,
-		publisher:          publisher.GetInstance(),
-		workMode:           "",
+		triggerIntervalMs: triggerInterval,
+		blocksPerCommit:   blocksPerCommit,
+		storage:           storage,
+		commitFromBlock:   commitFromBlock,
+		rpc:               rpc,
+		publisher:         publisher.GetInstance(),
+		workMode:          "",
 	}
+	cfb := commitFromBlock.Uint64()
+	committer.lastCommittedBlock.Store(cfb)
+	committer.lastPublishedBlock.Store(cfb)
 
 	for _, opt := range opts {
 		opt(committer)
@@ -79,15 +84,63 @@ func (c *Committer) Start(ctx context.Context) {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 
 	log.Debug().Msgf("Committer running")
+	chainID := c.rpc.GetChainID()
 
-	// Clean up staging data before starting the committer
-	c.cleanupStagingData()
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(chainID)
+	if err != nil {
+		// It's okay to fail silently here; this value is only used for staging cleanup and
+		// the worker loop will eventually correct the state and delete as needed.
+		log.Error().Msgf("Error getting latest committed block number: %v", err)
+	} else if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
+		c.lastCommittedBlock.Store(latestCommittedBlockNumber.Uint64())
+	}
 
+	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+	if err != nil {
+		// It's okay to fail silently here; it's only used for staging cleanup and will be
+		// corrected by the worker loop.
+		log.Error().Err(err).Msg("failed to get last published block number")
+	} else if lastPublished != nil && lastPublished.Sign() > 0 {
+		c.lastPublishedBlock.Store(lastPublished.Uint64())
+	} else {
+		c.lastPublishedBlock.Store(c.lastCommittedBlock.Load())
+	}
+
+	c.cleanupProcessedStagingBlocks()
+
+	if config.Cfg.Publisher.Mode == "parallel" {
+		var wg sync.WaitGroup
+		publishInterval := interval / 2
+		if publishInterval <= 0 {
+			publishInterval = interval
+		}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			c.runPublishLoop(ctx, publishInterval)
+		}()
+		// allow the publisher to start before the committer
+		time.Sleep(publishInterval)
+		go func() {
+			defer wg.Done()
+			c.runCommitLoop(ctx, interval)
+		}()
+		<-ctx.Done()
+		wg.Wait()
+		log.Info().Msg("Committer shutting down")
+		c.publisher.Close()
+		return
+	}
+
+	c.runCommitLoop(ctx, interval)
+	log.Info().Msg("Committer shutting down")
+	c.publisher.Close()
+}
+
+func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().Msg("Committer shutting down")
-			c.publisher.Close()
 			return
 		case workMode := <-c.workModeChan:
 			if workMode != c.workMode && workMode != "" {
@@ -116,26 +169,46 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 }
 
-func (c *Committer) cleanupStagingData() {
-	// Get the last committed block number from main storage
-	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
-	if err != nil {
-		log.Error().Msgf("Error getting latest committed block number: %v", err)
+func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(interval)
+			if c.workMode == "" {
+				log.Debug().Msg("Committer work mode not set, skipping publish")
+				continue
+			}
+			if err := c.publish(ctx); err != nil {
+				log.Error().Err(err).Msg("Error publishing blocks")
+			}
+		}
+	}
+}
+
+func (c *Committer) cleanupProcessedStagingBlocks() {
+	committed := c.lastCommittedBlock.Load()
+	published := c.lastPublishedBlock.Load()
+	if published == 0 || committed == 0 {
 		return
 	}
-
-	if latestCommittedBlockNumber.Sign() == 0 {
-		log.Debug().Msg("No blocks committed yet, skipping staging data cleanup")
+	limit := committed
+	if published < limit {
+		limit = published
+	}
+	if limit == 0 {
 		return
 	}
-
-	// Delete all staging data older than the latest committed block number
-	if err := c.storage.StagingStorage.DeleteOlderThan(c.rpc.GetChainID(), latestCommittedBlockNumber); err != nil {
-		log.Error().Msgf("Error deleting staging data older than %v: %v", latestCommittedBlockNumber, err)
+	chainID := c.rpc.GetChainID()
+	blockNumber := new(big.Int).SetUint64(limit)
+	stagingDeleteStart := time.Now()
+	if err := c.storage.StagingStorage.DeleteOlderThan(chainID, blockNumber); err != nil {
+		log.Error().Err(err).Msg("Failed to delete staging data")
 		return
 	}
-
-	log.Info().Msgf("Deleted staging data older than or equal to %v", latestCommittedBlockNumber)
+	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
+	metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
 }
 
 func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, error) {
@@ -155,8 +228,9 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 		// If no blocks have been committed yet, start from the fromBlock specified in the config
 		latestCommittedBlockNumber = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
 	} else {
-		if latestCommittedBlockNumber.Cmp(c.lastCommittedBlock) < 0 {
-			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), c.lastCommittedBlock.String())
+		lastCommitted := new(big.Int).SetUint64(c.lastCommittedBlock.Load())
+		if latestCommittedBlockNumber.Cmp(lastCommitted) < 0 {
+			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), lastCommitted.String())
 			return []*big.Int{}, nil
 		}
 	}
@@ -293,13 +367,89 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 	return sequentialBlockData, nil
 }
 
+func (c *Committer) getSequentialBlockDataToPublish(ctx context.Context) ([]common.BlockData, error) {
+	chainID := c.rpc.GetChainID()
+	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last published block number: %v", err)
+	}
+
+	startBlock := new(big.Int).Set(c.commitFromBlock)
+	if lastPublished != nil && lastPublished.Sign() > 0 {
+		startBlock = new(big.Int).Add(lastPublished, big.NewInt(1))
+	}
+
+	endBlock := new(big.Int).Add(startBlock, big.NewInt(int64(c.blocksPerCommit-1)))
+
+	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{
+		ChainId:    chainID,
+		StartBlock: startBlock,
+		EndBlock:   endBlock,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error fetching blocks to publish: %v", err)
+	}
+	if len(blocksData) == 0 {
+		return nil, nil
+	}
+
+	sort.Slice(blocksData, func(i, j int) bool {
+		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
+	})
+	if blocksData[0].Block.Number.Cmp(startBlock) != 0 {
+		log.Debug().Msgf("First block to publish %s does not match expected %s", blocksData[0].Block.Number.String(), startBlock.String())
+		return nil, nil
+	}
+
+	sequential := []common.BlockData{blocksData[0]}
+	expected := new(big.Int).Add(blocksData[0].Block.Number, big.NewInt(1))
+	for i := 1; i < len(blocksData); i++ {
+		if blocksData[i].Block.Number.Cmp(blocksData[i-1].Block.Number) == 0 {
+			continue
+		}
+		if blocksData[i].Block.Number.Cmp(expected) != 0 {
+			break
+		}
+		sequential = append(sequential, blocksData[i])
+		expected.Add(expected, big.NewInt(1))
+	}
+
+	return sequential, nil
+}
+
+func (c *Committer) publish(ctx context.Context) error {
+	blockData, err := c.getSequentialBlockDataToPublish(ctx)
+	if err != nil {
+		return err
+	}
+	if len(blockData) == 0 {
+		return nil
+	}
+
+	if err := c.publisher.PublishBlockData(blockData); err != nil {
+		return err
+	}
+
+	chainID := c.rpc.GetChainID()
+	highest := blockData[len(blockData)-1].Block.Number
+	if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
+		return err
+	}
+	c.lastPublishedBlock.Store(highest.Uint64())
+	go c.cleanupProcessedStagingBlocks()
+	return nil
+}
+
 func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) error {
 	blockNumbers := make([]*big.Int, len(blockData))
+	highestBlock := blockData[0].Block
 	for i, block := range blockData {
 		blockNumbers[i] = block.Block.Number
+		if block.Block.Number.Cmp(highestBlock.Number) > 0 {
+			highestBlock = block.Block
+		}
 	}
 	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
-
 	mainStorageStart := time.Now()
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
 		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
@@ -308,31 +458,20 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
 	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
 
-	go func() {
-		if err := c.publisher.PublishBlockData(blockData); err != nil {
-			log.Error().Err(err).Msg("Failed to publish block data to kafka")
-		}
-	}()
-
-	if c.workMode == WorkModeBackfill {
+	if config.Cfg.Publisher.Mode == "default" {
+		highest := highestBlock.Number.Uint64()
 		go func() {
-			stagingDeleteStart := time.Now()
-			if err := c.storage.StagingStorage.DeleteStagingData(blockData); err != nil {
-				log.Error().Err(err).Msg("Failed to delete staging data")
+			if err := c.publisher.PublishBlockData(blockData); err != nil {
+				log.Error().Err(err).Msg("Failed to publish block data to kafka")
+				return
 			}
-			log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingData duration: %f", time.Since(stagingDeleteStart).Seconds())
-			metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
+			c.lastPublishedBlock.Store(highest)
+			c.cleanupProcessedStagingBlocks()
 		}()
 	}
 
-	// Find highest block number from committed blocks
-	highestBlock := blockData[0].Block
-	for _, block := range blockData {
-		if block.Block.Number.Cmp(highestBlock.Number) > 0 {
-			highestBlock = block.Block
-		}
-	}
-	c.lastCommittedBlock = new(big.Int).Set(highestBlock.Number)
+	c.lastCommittedBlock.Store(highestBlock.Number.Uint64())
+	go c.cleanupProcessedStagingBlocks()
 
 	// Update metrics for successful commits
 	metrics.SuccessfulCommits.Add(float64(len(blockData)))
