@@ -167,6 +167,17 @@ func TestPostgresConnector_StagingData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, retrievedData, 2)
 
+	// Test GetStagingData with StartBlock and EndBlock
+	rangeQf := QueryFilter{
+		ChainId:    big.NewInt(1),
+		StartBlock: big.NewInt(100),
+		EndBlock:   big.NewInt(101),
+	}
+
+	retrievedDataRange, err := conn.GetStagingData(rangeQf)
+	assert.NoError(t, err)
+	assert.Len(t, retrievedDataRange, 2)
+
 	// Test GetLastStagedBlockNumber
 	lastBlock, err := conn.GetLastStagedBlockNumber(big.NewInt(1), big.NewInt(90), big.NewInt(110))
 	assert.NoError(t, err)

@@ -11,6 +11,8 @@ import (
 type QueryFilter struct {
 	ChainId             *big.Int
 	BlockNumbers        []*big.Int
+	StartBlock          *big.Int
+	EndBlock            *big.Int
 	FilterParams        map[string]string
 	GroupBy             []string
 	SortBy              string

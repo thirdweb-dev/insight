@@ -380,13 +380,12 @@ func (c *Committer) getSequentialBlockDataToPublish(ctx context.Context) ([]comm
 	}
 
 	endBlock := new(big.Int).Add(startBlock, big.NewInt(int64(c.blocksPerCommit-1)))
-	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
-	blockNumbers := make([]*big.Int, blockCount)
-	for i := int64(0); i < blockCount; i++ {
-		blockNumbers[i] = new(big.Int).Add(startBlock, big.NewInt(i))
-	}
 
-	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{ChainId: chainID, BlockNumbers: blockNumbers})
+	blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{
+		ChainId:    chainID,
+		StartBlock: startBlock,
+		EndBlock:   endBlock,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching blocks to publish: %v", err)
 	}

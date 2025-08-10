@@ -1014,8 +1014,17 @@ func (c *ClickHouseConnector) InsertStagingData(data []common.BlockData) error {
 }
 
 func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
-	query := fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0",
-		c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
+	var query string
+
+	if len(qf.BlockNumbers) > 0 {
+		query = fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number IN (%s) AND is_deleted = 0",
+			c.cfg.Database, getBlockNumbersStringArray(qf.BlockNumbers))
+	} else if qf.StartBlock != nil && qf.EndBlock != nil {
+		query = fmt.Sprintf("SELECT data FROM %s.block_data FINAL WHERE block_number >= %s AND block_number <= %s AND is_deleted = 0",
+			c.cfg.Database, qf.StartBlock.String(), qf.EndBlock.String())
+	} else {
+		return nil, fmt.Errorf("either BlockNumbers or StartBlock/EndBlock must be provided")
+	}
 
 	if qf.ChainId.Sign() != 0 {
 		query += fmt.Sprintf(" AND chain_id = %s", qf.ChainId.String())
