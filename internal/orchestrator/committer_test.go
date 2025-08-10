@@ -470,7 +470,7 @@ func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
 	committer.workMode = WorkModeLive
-	committer.setLastCommittedBlock(big.NewInt(102))
+	committer.lastCommittedBlock.Store(102)
 
 	chainID := big.NewInt(1)
 	blockData := []common.BlockData{
@@ -478,25 +478,25 @@ func TestRunPublishLoopPublishesWhenBehind(t *testing.T) {
 		{Block: common.Block{ChainId: chainID, Number: big.NewInt(102)}},
 	}
 
-        publishDone := make(chan struct{})
-        deleteDone := make(chan struct{})
+	publishDone := make(chan struct{})
+	deleteDone := make(chan struct{})
 
-        mockRPC.EXPECT().GetChainID().Return(chainID)
-        mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(100), nil)
-        mockStagingStorage.EXPECT().GetStagingData(mock.Anything).Return(blockData, nil)
-        mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(100), nil)
+	mockStagingStorage.EXPECT().GetStagingData(mock.Anything).Return(blockData, nil)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
 
-        ctx, cancel := context.WithCancel(context.Background())
-        mockStagingStorage.EXPECT().SetLastPublishedBlockNumber(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
-                close(publishDone)
-                cancel()
-                return nil
-        })
-        mockRPC.EXPECT().GetChainID().Return(chainID)
-        mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
-                close(deleteDone)
-                return nil
-        })
+	ctx, cancel := context.WithCancel(context.Background())
+	mockStagingStorage.EXPECT().SetLastPublishedBlockNumber(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
+		close(publishDone)
+		cancel()
+		return nil
+	})
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
+		close(deleteDone)
+		return nil
+	})
 
 	go committer.runPublishLoop(ctx, time.Millisecond)
 
@@ -528,22 +528,22 @@ func TestRunPublishLoopDoesNothingWhenNoNewBlocks(t *testing.T) {
 	}
 	committer := NewCommitter(mockRPC, mockStorage)
 	committer.workMode = WorkModeLive
-	committer.setLastCommittedBlock(big.NewInt(102))
+	committer.lastCommittedBlock.Store(102)
 
-        chainID := big.NewInt(1)
+	chainID := big.NewInt(1)
 
-        mockRPC.EXPECT().GetChainID().Return(chainID)
-        mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(105), nil)
-        mockStagingStorage.EXPECT().GetStagingData(mock.Anything).Return([]common.BlockData{}, nil)
+	mockRPC.EXPECT().GetChainID().Return(chainID)
+	mockStagingStorage.EXPECT().GetLastPublishedBlockNumber(chainID).Return(big.NewInt(105), nil)
+	mockStagingStorage.EXPECT().GetStagingData(mock.Anything).Return([]common.BlockData{}, nil)
 
-        ctx, cancel := context.WithCancel(context.Background())
-        go committer.runPublishLoop(ctx, time.Millisecond)
-        time.Sleep(2 * time.Millisecond)
-        cancel()
-        time.Sleep(10 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	go committer.runPublishLoop(ctx, time.Millisecond)
+	time.Sleep(2 * time.Millisecond)
+	cancel()
+	time.Sleep(10 * time.Millisecond)
 
-        mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
-        mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
 }
 
 func TestHandleGap(t *testing.T) {

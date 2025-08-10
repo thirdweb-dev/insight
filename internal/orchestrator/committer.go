@@ -80,14 +80,6 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 	return committer
 }
 
-func (c *Committer) getLastCommittedBlock() *big.Int {
-	return new(big.Int).SetUint64(c.lastCommittedBlock.Load())
-}
-
-func (c *Committer) setLastCommittedBlock(b *big.Int) {
-	c.lastCommittedBlock.Store(b.Uint64())
-}
-
 func (c *Committer) Start(ctx context.Context) {
 	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
 
@@ -96,6 +88,8 @@ func (c *Committer) Start(ctx context.Context) {
 
 	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(chainID)
 	if err != nil {
+		// It's okay to fail silently here; this value is only used for staging cleanup and
+		// the worker loop will eventually correct the state and delete as needed.
 		log.Error().Msgf("Error getting latest committed block number: %v", err)
 	} else if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
 		c.lastCommittedBlock.Store(latestCommittedBlockNumber.Uint64())
@@ -103,6 +97,8 @@ func (c *Committer) Start(ctx context.Context) {
 
 	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
 	if err != nil {
+		// It's okay to fail silently here; it's only used for staging cleanup and will be
+		// corrected by the worker loop.
 		log.Error().Err(err).Msg("failed to get last published block number")
 	} else if lastPublished != nil && lastPublished.Sign() > 0 {
 		c.lastPublishedBlock.Store(lastPublished.Uint64())
@@ -174,21 +170,21 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 }
 
 func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) {
-        for {
-                select {
-                case <-ctx.Done():
-                        return
-                default:
-                        time.Sleep(interval)
-                        if c.workMode == "" {
-                                log.Debug().Msg("Committer work mode not set, skipping publish")
-                                continue
-                        }
-                        if err := c.publish(ctx); err != nil {
-                                log.Error().Err(err).Msg("Error publishing blocks")
-                        }
-                }
-        }
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(interval)
+			if c.workMode == "" {
+				log.Debug().Msg("Committer work mode not set, skipping publish")
+				continue
+			}
+			if err := c.publish(ctx); err != nil {
+				log.Error().Err(err).Msg("Error publishing blocks")
+			}
+		}
+	}
 }
 
 func (c *Committer) cleanupProcessedStagingBlocks() {
@@ -232,7 +228,7 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 		// If no blocks have been committed yet, start from the fromBlock specified in the config
 		latestCommittedBlockNumber = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
 	} else {
-		lastCommitted := c.getLastCommittedBlock()
+		lastCommitted := new(big.Int).SetUint64(c.lastCommittedBlock.Load())
 		if latestCommittedBlockNumber.Cmp(lastCommitted) < 0 {
 			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), lastCommitted.String())
 			return []*big.Int{}, nil
