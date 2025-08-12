@@ -167,3 +167,30 @@ func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 
 	return typedConn, nil
 }
+
+// NewReadonlyConnector creates a readonly connector for API endpoints
+// This is separate from the main orchestration flow to ensure readonly access
+func NewReadonlyConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
+	var conn interface{}
+	var err error
+	if cfg.Postgres != nil {
+		// For now, use the same Postgres connector for readonly
+		// You can implement a readonly Postgres connector if needed
+		conn, err = NewPostgresConnector(cfg.Postgres)
+	} else if cfg.Clickhouse != nil {
+		conn, err = NewClickHouseReadonlyConnector(cfg.Clickhouse)
+	} else {
+		return *new(T), fmt.Errorf("no storage driver configured")
+	}
+
+	if err != nil {
+		return *new(T), err
+	}
+
+	typedConn, ok := conn.(T)
+	if !ok {
+		return *new(T), fmt.Errorf("connector does not implement the required interface")
+	}
+
+	return typedConn, nil
+}

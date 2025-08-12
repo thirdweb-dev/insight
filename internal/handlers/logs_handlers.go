@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/gin-gonic/gin"
@@ -11,13 +10,6 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/storage"
-)
-
-// package-level variables
-var (
-	mainStorage storage.IMainStorage
-	storageOnce sync.Once
-	storageErr  error
 )
 
 // @Summary Get all logs
@@ -219,18 +211,6 @@ func decodeLogsIfNeeded(chainId string, logs []common.Log, eventABI *abi.Event, 
 		return common.DecodeLogs(chainId, logs)
 	}
 	return nil
-}
-
-func getMainStorage() (storage.IMainStorage, error) {
-	storageOnce.Do(func() {
-		var err error
-		mainStorage, err = storage.NewConnector[storage.IMainStorage](&config.Cfg.Storage.Main)
-		if err != nil {
-			storageErr = err
-			log.Error().Err(err).Msg("Error creating storage connector")
-		}
-	})
-	return mainStorage, storageErr
 }
 
 func sendJSONResponse(c *gin.Context, response interface{}) {

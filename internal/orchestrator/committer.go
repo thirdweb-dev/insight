@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -108,30 +107,6 @@ func (c *Committer) Start(ctx context.Context) {
 
 	c.cleanupProcessedStagingBlocks()
 
-	if config.Cfg.Publisher.Mode == "parallel" {
-		var wg sync.WaitGroup
-		publishInterval := interval / 2
-		if publishInterval <= 0 {
-			publishInterval = interval
-		}
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			c.runPublishLoop(ctx, publishInterval)
-		}()
-		// allow the publisher to start before the committer
-		time.Sleep(publishInterval)
-		go func() {
-			defer wg.Done()
-			c.runCommitLoop(ctx, interval)
-		}()
-		<-ctx.Done()
-		wg.Wait()
-		log.Info().Msg("Committer shutting down")
-		c.publisher.Close()
-		return
-	}
-
 	c.runCommitLoop(ctx, interval)
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
@@ -162,9 +137,19 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 				log.Debug().Msg("No block data to commit")
 				continue
 			}
-			if err := c.commit(ctx, blockDataToCommit); err != nil {
-				log.Error().Err(err).Msg("Error committing blocks")
-			}
+			go func() {
+				highest := blockDataToCommit[len(blockDataToCommit)-1].Block.Number.Uint64()
+				if err := c.publisher.PublishBlockData(blockDataToCommit); err != nil {
+					log.Error().Err(err).Msg("Failed to publish block data to kafka")
+					return
+				}
+				c.lastPublishedBlock.Store(highest)
+			}()
+			go func() {
+				if err := c.commit(ctx, blockDataToCommit); err != nil {
+					log.Error().Err(err).Msg("Error committing blocks")
+				}
+			}()
 		}
 	}
 }
@@ -457,18 +442,6 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 	}
 	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
 	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
-
-	if config.Cfg.Publisher.Mode == "default" {
-		highest := highestBlock.Number.Uint64()
-		go func() {
-			if err := c.publisher.PublishBlockData(blockData); err != nil {
-				log.Error().Err(err).Msg("Failed to publish block data to kafka")
-				return
-			}
-			c.lastPublishedBlock.Store(highest)
-			c.cleanupProcessedStagingBlocks()
-		}()
-	}
 
 	c.lastCommittedBlock.Store(highestBlock.Number.Uint64())
 	go c.cleanupProcessedStagingBlocks()
