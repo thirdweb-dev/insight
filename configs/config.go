@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -86,13 +85,6 @@ type ClickhouseConfig struct {
 	ChainBasedConfig             map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
 	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
 	MaxQueryTime                 int                            `mapstructure:"maxQueryTime"`
-
-	// Readonly configuration for API endpoints
-	ReadonlyHost     string `mapstructure:"readonlyHost"`
-	ReadonlyPort     int    `mapstructure:"readonlyPort"`
-	ReadonlyUsername string `mapstructure:"readonlyUsername"`
-	ReadonlyPassword string `mapstructure:"readonlyPassword"`
-	ReadonlyDatabase string `mapstructure:"readonlyDatabase"`
 }
 
 type PostgresConfig struct {
@@ -290,35 +282,5 @@ func setCustomJSONConfigs() error {
 			Cfg.Storage.Main.Clickhouse.ChainBasedConfig = orchestratorChainConfig
 		}
 	}
-
-	// Load readonly ClickHouse configuration from environment variables
-	if readonlyHost := os.Getenv("CLICKHOUSE_HOST_READONLY"); readonlyHost != "" {
-		if Cfg.Storage.Main.Clickhouse != nil {
-			Cfg.Storage.Main.Clickhouse.ReadonlyHost = readonlyHost
-		}
-	}
-	if readonlyPort := os.Getenv("CLICKHOUSE_PORT_READONLY"); readonlyPort != "" {
-		if port, err := strconv.Atoi(readonlyPort); err == nil {
-			if Cfg.Storage.Main.Clickhouse != nil {
-				Cfg.Storage.Main.Clickhouse.ReadonlyPort = port
-			}
-		}
-	}
-	if readonlyUsername := os.Getenv("CLICKHOUSE_USER_READONLY"); readonlyUsername != "" {
-		if Cfg.Storage.Main.Clickhouse != nil {
-			Cfg.Storage.Main.Clickhouse.ReadonlyUsername = readonlyUsername
-		}
-	}
-	if readonlyPassword := os.Getenv("CLICKHOUSE_PASSWORD_READONLY"); readonlyPassword != "" {
-		if Cfg.Storage.Main.Clickhouse != nil {
-			Cfg.Storage.Main.Clickhouse.ReadonlyPassword = readonlyPassword
-		}
-	}
-	if readonlyDatabase := os.Getenv("CLICKHOUSE_DATABASE_READONLY"); readonlyDatabase != "" {
-		if Cfg.Storage.Main.Clickhouse != nil {
-			Cfg.Storage.Main.Clickhouse.ReadonlyDatabase = readonlyDatabase
-		}
-	}
-
 	return nil
 }
