@@ -149,7 +149,6 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 				if err := c.commit(ctx, blockDataToCommit); err != nil {
 					log.Error().Err(err).Msg("Error committing blocks")
 				}
-				c.cleanupProcessedStagingBlocks()
 			}()
 		}
 	}
