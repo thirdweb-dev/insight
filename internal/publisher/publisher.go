@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -97,18 +98,9 @@ func (p *Publisher) initialize() error {
 }
 
 func (p *Publisher) PublishBlockData(blockData []common.BlockData) error {
-	for _, data := range blockData {
-		for _, tx := range data.Transactions {
-			if strings.ToLower(tx.ToAddress) == "0x9c868614ffca7da36b36330b1f317b117c7834de" {
-				log.Debug().Msgf("Publising block has txn hash %s", tx.Hash)
-			}
-		}
+	if rand.Float32() < 0.3 {
+		log.Debug().Msgf("Publishing %d block data", len(blockData))
 	}
-	log.Debug().
-		Any("startBlockNumber", blockData[0].Block.Number.Uint64()).
-		Any("endBlockNumber", blockData[len(blockData)-1].Block.Number.Uint64()).
-		Msgf("Publishing %d block data", len(blockData))
-
 	return p.publishBlockData(blockData, false)
 }
 
