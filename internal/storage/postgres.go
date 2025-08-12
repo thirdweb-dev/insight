@@ -193,8 +193,13 @@ func (p *PostgresConnector) DeleteBlockFailures(failures []common.BlockFailure) 
 		args = append(args, failure.ChainId.String(), failure.BlockNumber.String())
 	}
 
-	query := fmt.Sprintf(`DELETE FROM block_failures 
-	          WHERE (chain_id, block_number) IN (%s)`, strings.Join(tuples, ","))
+	query := fmt.Sprintf(`DELETE FROM block_failures
+	WHERE ctid IN (
+		SELECT ctid
+		FROM block_failures
+		WHERE (chain_id, block_number) IN (%s)
+		FOR UPDATE SKIP LOCKED
+	)`, strings.Join(tuples, ","))
 
 	_, err := p.db.Exec(query, args...)
 	return err
@@ -342,8 +347,13 @@ func (p *PostgresConnector) DeleteStagingData(data []common.BlockData) error {
 		args = append(args, blockData.Block.ChainId.String(), blockData.Block.Number.String())
 	}
 
-	query := fmt.Sprintf(`DELETE FROM block_data 
-	          WHERE (chain_id, block_number) IN (%s)`, strings.Join(tuples, ","))
+	query := fmt.Sprintf(`DELETE FROM block_data
+	WHERE ctid IN (
+		SELECT ctid
+		FROM block_failures
+		WHERE (chain_id, block_number) IN (%s)
+		FOR UPDATE SKIP LOCKED
+	)`, strings.Join(tuples, ","))
 
 	_, err := p.db.Exec(query, args...)
 	return err
@@ -422,7 +432,14 @@ func (p *PostgresConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStar
 }
 
 func (p *PostgresConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
-	query := `DELETE FROM block_data WHERE chain_id = $1 AND block_number <= $2`
+	query := `DELETE FROM block_data
+	WHERE ctid IN (
+		SELECT ctid
+		FROM block_data
+		WHERE chain_id = $1
+			AND block_number <= $2
+		FOR UPDATE SKIP LOCKED
+	)`
 	_, err := p.db.Exec(query, chainId.String(), blockNumber.String())
 	return err
 }
