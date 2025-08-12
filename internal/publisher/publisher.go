@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -98,9 +97,6 @@ func (p *Publisher) initialize() error {
 }
 
 func (p *Publisher) PublishBlockData(blockData []common.BlockData) error {
-	if rand.Float32() < 0.3 {
-		log.Debug().Msgf("Publishing %d block data", len(blockData))
-	}
 	return p.publishBlockData(blockData, false)
 }
 
