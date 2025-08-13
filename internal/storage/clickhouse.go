@@ -1959,6 +1959,7 @@ func (c *ClickHouseConnector) GetValidationBlockData(chainId *big.Int, startBloc
 	for i, block := range blocksResult.blocks {
 		blockNum := block.Number.String()
 		blockData[i] = common.BlockData{
+			ChainId:      chainId.Uint64(),
 			Block:        block,
 			Logs:         logsResult.logMap[blockNum],
 			Transactions: txsResult.txMap[blockNum],
@@ -2138,6 +2139,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	for i, block := range blocksResult.blocks {
 		blockNum := block.Number.String()
 		blockData[i] = common.BlockData{
+			ChainId:      chainId.Uint64(),
 			Block:        block,
 			Logs:         logsResult.logMap[blockNum],
 			Transactions: txsResult.txMap[blockNum],

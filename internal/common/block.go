@@ -59,10 +59,11 @@ type BlockModel struct {
 }
 
 type BlockData struct {
-	Block        Block
-	Transactions []Transaction
-	Logs         []Log
-	Traces       []Trace
+	ChainId      uint64        `json:"chain_id"`
+	Block        Block         `json:"block"`
+	Transactions []Transaction `json:"transactions"`
+	Logs         []Log         `json:"logs"`
+	Traces       []Trace       `json:"traces"`
 }
 
 type BlockHeader struct {
