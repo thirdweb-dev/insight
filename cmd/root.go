@@ -125,7 +125,6 @@ func init() {
 	rootCmd.PersistentFlags().Int("storage-staging-postgres-maxConnLifetime", 300, "PostgreSQL max connection lifetime in seconds for staging storage")
 	rootCmd.PersistentFlags().Int("storage-staging-postgres-connectTimeout", 10, "PostgreSQL connection timeout in seconds for staging storage")
 	// Kafka storage flags - only for main storage (where blockchain data is committed)
-	rootCmd.PersistentFlags().Bool("storage-main-kafka-enabled", false, "Enable Kafka storage for main storage")
 	rootCmd.PersistentFlags().String("storage-main-kafka-brokers", "", "Kafka brokers for main storage")
 	rootCmd.PersistentFlags().String("storage-main-kafka-username", "", "Kafka username for main storage")
 	rootCmd.PersistentFlags().String("storage-main-kafka-password", "", "Kafka password for main storage")
@@ -253,8 +252,6 @@ func init() {
 	viper.BindPFlag("storage.staging.postgres.maxIdleConns", rootCmd.PersistentFlags().Lookup("storage-staging-postgres-maxIdleConns"))
 	viper.BindPFlag("storage.staging.postgres.maxConnLifetime", rootCmd.PersistentFlags().Lookup("storage-staging-postgres-maxConnLifetime"))
 	viper.BindPFlag("storage.staging.postgres.connectTimeout", rootCmd.PersistentFlags().Lookup("storage-staging-postgres-connectTimeout"))
-	// Bind Kafka storage flags - only for main storage
-	viper.BindPFlag("storage.main.kafka.enabled", rootCmd.PersistentFlags().Lookup("storage-main-kafka-enabled"))
 	viper.BindPFlag("storage.main.kafka.brokers", rootCmd.PersistentFlags().Lookup("storage-main-kafka-brokers"))
 	viper.BindPFlag("storage.main.kafka.username", rootCmd.PersistentFlags().Lookup("storage-main-kafka-username"))
 	viper.BindPFlag("storage.main.kafka.password", rootCmd.PersistentFlags().Lookup("storage-main-kafka-password"))

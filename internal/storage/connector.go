@@ -148,12 +148,12 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var conn interface{}
 	var err error
-	if cfg.Postgres != nil {
+	if cfg.Kafka != nil {
+		conn, err = NewKafkaPostgresConnector(cfg.Kafka)
+	} else if cfg.Postgres != nil {
 		conn, err = NewPostgresConnector(cfg.Postgres)
 	} else if cfg.Clickhouse != nil {
 		conn, err = NewClickHouseConnector(cfg.Clickhouse)
-	} else if cfg.Kafka != nil {
-		conn, err = NewKafkaPostgresConnector(cfg.Kafka)
 	} else {
 		return *new(T), fmt.Errorf("no storage driver configured")
 	}

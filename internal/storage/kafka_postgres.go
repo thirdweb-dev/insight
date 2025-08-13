@@ -56,7 +56,7 @@ func NewKafkaPostgresConnector(cfg *config.KafkaConfig) (*KafkaPostgresConnector
 
 	// Initialize Kafka publisher if enabled
 	var kafkaPublisher *KafkaPublisher
-	if cfg.Enabled && cfg.Brokers != "" {
+	if cfg.Brokers != "" {
 		kafkaPublisher, err = NewKafkaPublisher(cfg)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to initialize Kafka publisher, continuing without publishing")

@@ -102,7 +102,6 @@ type PostgresConfig struct {
 }
 
 type KafkaConfig struct {
-	Enabled  bool            `mapstructure:"enabled"`
 	Brokers  string          `mapstructure:"brokers"`
 	Username string          `mapstructure:"username"`
 	Password string          `mapstructure:"password"`
