@@ -55,13 +55,9 @@ func NewKafkaPostgresConnector(cfg *config.KafkaConfig) (*KafkaPostgresConnector
 	}
 
 	// Initialize Kafka publisher if enabled
-	var kafkaPublisher *KafkaPublisher
-	if cfg.Brokers != "" {
-		kafkaPublisher, err = NewKafkaPublisher(cfg)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize Kafka publisher, continuing without publishing")
-			kafkaPublisher = nil
-		}
+	kafkaPublisher, err := NewKafkaPublisher(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	return &KafkaPostgresConnector{
@@ -502,11 +498,9 @@ func (kp *KafkaPostgresConnector) ReplaceBlockData(data []common.BlockData) ([]c
 	oldBlocks := []common.BlockData{}
 
 	// Publish reorg event to Kafka
-	if kp.kafkaPublisher != nil {
-		// Publish new blocks (the reorg handler will mark old ones as reverted)
-		if err := kp.kafkaPublisher.PublishBlockData(data); err != nil {
-			return nil, fmt.Errorf("failed to publish reorg blocks to kafka: %w", err)
-		}
+	// TODO: Publish new blocks (the reorg handler will mark old ones as reverted)
+	if err := kp.kafkaPublisher.PublishBlockData(data); err != nil {
+		return nil, fmt.Errorf("failed to publish reorg blocks to kafka: %w", err)
 	}
 
 	// Update cursor to track the highest block number

@@ -126,7 +126,7 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 }
 
 func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isReorg bool) error {
-	if p.client == nil || len(blockData) == 0 {
+	if len(blockData) == 0 {
 		return nil
 	}
 
@@ -135,6 +135,7 @@ func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isReorg 
 	// Prepare messages for blocks, events, transactions and traces
 	blockMessages := make([]*kgo.Record, len(blockData))
 
+	// TODO: handle reorg
 	status := "new"
 	if isReorg {
 		status = "reverted"
