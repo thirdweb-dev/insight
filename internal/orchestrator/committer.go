@@ -111,7 +111,7 @@ func (c *Committer) Start(ctx context.Context) {
 					Str("latest_committed", latestCommittedBlockNumber.String()).
 					Str("gap", gap.String()).
 					Msg("Publisher is behind committed position, seeking forward to committed value")
-				
+
 				c.lastPublishedBlock.Store(latestCommittedBlockNumber.Uint64())
 				if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, latestCommittedBlockNumber); err != nil {
 					log.Error().Err(err).Msg("Failed to update last published block number after seeking forward")
