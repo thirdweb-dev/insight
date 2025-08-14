@@ -124,19 +124,8 @@ func (c *Committer) Start(ctx context.Context) {
 			Str("target_publish_block", targetPublishBlock.String()).
 			Msg("No previous publish position, initializing publisher cursor")
 	} else {
-		// We have a previous position - use max(lastPublished, lastCommitted)
+		// We have a previous position
 		targetPublishBlock = lastPublished
-		if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
-			if latestCommittedBlockNumber.Cmp(lastPublished) > 0 {
-				gap := new(big.Int).Sub(latestCommittedBlockNumber, lastPublished)
-				log.Warn().
-					Str("last_published", lastPublished.String()).
-					Str("latest_committed", latestCommittedBlockNumber.String()).
-					Str("gap", gap.String()).
-					Msg("Publisher is behind committed position, seeking forward to committed value")
-				targetPublishBlock = latestCommittedBlockNumber
-			}
-		}
 	}
 
 	// Only update storage if we're changing the position
@@ -150,7 +139,7 @@ func (c *Committer) Start(ctx context.Context) {
 		}
 	}
 
-	// Store in memory for quick access
+	// Store in memory for quick acess
 	c.lastPublishedBlock.Store(targetPublishBlock.Uint64())
 
 	log.Info().
@@ -326,26 +315,26 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 
 func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, error) {
 	// Get the last published block from storage (which was already corrected in Start)
-	lastestPublishedBlockNumber, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
+	latestPublishedBlockNumber, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last published block number: %v", err)
 	}
 
 	// This should never happen after Start() has run, but handle it defensively
-	if lastestPublishedBlockNumber == nil || lastestPublishedBlockNumber.Sign() == 0 {
+	if latestPublishedBlockNumber == nil || latestPublishedBlockNumber.Sign() == 0 {
 		// Fall back to in-memory value which was set during Start
-		lastestPublishedBlockNumber = new(big.Int).SetUint64(c.lastPublishedBlock.Load())
+		latestPublishedBlockNumber = new(big.Int).SetUint64(c.lastPublishedBlock.Load())
 		log.Warn().
-			Str("fallback_value", lastestPublishedBlockNumber.String()).
+			Str("fallback_value", latestPublishedBlockNumber.String()).
 			Msg("Storage returned nil/0 for last published block, using in-memory value")
 	}
 
 	log.Debug().
-		Str("last_published", lastestPublishedBlockNumber.String()).
+		Str("last_published", latestPublishedBlockNumber.String()).
 		Msg("Determining blocks to publish")
 
-	startBlock := new(big.Int).Add(lastestPublishedBlockNumber, big.NewInt(1))
-	endBlock, err := c.getBlockToCommitUntil(ctx, lastestPublishedBlockNumber)
+	startBlock := new(big.Int).Add(latestPublishedBlockNumber, big.NewInt(1))
+	endBlock, err := c.getBlockToCommitUntil(ctx, latestPublishedBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("error getting block to commit until: %v", err)
 	}
