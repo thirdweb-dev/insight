@@ -102,10 +102,11 @@ type PostgresConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers  string          `mapstructure:"brokers"`
-	Username string          `mapstructure:"username"`
-	Password string          `mapstructure:"password"`
-	Postgres *PostgresConfig `mapstructure:"postgres"`
+	Brokers   string          `mapstructure:"brokers"`
+	Username  string          `mapstructure:"username"`
+	Password  string          `mapstructure:"password"`
+	EnableTLS bool            `mapstructure:"enable_tls"`
+	Postgres  *PostgresConfig `mapstructure:"postgres"`
 }
 
 type RPCBatchRequestConfig struct {
@@ -184,6 +185,7 @@ type PublisherConfig struct {
 	Brokers      string                     `mapstructure:"brokers"`
 	Username     string                     `mapstructure:"username"`
 	Password     string                     `mapstructure:"password"`
+	EnableTLS    bool                       `mapstructure:"enable_tls"`
 	Blocks       BlockPublisherConfig       `mapstructure:"blocks"`
 	Transactions TransactionPublisherConfig `mapstructure:"transactions"`
 	Traces       TracePublisherConfig       `mapstructure:"traces"`

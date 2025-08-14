@@ -47,6 +47,9 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 			User: cfg.Username,
 			Pass: cfg.Password,
 		}.AsMechanism()))
+	}
+
+	if cfg.EnableTLS {
 		tlsDialer := &tls.Dialer{NetDialer: &net.Dialer{Timeout: 10 * time.Second}}
 		opts = append(opts, kgo.Dialer(tlsDialer.DialContext))
 	}
