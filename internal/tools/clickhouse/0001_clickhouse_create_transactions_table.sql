@@ -31,26 +31,46 @@ CREATE TABLE IF NOT EXISTS transactions (
     `blob_gas_price` Nullable(UInt256),
     `logs_bloom` Nullable(String),
     `status` Nullable(UInt64),
+
     `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
-    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 3,
+
+    INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 3,
-    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 3,
-    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 1,
-    PROJECTION txs_chainid_from_address
+    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 2,
+    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 2,
+
+    PROJECTION from_address_projection
     (
-        SELECT *
+        SELECT
+          chain_id,
+          block_number,
+          block_timestamp,
+          hash,
+          from_address,
+          to_address,
+          value,
+          data
         ORDER BY 
           chain_id,
           from_address,
-          block_number
+          block_number,
+          hash
     ),
-    PROJECTION txs_chainid_to_address
+    PROJECTION to_address_projection
     (
-        SELECT *
-        ORDER BY 
+        SELECT
+          chain_id,
+          block_number,
+          block_timestamp,
+          hash,
+          from_address,
+          to_address,
+          value,
+          data
+        ORDER BY
           chain_id,
           to_address,
           block_number,
@@ -58,5 +78,5 @@ CREATE TABLE IF NOT EXISTS transactions (
     )
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, block_number, hash)
-PARTITION BY chain_id
-SETTINGS deduplicate_merge_projection_mode = 'drop', lightweight_mutation_projection_mode = 'rebuild';
+PARTITION BY toYYYYMM(block_timestamp)
+SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';
