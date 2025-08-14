@@ -62,6 +62,7 @@ const (
 type StorageConnectionConfig struct {
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
+	Kafka      *KafkaConfig      `mapstructure:"kafka"`
 }
 
 type TableConfig struct {
@@ -98,6 +99,14 @@ type PostgresConfig struct {
 	MaxIdleConns    int    `mapstructure:"maxIdleConns"`
 	MaxConnLifetime int    `mapstructure:"maxConnLifetime"`
 	ConnectTimeout  int    `mapstructure:"connectTimeout"`
+}
+
+type KafkaConfig struct {
+	Brokers   string          `mapstructure:"brokers"`
+	Username  string          `mapstructure:"username"`
+	Password  string          `mapstructure:"password"`
+	EnableTLS bool            `mapstructure:"enable_tls"`
+	Postgres  *PostgresConfig `mapstructure:"postgres"`
 }
 
 type RPCBatchRequestConfig struct {
@@ -176,6 +185,7 @@ type PublisherConfig struct {
 	Brokers      string                     `mapstructure:"brokers"`
 	Username     string                     `mapstructure:"username"`
 	Password     string                     `mapstructure:"password"`
+	EnableTLS    bool                       `mapstructure:"enable_tls"`
 	Blocks       BlockPublisherConfig       `mapstructure:"blocks"`
 	Transactions TransactionPublisherConfig `mapstructure:"transactions"`
 	Traces       TracePublisherConfig       `mapstructure:"traces"`

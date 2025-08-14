@@ -262,6 +262,7 @@ func (p *Poller) convertPollResultsToBlockData(results []rpc.GetFullBlockResult)
 	blockData := make([]common.BlockData, 0, len(successfulResults))
 	for _, result := range successfulResults {
 		blockData = append(blockData, common.BlockData{
+			ChainId:      p.rpc.GetChainID().Uint64(),
 			Block:        result.Data.Block,
 			Logs:         result.Data.Logs,
 			Transactions: result.Data.Transactions,
