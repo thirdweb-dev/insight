@@ -104,7 +104,7 @@ type Migrator struct {
 	targetConn         *storage.ClickHouseConnector
 	migrationBatchSize int
 	rpcBatchSize       int
-	newkafka           *newkafka.Publisher
+	newkafka           *newkafka.NewKafka
 	psql               *storage.PostgresConnector
 }
 

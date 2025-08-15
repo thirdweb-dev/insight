@@ -182,6 +182,12 @@ type PublisherConfig struct {
 	Events       EventPublisherConfig       `mapstructure:"events"`
 }
 
+type NewKafkaConfig struct {
+	Brokers  string `mapstructure:"brokers"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+}
+
 type WorkModeConfig struct {
 	CheckIntervalMinutes int   `mapstructure:"checkIntervalMinutes"`
 	LiveModeThreshold    int64 `mapstructure:"liveModeThreshold"`
@@ -201,6 +207,7 @@ type Config struct {
 	Storage          StorageConfig          `mapstructure:"storage"`
 	API              APIConfig              `mapstructure:"api"`
 	Publisher        PublisherConfig        `mapstructure:"publisher"`
+	NewKafka         NewKafkaConfig         `mapstructure:"newKafka"`
 	WorkMode         WorkModeConfig         `mapstructure:"workMode"`
 	Validation       ValidationConfig       `mapstructure:"validation"`
 }
