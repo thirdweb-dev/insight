@@ -154,7 +154,7 @@ func NewMigrator() *Migrator {
 	newpublisher := newkafka.GetInstance()
 
 	// psql cursor for new kafka
-	psql, err := storage.NewPostgresConnector(config.Cfg.Storage.Main.Postgres)
+	psql, err := storage.NewPostgresConnector(config.Cfg.Storage.Staging.Postgres)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize psql cursor")
 	}
