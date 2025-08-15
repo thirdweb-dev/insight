@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS backfill_logs
 
 --- Materialize view running to the correct tables
 -- ERC20
-CREATE MATERIALIZED VIEW IF NOT EXISTS bf__logs_transfer_erc20_mv
-TO logs_transfer
+CREATE MATERIALIZED VIEW IF NOT EXISTS bf__token_transfers_erc20_mv
+TO token_transfers
 AS
 SELECT
   chain_id,
@@ -48,8 +48,8 @@ WHERE topic_0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b
   AND length(data) = 66;
 
 -- ERC721
-CREATE MATERIALIZED VIEW IF NOT EXISTS bf__logs_transfer_erc721_mv
-TO logs_transfer
+CREATE MATERIALIZED VIEW IF NOT EXISTS bf__token_transfers_erc721_mv
+TO token_transfers
 AS
 SELECT
   chain_id,
@@ -75,8 +75,8 @@ WHERE topic_0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b
   AND length(data) = 2;
 
 -- ERC1155 (single)
-CREATE MATERIALIZED VIEW IF NOT EXISTS bf__logs_transfer_erc1155_single_mv
-TO logs_transfer
+CREATE MATERIALIZED VIEW IF NOT EXISTS bf__token_transfers_erc1155_single_mv
+TO token_transfers
 AS
 SELECT
     chain_id,
@@ -100,8 +100,8 @@ WHERE topic_0 = '0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0
   AND length(data) = (2 + 2*64);
 
 -- ERC1155 (batch)
-CREATE MATERIALIZED VIEW IF NOT EXISTS bf__logs_transfer_erc1155_batch_mv
-TO logs_transfer
+CREATE MATERIALIZED VIEW IF NOT EXISTS bf__token_transfers_erc1155_batch_mv
+TO token_transfers
 AS
 SELECT
     chain_id,
@@ -142,8 +142,8 @@ ARRAY JOIN
 
 
 -- ERC6909
-CREATE MATERIALIZED VIEW IF NOT EXISTS bf__logs_transfer_erc6909_mv
-TO logs_transfer
+CREATE MATERIALIZED VIEW IF NOT EXISTS bf__token_transfers_erc6909_mv
+TO token_transfers
 AS
 SELECT
   chain_id,
@@ -196,7 +196,7 @@ WHERE topic_0 = '0x1b3d7edb2e9c0b0e7c525b20aaaef0f5940d2ed71663c7d39266ecafac728
 --     '0x1b3d7edb2e9c0b0e7c525b20aaaef0f5940d2ed71663c7d39266ecafac728859' -- 6909
 --   );
 
--- DROP TABLE logs_transfer, token_balance;
--- DROP TABLE bf__logs_transfer_erc20_mv, bf__logs_transfer_erc721_mv, bf__logs_transfer_erc1155_mv, bf__logs_transfer_erc6909_mv;
--- DROP TABLE logs_transfer_erc20_mv, logs_transfer_erc721_mv, logs_transfer_erc1155_mv, logs_transfer_erc6909_mv;
+-- DROP TABLE token_transfers, token_balance;
+-- DROP TABLE bf__token_transfers_erc20_mv, bf__token_transfers_erc721_mv, bf__token_transfers_erc1155_mv, bf__token_transfers_erc6909_mv;
+-- DROP TABLE token_transfers_erc20_mv, token_transfers_erc721_mv, token_transfers_erc1155_mv, token_transfers_erc6909_mv;
 -- DROP TABLE token_balance_erc20_mv, token_balance_erc721_mv, token_balance_erc1155_mv, token_balance_erc6909_mv;
