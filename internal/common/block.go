@@ -100,3 +100,23 @@ func (b *Block) Serialize() BlockModel {
 		BaseFeePerGas:    b.BaseFeePerGas,
 	}
 }
+
+func (b *BlockData) Serialize() BlockData {
+	data := BlockData{
+		ChainId:      b.ChainId,
+		Block:        b.Block,
+		Transactions: b.Transactions,
+		Logs:         b.Logs,
+		Traces:       b.Traces,
+	}
+	if data.Transactions == nil {
+		data.Transactions = []Transaction{}
+	}
+	if data.Logs == nil {
+		data.Logs = []Log{}
+	}
+	if data.Traces == nil {
+		data.Traces = []Trace{}
+	}
+	return data
+}

@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -18,28 +20,37 @@ import (
 )
 
 type KafkaPublisher struct {
-	client *kgo.Client
-	mu     sync.RWMutex
+	client  *kgo.Client
+	mu      sync.RWMutex
+	chainID string
 }
 
-type PublishableMessage[T common.BlockData] struct {
-	Data   T      `json:"data"`
-	Status string `json:"status"`
+type PublishableBlockMessage struct {
+	common.BlockData
+	Sign            int8      `json:"sign"`
+	InsertTimestamp time.Time `json:"insert_timestamp"`
 }
 
 // NewKafkaPublisher method for storage connector (public)
 func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 	brokers := strings.Split(cfg.Brokers, ",")
+	chainID := config.Cfg.RPC.ChainID
+
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.AllowAutoTopicCreation(),
-		kgo.ProducerBatchCompression(kgo.SnappyCompression()),
-		kgo.ClientID(fmt.Sprintf("insight-indexer-kafka-storage-%s", config.Cfg.RPC.ChainID)),
+		kgo.ProducerBatchCompression(kgo.ZstdCompression()),
+		kgo.ClientID(fmt.Sprintf("insight-indexer-kafka-storage-%s", chainID)),
+		kgo.TransactionalID(fmt.Sprintf("insight-producer-%s", chainID)),
+		kgo.MaxBufferedBytes(2 * 1024 * 1024 * 1024), // 2GB
 		kgo.MaxBufferedRecords(1_000_000),
 		kgo.ProducerBatchMaxBytes(16_000_000),
-		kgo.RecordPartitioner(kgo.UniformBytesPartitioner(1_000_000, false, false, nil)),
+		kgo.RecordPartitioner(kgo.ManualPartitioner()),
+		kgo.ProduceRequestTimeout(30 * time.Second),
 		kgo.MetadataMaxAge(60 * time.Second),
 		kgo.DialTimeout(10 * time.Second),
+		kgo.RequiredAcks(kgo.AllISRAcks()),
+		kgo.RequestRetries(5),
 	}
 
 	if cfg.Username != "" && cfg.Password != "" {
@@ -68,8 +79,10 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 	}
 
 	publisher := &KafkaPublisher{
-		client: client,
+		client:  client,
+		chainID: chainID,
 	}
+
 	return publisher, nil
 }
 
@@ -78,7 +91,6 @@ func (p *KafkaPublisher) PublishBlockData(blockData []common.BlockData) error {
 }
 
 func (p *KafkaPublisher) PublishReorg(oldData []common.BlockData, newData []common.BlockData) error {
-	// TODO: need to revisit how reorg blocks get published to downstream
 	if err := p.publishBlockData(oldData, true); err != nil {
 		return fmt.Errorf("failed to publish old block data: %v", err)
 	}
@@ -105,30 +117,39 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 		return nil
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	// Lock for the entire transaction lifecycle to ensure thread safety
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	if p.client == nil {
-		return nil // Skip if no client configured
+		return fmt.Errorf("no kafka client configured")
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(len(messages))
-	// Publish to all configured producers
-	for _, msg := range messages {
-		p.client.Produce(ctx, msg, func(_ *kgo.Record, err error) {
-			defer wg.Done()
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to publish message to Kafka")
-			}
-		})
+	// Start a new transaction
+	if err := p.client.BeginTransaction(); err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
 	}
-	wg.Wait()
+
+	// Produce all messages in the transaction
+	for _, msg := range messages {
+		p.client.Produce(ctx, msg, nil)
+	}
+
+	// Flush all messages
+	if err := p.client.Flush(ctx); err != nil {
+		p.client.EndTransaction(ctx, kgo.TryAbort)
+		return fmt.Errorf("failed to flush messages: %v", err)
+	}
+
+	// Commit the transaction
+	if err := p.client.EndTransaction(ctx, kgo.TryCommit); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
 
 	return nil
 }
 
-func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isReorg bool) error {
+func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isDeleted bool) error {
 	if len(blockData) == 0 {
 		return nil
 	}
@@ -138,15 +159,9 @@ func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isReorg 
 	// Prepare messages for blocks, events, transactions and traces
 	blockMessages := make([]*kgo.Record, len(blockData))
 
-	// TODO: handle reorg
-	status := "new"
-	if isReorg {
-		status = "reverted"
-	}
-
 	for i, data := range blockData {
 		// Block message
-		if blockMsg, err := p.createBlockDataMessage(data, status); err == nil {
+		if blockMsg, err := p.createBlockDataMessage(data, isDeleted); err == nil {
 			blockMessages[i] = blockMsg
 		} else {
 			return fmt.Errorf("failed to create block message: %v", err)
@@ -161,27 +176,47 @@ func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isReorg 
 	return nil
 }
 
-func (p *KafkaPublisher) createBlockDataMessage(data common.BlockData, status string) (*kgo.Record, error) {
-	msg := PublishableMessage[common.BlockData]{
-		Data:   data,
-		Status: status,
+func (p *KafkaPublisher) createBlockDataMessage(data common.BlockData, isDeleted bool) (*kgo.Record, error) {
+	insertTimestamp := time.Now()
+	msg := PublishableBlockMessage{
+		BlockData:       data.Serialize(),
+		Sign:            1,
+		InsertTimestamp: insertTimestamp,
+	}
+	if isDeleted {
+		msg.Sign = -1 // Indicate deletion with a negative sign
 	}
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
-	return &kgo.Record{
-		Topic: p.getTopicName("commit", data.ChainId),
-		Key:   []byte(fmt.Sprintf("block-%s-%d-%s", status, data.ChainId, data.Block.Hash)),
-		Value: msgJson,
-	}, nil
-}
 
-func (p *KafkaPublisher) getTopicName(entity string, chainId uint64) string {
-	switch entity {
-	case "commit":
-		return fmt.Sprintf("insight.commit.blocks.%d", chainId)
-	default:
-		panic(fmt.Errorf("unknown topic entity: %s", entity))
+	// Determine partition based on chainID
+	var partition int32
+	if data.ChainId <= math.MaxInt32 {
+		// Direct assignment for chain IDs that fit in int32
+		partition = int32(data.ChainId)
+	} else {
+		// Hash for larger chain IDs to avoid overflow
+		h := fnv.New32a()
+		fmt.Fprintf(h, "%d", data.ChainId)
+		partition = int32(h.Sum32() & 0x7FFFFFFF) // Ensure positive
 	}
+
+	// Create headers with metadata
+	headers := []kgo.RecordHeader{
+		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", data.ChainId))},
+		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", data.Block.Number))},
+		{Key: "sign", Value: []byte(fmt.Sprintf("%d", msg.Sign))},
+		{Key: "insert_timestamp", Value: []byte(insertTimestamp.Format(time.RFC3339Nano))},
+		{Key: "schema_version", Value: []byte("1")},
+	}
+
+	return &kgo.Record{
+		Topic:     "insight.commit.blocks",
+		Key:       []byte(fmt.Sprintf("blockdata-%d-%d-%s-%d", data.ChainId, data.Block.Number, data.Block.Hash, msg.Sign)),
+		Value:     msgJson,
+		Headers:   headers,
+		Partition: partition,
+	}, nil
 }
