@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS logs_transfer
+CREATE TABLE IF NOT EXISTS token_transfers
 (
     `chain_id` UInt256,
     `token_type` LowCardinality(String),
@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS logs_transfer
     `insert_timestamp` DateTime DEFAULT now(),
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
-    INDEX idx_token_address token_address TYPE bloom_filter GRANULARITY 2,
     INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 3,
     INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 3,
     INDEX idx_transaction_hash transaction_hash TYPE bloom_filter GRANULARITY 4,
@@ -42,7 +41,6 @@ CREATE TABLE IF NOT EXISTS logs_transfer
             block_number,
             transaction_index,
             log_index
-
     ),
     PROJECTION token_id_projection (
         SELECT 
@@ -57,6 +55,6 @@ CREATE TABLE IF NOT EXISTS logs_transfer
     )
 )
 ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
-PARTITION BY toYYYYMM(block_timestamp)
+PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 ORDER BY (chain_id, token_address, block_number, transaction_index, log_index)
 SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild', deduplicate_merge_projection_mode = 'rebuild';

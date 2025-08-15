@@ -29,5 +29,5 @@ CREATE TABLE IF NOT EXISTS blocks (
     INDEX idx_hash hash TYPE bloom_filter GRANULARITY 2,
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, block_number)
-PARTITION BY toYYYYMM(block_timestamp)
+PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

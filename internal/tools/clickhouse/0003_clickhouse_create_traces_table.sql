@@ -54,5 +54,5 @@ CREATE TABLE IF NOT EXISTS traces (
 
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, transaction_hash, trace_address)
-PARTITION BY toYYYYMM(block_timestamp)
+PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

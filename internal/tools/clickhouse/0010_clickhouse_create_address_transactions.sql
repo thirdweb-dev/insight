@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS transactions (
+CREATE TABLE IF NOT EXISTS address_transactions (
     `chain_id` UInt256,
     `hash` FixedString(66),
     `nonce` UInt64,
@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     `block_number` UInt256,
     `block_timestamp` DateTime CODEC(Delta, ZSTD),
     `transaction_index` UInt64,
-    `from_address` FixedString(42),
-    `to_address` FixedString(42),
+    `address` FixedString(42),
+    `address_type` Enum8('from' = 1, 'to' = 2),
     `value` UInt256,
     `gas` UInt64,
     `gas_price` UInt256,
@@ -36,47 +36,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     `insert_timestamp` DateTime DEFAULT now(),
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
-    INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 3,
-    INDEX idx_hash hash TYPE bloom_filter GRANULARITY 2,
-    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 4,
-    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 4,
-    INDEX idx_function_selector function_selector TYPE bloom_filter GRANULARITY 2,
-
-    PROJECTION from_address_projection
-    (
-        SELECT
-          chain_id,
-          block_number,
-          block_timestamp,
-          hash,
-          from_address,
-          to_address,
-          value,
-          data
-        ORDER BY 
-          chain_id,
-          from_address,
-          block_number,
-          hash
-    ),
-    PROJECTION to_address_projection
-    (
-        SELECT
-          chain_id,
-          block_number,
-          block_timestamp,
-          hash,
-          from_address,
-          to_address,
-          value,
-          data
-        ORDER BY
-          chain_id,
-          to_address,
-          block_number,
-          hash
-    )
+    INDEX idx_address_type address_type TYPE bloom_filter GRANULARITY 3
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
-ORDER BY (chain_id, block_number, hash)
+ORDER BY (chain_id, address, block_number, hash, transaction_index)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

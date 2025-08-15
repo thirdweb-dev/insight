@@ -51,5 +51,5 @@ CREATE TABLE IF NOT EXISTS logs (
     )
 ) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
 ORDER BY (chain_id, block_number, transaction_hash, log_index)
-PARTITION BY toYYYYMM(block_timestamp)
+PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

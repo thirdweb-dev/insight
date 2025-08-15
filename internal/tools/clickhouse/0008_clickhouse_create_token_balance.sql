@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS token_balance
+CREATE TABLE IF NOT EXISTS token_balances
 (
   `chain_id` UInt256,
   `token_type` LowCardinality(String),
