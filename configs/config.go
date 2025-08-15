@@ -101,12 +101,19 @@ type PostgresConfig struct {
 	ConnectTimeout  int    `mapstructure:"connectTimeout"`
 }
 
+type RedisConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Password string `mapstructure:"password"`
+	DB       int    `mapstructure:"db"`
+}
+
 type KafkaConfig struct {
-	Brokers   string          `mapstructure:"brokers"`
-	Username  string          `mapstructure:"username"`
-	Password  string          `mapstructure:"password"`
-	EnableTLS bool            `mapstructure:"enable_tls"`
-	Postgres  *PostgresConfig `mapstructure:"postgres"`
+	Brokers   string       `mapstructure:"brokers"`
+	Username  string       `mapstructure:"username"`
+	Password  string       `mapstructure:"password"`
+	EnableTLS bool         `mapstructure:"enable_tls"`
+	Redis     *RedisConfig `mapstructure:"redis"`
 }
 
 type RPCBatchRequestConfig struct {
