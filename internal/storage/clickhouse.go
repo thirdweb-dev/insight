@@ -2016,6 +2016,11 @@ func (c *ClickHouseConnector) FindMissingBlockNumbers(chainId *big.Int, startBlo
 }
 
 func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) (blocks []common.BlockData, err error) {
+	// For migration purposes, we don't need ForceConsistentData which causes FINAL keyword issues
+	return c.GetFullBlockDataWithOptions(chainId, blockNumbers, true)
+}
+
+func (c *ClickHouseConnector) GetFullBlockDataWithOptions(chainId *big.Int, blockNumbers []*big.Int, forceConsistentData bool) (blocks []common.BlockData, err error) {
 	// Get blocks, logs and transactions concurrently
 	type blockResult struct {
 		blocks []common.Block
@@ -2047,7 +2052,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 		blocksResult, err := c.GetBlocks(QueryFilter{
 			ChainId:             chainId,
 			BlockNumbers:        blockNumbers,
-			ForceConsistentData: true,
+			ForceConsistentData: forceConsistentData,
 		})
 		blocksChan <- blockResult{blocks: blocksResult.Data, err: err}
 	}()
@@ -2056,7 +2061,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 		logsResult, err := c.GetLogs(QueryFilter{
 			ChainId:             chainId,
 			BlockNumbers:        blockNumbers,
-			ForceConsistentData: true,
+			ForceConsistentData: forceConsistentData,
 		})
 		if err != nil {
 			logsChan <- logResult{err: err}
@@ -2076,7 +2081,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 		transactionsResult, err := c.GetTransactions(QueryFilter{
 			ChainId:             chainId,
 			BlockNumbers:        blockNumbers,
-			ForceConsistentData: true,
+			ForceConsistentData: forceConsistentData,
 		})
 		if err != nil {
 			txsChan <- txResult{err: err}
@@ -2096,7 +2101,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 		tracesResult, err := c.GetTraces(QueryFilter{
 			ChainId:             chainId,
 			BlockNumbers:        blockNumbers,
-			ForceConsistentData: true,
+			ForceConsistentData: forceConsistentData,
 		})
 		if err != nil {
 			tracesChan <- traceResult{err: err}

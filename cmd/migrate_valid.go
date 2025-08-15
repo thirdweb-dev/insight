@@ -181,7 +181,7 @@ func createMigratedBlockRangesTable(psql *storage.PostgresConnector) {
 			chain_id BIGINT NOT NULL,
 			block_number BIGINT NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		) WITH (fillfactor = 80, autovacuum_vacuum_scale_factor = 0.1, autovacuum_analyze_scale_factor = 0.05)
 	`
 
@@ -242,7 +242,7 @@ func (m *Migrator) DetermineMigrationBoundaries() (*big.Int, *big.Int) {
 
 func (m *Migrator) getAbsStartAndEndBlock() (*big.Int, *big.Int) {
 	// get latest block from main storage
-	latestBlockStored, err := m.storage.MainStorage.GetMaxBlockNumber(m.rpcClient.GetChainID())
+	latestBlockStored, err := m.rpcClient.GetLatestBlockNumber(context.Background())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get latest block from main storage")
 	}
@@ -304,13 +304,14 @@ func (m *Migrator) GetMaxBlockNumberInRange(startBlock *big.Int, endBlock *big.I
 
 	// Get the maximum end_block for the given chain_id
 	maxBlock, err := m.getMaxMigratedBlock(chainID, startBlock, endBlock)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to get last migrated block, returning start block")
-		return startBlock, err
+	if err != nil || maxBlock.Cmp(startBlock) < 0 {
+		log.Warn().Err(err).Msg("Failed to get last migrated block, returning start block - 1")
+		// Return startBlock - 1 so that the next block to migrate is startBlock
+		return new(big.Int).Sub(startBlock, big.NewInt(1)), nil
 	}
 
-	// Return maxBlock + 1 as the next block to migrate
-	return new(big.Int).Add(maxBlock, big.NewInt(1)), nil
+	// Return the actual maxBlock (not +1) since this represents the last migrated block
+	return maxBlock, nil
 }
 
 // upsertMigratedBlockRange upserts a row for the given chain_id and block range
