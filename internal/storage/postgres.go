@@ -448,3 +448,18 @@ func (p *PostgresConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.I
 func (p *PostgresConnector) Close() error {
 	return p.db.Close()
 }
+
+// ExecRaw executes a raw SQL statement
+func (p *PostgresConnector) ExecRaw(query string, args ...interface{}) (sql.Result, error) {
+	return p.db.Exec(query, args...)
+}
+
+// QueryRaw executes a raw SQL query and returns the result rows
+func (p *PostgresConnector) QueryRaw(query string, args ...interface{}) (*sql.Rows, error) {
+	return p.db.Query(query, args...)
+}
+
+// QueryRowRaw executes a raw SQL query and returns a single row
+func (p *PostgresConnector) QueryRowRaw(query string, args ...interface{}) *sql.Row {
+	return p.db.QueryRow(query, args...)
+}
