@@ -184,27 +184,12 @@ func (kr *KafkaRedisConnector) ReplaceBlockData(data []common.BlockData) ([]comm
 
 	oldBlocks := []common.BlockData{}
 
-	// Publish reorg event to Kafka
-	// TODO: Publish new blocks (the reorg handler will mark old ones as reverted)
-	if err := kr.kafkaPublisher.PublishBlockData(data); err != nil {
+	// TODO: We need to fetch the old blocks from the primary data store
+	if err := kr.kafkaPublisher.PublishReorg(data, data); err != nil {
 		return nil, fmt.Errorf("failed to publish reorg blocks to kafka: %w", err)
 	}
 
-	// Update cursor to track the highest block number
-	if len(data) > 0 {
-		var maxBlock *big.Int
-		for _, blockData := range data {
-			if maxBlock == nil || blockData.Block.Number.Cmp(maxBlock) > 0 {
-				maxBlock = blockData.Block.Number
-			}
-		}
-		if maxBlock != nil {
-			if err := kr.SetLastPublishedBlockNumber(data[0].Block.ChainId, maxBlock); err != nil {
-				return nil, fmt.Errorf("failed to update published block cursor: %w", err)
-			}
-		}
-	}
-
+	// save cursor
 	return oldBlocks, nil
 }
 
@@ -250,48 +235,48 @@ func (kr *KafkaRedisConnector) GetMaxBlockNumberInRange(chainId *big.Int, startB
 }
 
 func (kr *KafkaRedisConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) ([]common.BlockHeader, error) {
-	return []common.BlockHeader{}, nil
+	return nil, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error) {
-	return QueryResult[common.TokenBalance]{Data: []common.TokenBalance{}}, nil
+	return QueryResult[common.TokenBalance]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error) {
-	return QueryResult[common.TokenTransfer]{Data: []common.TokenTransfer{}}, nil
+	return QueryResult[common.TokenTransfer]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetValidationBlockData(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) ([]common.BlockData, error) {
-	return []common.BlockData{}, nil
+	return nil, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) FindMissingBlockNumbers(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) ([]*big.Int, error) {
-	return []*big.Int{}, nil
+	return nil, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) ([]common.BlockData, error) {
-	return []common.BlockData{}, nil
+	return nil, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
-// Query methods return empty results as this connector uses Kafka for data delivery
+// Query methods return errors as this is a write-only connector for streaming
 func (kr *KafkaRedisConnector) GetBlocks(qf QueryFilter, fields ...string) (QueryResult[common.Block], error) {
-	return QueryResult[common.Block]{Data: []common.Block{}}, nil
+	return QueryResult[common.Block]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetTransactions(qf QueryFilter, fields ...string) (QueryResult[common.Transaction], error) {
-	return QueryResult[common.Transaction]{Data: []common.Transaction{}}, nil
+	return QueryResult[common.Transaction]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetLogs(qf QueryFilter, fields ...string) (QueryResult[common.Log], error) {
-	return QueryResult[common.Log]{Data: []common.Log{}}, nil
+	return QueryResult[common.Log]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetTraces(qf QueryFilter, fields ...string) (QueryResult[common.Trace], error) {
-	return QueryResult[common.Trace]{Data: []common.Trace{}}, nil
+	return QueryResult[common.Trace]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error) {
-	return QueryResult[interface{}]{Aggregates: []map[string]interface{}{}}, nil
+	return QueryResult[interface{}]{}, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 // Close closes the Redis connection

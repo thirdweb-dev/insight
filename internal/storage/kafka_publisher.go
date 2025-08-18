@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
-	"math"
 	"net"
 	"strings"
 	"sync"
@@ -25,10 +23,37 @@ type KafkaPublisher struct {
 	chainID string
 }
 
-type PublishableBlockMessage struct {
+type MessageType string
+
+type PublishableData interface {
+	GetType() MessageType
+}
+
+type PublishableMessagePayload struct {
+	Data      PublishableData `json:"data"`
+	Type      MessageType     `json:"type"`
+	Timestamp time.Time       `json:"timestamp"`
+}
+
+type PublishableMessageBlockData struct {
 	common.BlockData
 	Sign            int8      `json:"sign"`
 	InsertTimestamp time.Time `json:"insert_timestamp"`
+}
+
+type PublishableMessageRevert struct {
+	ChainId         uint64    `json:"chain_id"`
+	BlockNumber     uint64    `json:"block_number"`
+	Sign            int8      `json:"sign"`
+	InsertTimestamp time.Time `json:"insert_timestamp"`
+}
+
+func (b PublishableMessageBlockData) GetType() MessageType {
+	return "block_data"
+}
+
+func (b PublishableMessageRevert) GetType() MessageType {
+	return "revert"
 }
 
 // NewKafkaPublisher method for storage connector (public)
@@ -91,6 +116,12 @@ func (p *KafkaPublisher) PublishBlockData(blockData []common.BlockData) error {
 }
 
 func (p *KafkaPublisher) PublishReorg(oldData []common.BlockData, newData []common.BlockData) error {
+	newHead := uint64(newData[0].Block.Number.Uint64())
+	// Publish revert the revert to the new head - 1, so that the new updated block data can be re-processed
+	if err := p.publishBlockRevert(newData[0].ChainId, newHead-1); err != nil {
+		return fmt.Errorf("failed to revert: %v", err)
+	}
+
 	if err := p.publishBlockData(oldData, true); err != nil {
 		return fmt.Errorf("failed to publish old block data: %v", err)
 	}
@@ -149,6 +180,27 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 	return nil
 }
 
+func (p *KafkaPublisher) publishBlockRevert(chainId uint64, blockNumber uint64) error {
+	publishStart := time.Now()
+
+	// Prepare messages for blocks, events, transactions and traces
+	blockMessages := make([]*kgo.Record, 1)
+
+	// Block message
+	if blockMsg, err := p.createBlockRevertMessage(chainId, blockNumber); err == nil {
+		blockMessages[0] = blockMsg
+	} else {
+		return fmt.Errorf("failed to create block revert message: %v", err)
+	}
+
+	if err := p.publishMessages(context.Background(), blockMessages); err != nil {
+		return fmt.Errorf("failed to publish block revert messages: %v", err)
+	}
+
+	log.Debug().Str("metric", "publish_duration").Msgf("Publisher.PublishBlockData duration: %f", time.Since(publishStart).Seconds())
+	return nil
+}
+
 func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isDeleted bool) error {
 	if len(blockData) == 0 {
 		return nil
@@ -176,47 +228,71 @@ func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isDelete
 	return nil
 }
 
-func (p *KafkaPublisher) createBlockDataMessage(data common.BlockData, isDeleted bool) (*kgo.Record, error) {
-	insertTimestamp := time.Now()
-	msg := PublishableBlockMessage{
-		BlockData:       data.Serialize(),
+func (p *KafkaPublisher) createBlockDataMessage(block common.BlockData, isDeleted bool) (*kgo.Record, error) {
+	timestamp := time.Now()
+
+	data := PublishableMessageBlockData{
+		BlockData:       block,
 		Sign:            1,
-		InsertTimestamp: insertTimestamp,
+		InsertTimestamp: timestamp,
 	}
 	if isDeleted {
-		msg.Sign = -1 // Indicate deletion with a negative sign
+		data.Sign = -1
 	}
+
+	msg := PublishableMessagePayload{
+		Data:      data,
+		Type:      data.GetType(),
+		Timestamp: timestamp,
+	}
+
 	msgJson, err := json.Marshal(msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
 
-	// Determine partition based on chainID
-	var partition int32
-	if data.ChainId <= math.MaxInt32 {
-		// Direct assignment for chain IDs that fit in int32
-		partition = int32(data.ChainId)
-	} else {
-		// Hash for larger chain IDs to avoid overflow
-		h := fnv.New32a()
-		fmt.Fprintf(h, "%d", data.ChainId)
-		partition = int32(h.Sum32() & 0x7FFFFFFF) // Ensure positive
+	return p.createRecord(data.GetType(), block.ChainId, block.Block.Number.Uint64(), timestamp, msgJson)
+}
+
+func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber uint64) (*kgo.Record, error) {
+	timestamp := time.Now()
+
+	data := PublishableMessageRevert{
+		ChainId:         chainId,
+		BlockNumber:     blockNumber,
+		Sign:            1,
+		InsertTimestamp: timestamp,
 	}
 
+	msg := PublishableMessagePayload{
+		Data:      data,
+		Type:      data.GetType(),
+		Timestamp: timestamp,
+	}
+
+	msgJson, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal block data: %v", err)
+	}
+
+	return p.createRecord(data.GetType(), chainId, blockNumber, timestamp, msgJson)
+}
+
+func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, msgJson []byte) (*kgo.Record, error) {
 	// Create headers with metadata
 	headers := []kgo.RecordHeader{
-		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", data.ChainId))},
-		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", data.Block.Number))},
-		{Key: "sign", Value: []byte(fmt.Sprintf("%d", msg.Sign))},
-		{Key: "insert_timestamp", Value: []byte(insertTimestamp.Format(time.RFC3339Nano))},
+		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", chainId))},
+		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", blockNumber))},
+		{Key: "type", Value: []byte(fmt.Sprintf("%s", msgType))},
+		{Key: "timestamp", Value: []byte(timestamp.Format(time.RFC3339Nano))},
 		{Key: "schema_version", Value: []byte("1")},
 	}
 
 	return &kgo.Record{
-		Topic:     "insight.commit.blocks",
-		Key:       []byte(fmt.Sprintf("blockdata-%d-%d-%s-%d", data.ChainId, data.Block.Number, data.Block.Hash, msg.Sign)),
+		Topic:     fmt.Sprintf("insight.commit.blocks.%d", chainId),
+		Key:       []byte(fmt.Sprintf("%d:%s:%d", chainId, msgType, blockNumber)),
 		Value:     msgJson,
 		Headers:   headers,
-		Partition: partition,
+		Partition: 0,
 	}, nil
 }
