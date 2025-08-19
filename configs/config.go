@@ -86,6 +86,7 @@ type ClickhouseConfig struct {
 	ChainBasedConfig             map[string]TableOverrideConfig `mapstructure:"chainBasedConfig"`
 	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
 	MaxQueryTime                 int                            `mapstructure:"maxQueryTime"`
+	MaxMemoryUsage               int                            `mapstructure:"maxMemoryUsage"`
 }
 
 type PostgresConfig struct {

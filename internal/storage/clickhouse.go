@@ -670,8 +670,17 @@ func (c *ClickHouseConnector) addPostQueryClauses(query string, qf QueryFilter) 
 	}
 
 	// Add settings at the very end
+	// Build settings string for ClickHouse query optimization
+	var settings []string
 	if c.cfg.MaxQueryTime > 0 {
-		query += fmt.Sprintf(" SETTINGS max_execution_time = %d", c.cfg.MaxQueryTime)
+		settings = append(settings, fmt.Sprintf("max_execution_time = %d", c.cfg.MaxQueryTime))
+	}
+	if c.cfg.MaxMemoryUsage > 0 {
+		settings = append(settings, fmt.Sprintf("max_memory_usage = %d", c.cfg.MaxMemoryUsage))
+	}
+
+	if len(settings) > 0 {
+		query += " SETTINGS " + strings.Join(settings, ", ")
 	}
 
 	return query
