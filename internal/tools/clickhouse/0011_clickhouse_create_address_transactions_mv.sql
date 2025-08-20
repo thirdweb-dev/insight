@@ -34,9 +34,9 @@ SELECT
     blob_gas_price,
     logs_bloom,
     status,
-
-    sign,
-    insert_timestamp
+    
+    insert_timestamp,
+    is_deleted
 FROM transactions
 ARRAY JOIN 
     arrayZip([from_address, to_address], ['from', 'to']) AS address_tuple;

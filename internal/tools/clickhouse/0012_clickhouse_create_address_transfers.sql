@@ -13,12 +13,12 @@ CREATE TABLE IF NOT EXISTS address_transfers (
     `log_index` UInt64,
     `batch_index` Nullable(UInt16) DEFAULT NULL,
 
-    `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
+    `is_deleted` Int8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_address_type address_type TYPE bloom_filter GRANULARITY 3
-) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, address, block_number, transaction_hash, transaction_index)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

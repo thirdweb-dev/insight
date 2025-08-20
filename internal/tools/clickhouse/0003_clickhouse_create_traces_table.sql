@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS traces (
     `reward_type` LowCardinality(Nullable(String)),
     `refund_address` Nullable(FixedString(42)),
 
-    `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
+    `is_deleted` Int8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 2,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS traces (
           trace_address
     )
 
-) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, transaction_hash, trace_address)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

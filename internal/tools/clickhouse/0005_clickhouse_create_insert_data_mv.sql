@@ -65,7 +65,7 @@ SELECT
     t.30 AS logs_bloom,
     t.31 AS status,
     insert_timestamp,
-    sign
+    is_deleted
 FROM insert_null_block_data
 ARRAY JOIN transactions AS t;
 
@@ -87,7 +87,7 @@ SELECT
     l.11 AS topic_2,
     l.12 AS topic_3,
     insert_timestamp,
-    sign
+    is_deleted
 FROM insert_null_block_data
 ARRAY JOIN logs AS l;
 
@@ -117,6 +117,6 @@ SELECT
     tr.19 AS reward_type,
     tr.20 AS refund_address,
     insert_timestamp,
-    sign
+    is_deleted
 FROM insert_null_block_data
 ARRAY JOIN traces AS tr;

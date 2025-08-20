@@ -15,8 +15,8 @@ SELECT
     amount,
     log_index,
     batch_index,
-    sign,
-    insert_timestamp
+    insert_timestamp,
+    is_deleted
 FROM token_transfers
 ARRAY JOIN 
     arrayZip([from_address, to_address], ['from', 'to']) AS address_tuple;

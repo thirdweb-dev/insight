@@ -94,6 +94,6 @@ CREATE TABLE IF NOT EXISTS insert_null_block_data (
         refund_address Nullable(FixedString(42))
     )),
 
-    sign Int8 DEFAULT 1,
-    insert_timestamp DateTime DEFAULT now()
+    insert_timestamp DateTime DEFAULT now(),
+    is_deleted Int8 DEFAULT 0
 ) ENGINE = Null;

@@ -32,8 +32,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     `logs_bloom` Nullable(String),
     `status` Nullable(UInt64),
 
-    `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
+    `is_deleted` Int8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 3,
@@ -45,14 +45,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     PROJECTION from_address_projection
     (
         SELECT
-          chain_id,
-          block_number,
-          block_timestamp,
-          hash,
-          from_address,
-          to_address,
-          value,
-          data
+          *
         ORDER BY 
           chain_id,
           from_address,
@@ -62,21 +55,42 @@ CREATE TABLE IF NOT EXISTS transactions (
     PROJECTION to_address_projection
     (
         SELECT
-          chain_id,
-          block_number,
-          block_timestamp,
-          hash,
-          from_address,
-          to_address,
-          value,
-          data
+          *
         ORDER BY
           chain_id,
           to_address,
           block_number,
           hash
+    ),
+    PROJECTION from_address_state_projection
+    (
+        SELECT
+          chain_id,
+          from_address,
+          countState() AS tx_count_state,
+          minState(block_number) AS min_block_number_state,
+          minState(block_timestamp) AS min_block_timestamp_state,
+          maxState(block_number) AS max_block_number_state,
+          maxState(block_timestamp) AS max_block_timestamp_state
+        GROUP BY
+          chain_id,
+          from_address
+    ),
+    PROJECTION to_address_state_projection
+    (
+        SELECT
+          chain_id,
+          to_address,
+          countState() AS tx_count_state,
+          minState(block_number) AS min_block_number_state,
+          minState(block_timestamp) AS min_block_timestamp_state,
+          maxState(block_number) AS max_block_number_state,
+          maxState(block_timestamp) AS max_block_timestamp_state
+        GROUP BY
+          chain_id,
+          to_address
     )
-) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number, hash)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

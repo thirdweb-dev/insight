@@ -37,14 +37,14 @@ type PublishableMessagePayload struct {
 
 type PublishableMessageBlockData struct {
 	common.BlockData
-	Sign            int8      `json:"sign"`
+	IsDeleted       int8      `json:"is_deleted"`
 	InsertTimestamp time.Time `json:"insert_timestamp"`
 }
 
 type PublishableMessageRevert struct {
 	ChainId         uint64    `json:"chain_id"`
 	BlockNumber     uint64    `json:"block_number"`
-	Sign            int8      `json:"sign"`
+	IsDeleted       int8      `json:"is_deleted"`
 	InsertTimestamp time.Time `json:"insert_timestamp"`
 }
 
@@ -233,11 +233,11 @@ func (p *KafkaPublisher) createBlockDataMessage(block common.BlockData, isDelete
 
 	data := PublishableMessageBlockData{
 		BlockData:       block,
-		Sign:            1,
+		IsDeleted:       0,
 		InsertTimestamp: timestamp,
 	}
 	if isDeleted {
-		data.Sign = -1
+		data.IsDeleted = 1
 	}
 
 	msg := PublishableMessagePayload{
@@ -260,7 +260,7 @@ func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber ui
 	data := PublishableMessageRevert{
 		ChainId:         chainId,
 		BlockNumber:     blockNumber,
-		Sign:            1,
+		IsDeleted:       0,
 		InsertTimestamp: timestamp,
 	}
 

@@ -23,11 +23,11 @@ CREATE TABLE IF NOT EXISTS blocks (
     `base_fee_per_gas` Nullable(UInt64),
 
     `insert_timestamp` DateTime DEFAULT now(),
-    `sign` Int8 DEFAULT 1,
+    `is_deleted` Int8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_hash hash TYPE bloom_filter GRANULARITY 2,
-) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';

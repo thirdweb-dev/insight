@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS logs (
     `topic_2` String,
     `topic_3` String,
 
-    `sign` Int8 DEFAULT 1,
     `insert_timestamp` DateTime DEFAULT now(),
+    `is_deleted` Int8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 3,
@@ -48,8 +48,24 @@ CREATE TABLE IF NOT EXISTS logs (
             transaction_index,
             log_index,
             address
+    ),
+    PROJECTION address_topic0_state_projection
+    (
+        SELECT
+            chain_id,
+            address,
+            topic_0,
+            countState() AS log_count_state,
+            minState(block_number) AS min_block_number_state,
+            minState(block_timestamp) AS min_block_timestamp_state,
+            maxState(block_number) AS max_block_number_state,
+            maxState(block_timestamp) AS max_block_timestamp_state
+        GROUP BY
+            chain_id,
+            address,
+            topic_0
     )
-) ENGINE = VersionedCollapsingMergeTree(sign, insert_timestamp)
+) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number, transaction_hash, log_index)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';
