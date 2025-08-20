@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS token_transfers
     `batch_index` Nullable(UInt16) DEFAULT NULL,
 
     `insert_timestamp` DateTime DEFAULT now(),
-    `is_deleted` Int8 DEFAULT 0,
+    `is_deleted` UInt8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 3,
@@ -52,6 +52,60 @@ CREATE TABLE IF NOT EXISTS token_transfers
             block_number,
             transaction_index,
             log_index
+    ),
+    PROJECTION from_address_state_projection (
+        SELECT
+            chain_id,
+            from_address,
+            token_address,
+            token_type,
+            countState() AS transfer_count_state,
+            sumState(toInt256(amount)) AS total_amount_state,
+            minState(block_number) AS min_block_number_state,
+            minState(block_timestamp) AS min_block_timestamp_state,
+            maxState(block_number) AS max_block_number_state,
+            maxState(block_timestamp) AS max_block_timestamp_state
+        GROUP BY
+            chain_id,
+            from_address,
+            token_address,
+            token_type
+    ),
+    PROJECTION to_address_state_projection (
+        SELECT
+            chain_id,
+            to_address,
+            token_address,
+            token_type,
+            countState() AS transfer_count_state,
+            sumState(toInt256(amount)) AS total_amount_state,
+            minState(block_number) AS min_block_number_state,
+            minState(block_timestamp) AS min_block_timestamp_state,
+            maxState(block_number) AS max_block_number_state,
+            maxState(block_timestamp) AS max_block_timestamp_state
+        GROUP BY
+            chain_id,
+            to_address,
+            token_address,
+            token_type
+    ),
+    PROJECTION token_state_projection (
+        SELECT
+            chain_id,
+            token_address,
+            token_id,
+            token_type,
+            countState() AS transfer_count_state,
+            sumState(toInt256(amount)) AS total_volume_state,
+            minState(block_number) AS min_block_number_state,
+            minState(block_timestamp) AS min_block_timestamp_state,
+            maxState(block_number) AS max_block_number_state,
+            maxState(block_timestamp) AS max_block_timestamp_state
+        GROUP BY
+            chain_id,
+            token_address,
+            token_id,
+            token_type
     )
 )
 ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)

@@ -25,7 +25,7 @@ SELECT
     block.20 AS withdrawals_root,
     block.21 AS base_fee_per_gas,
     insert_timestamp,
-    sign
+    is_deleted
 FROM insert_null_block_data;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS insert_transactions_mv

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS traces (
     `refund_address` Nullable(FixedString(42)),
 
     `insert_timestamp` DateTime DEFAULT now(),
-    `is_deleted` Int8 DEFAULT 0,
+    `is_deleted` UInt8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_block_hash block_hash TYPE bloom_filter GRANULARITY 2,

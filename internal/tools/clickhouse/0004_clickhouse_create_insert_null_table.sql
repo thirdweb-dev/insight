@@ -95,5 +95,5 @@ CREATE TABLE IF NOT EXISTS insert_null_block_data (
     )),
 
     insert_timestamp DateTime DEFAULT now(),
-    is_deleted Int8 DEFAULT 0
+    is_deleted UInt8 DEFAULT 0
 ) ENGINE = Null;

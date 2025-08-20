@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS address_transactions (
     `status` Nullable(UInt64),
 
     `insert_timestamp` DateTime DEFAULT now(),
-    `is_deleted` Int8 DEFAULT 0,
+    `is_deleted` UInt8 DEFAULT 0,
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_address_type address_type TYPE bloom_filter GRANULARITY 3,
