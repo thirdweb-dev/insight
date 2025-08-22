@@ -60,9 +60,37 @@ const (
 )
 
 type StorageConnectionConfig struct {
+	Type       string            `mapstructure:"type"` // "auto", "clickhouse", "postgres", "kafka", "badger", "s3"
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 	Kafka      *KafkaConfig      `mapstructure:"kafka"`
+	Badger     *BadgerConfig     `mapstructure:"badger"`
+	S3         *S3Config         `mapstructure:"s3"`
+}
+
+type BadgerConfig struct {
+	Path string `mapstructure:"path"`
+}
+
+type S3Config struct {
+	Bucket          string         `mapstructure:"bucket"`
+	Region          string         `mapstructure:"region"`
+	Prefix          string         `mapstructure:"prefix"`
+	AccessKeyID     string         `mapstructure:"accessKeyId"`
+	SecretAccessKey string         `mapstructure:"secretAccessKey"`
+	Endpoint        string         `mapstructure:"endpoint"`
+	Format          string         `mapstructure:"format"`
+	Parquet         *ParquetConfig `mapstructure:"parquet"`
+	// Buffering configuration
+	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush (default 1024 MB = 1GB)
+	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush (default 300 = 5 min)
+	MaxBlocksPerFile int   `mapstructure:"maxBlocksPerFile"`     // Max blocks per parquet file (0 = no limit, only size/timeout triggers)
+}
+
+type ParquetConfig struct {
+	Compression  string `mapstructure:"compression"`
+	RowGroupSize int64  `mapstructure:"rowGroupSize"`
+	PageSize     int64  `mapstructure:"pageSize"`
 }
 
 type TableConfig struct {
@@ -113,7 +141,7 @@ type KafkaConfig struct {
 	Brokers   string       `mapstructure:"brokers"`
 	Username  string       `mapstructure:"username"`
 	Password  string       `mapstructure:"password"`
-	EnableTLS bool         `mapstructure:"enable_tls"`
+	EnableTLS bool         `mapstructure:"enableTLS"`
 	Redis     *RedisConfig `mapstructure:"redis"`
 }
 
@@ -193,7 +221,7 @@ type PublisherConfig struct {
 	Brokers      string                     `mapstructure:"brokers"`
 	Username     string                     `mapstructure:"username"`
 	Password     string                     `mapstructure:"password"`
-	EnableTLS    bool                       `mapstructure:"enable_tls"`
+	EnableTLS    bool                       `mapstructure:"enableTLS"`
 	Blocks       BlockPublisherConfig       `mapstructure:"blocks"`
 	Transactions TransactionPublisherConfig `mapstructure:"transactions"`
 	Traces       TracePublisherConfig       `mapstructure:"traces"`

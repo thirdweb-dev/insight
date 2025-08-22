@@ -72,12 +72,37 @@ type IStorage struct {
 	StagingStorage      IStagingStorage
 }
 
+// Close closes all storage connections
+func (s *IStorage) Close() error {
+	var errs []error
+
+	// Close each storage that implements Closer interface
+	if err := s.OrchestratorStorage.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to close orchestrator storage: %w", err))
+	}
+
+	if err := s.MainStorage.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to close main storage: %w", err))
+	}
+
+	if err := s.StagingStorage.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to close staging storage: %w", err))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors closing storage: %v", errs)
+	}
+
+	return nil
+}
+
 type IOrchestratorStorage interface {
 	GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error)
 	StoreBlockFailures(failures []common.BlockFailure) error
 	DeleteBlockFailures(failures []common.BlockFailure) error
 	GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error)
 	SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
+	Close() error
 }
 
 type IStagingStorage interface {
@@ -88,6 +113,7 @@ type IStagingStorage interface {
 	GetLastPublishedBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
 	DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error
+	Close() error
 }
 
 type IMainStorage interface {
@@ -99,16 +125,15 @@ type IMainStorage interface {
 	GetLogs(qf QueryFilter, fields ...string) (logs QueryResult[common.Log], err error)
 	GetTraces(qf QueryFilter, fields ...string) (traces QueryResult[common.Trace], err error)
 	GetAggregations(table string, qf QueryFilter) (QueryResult[interface{}], error)
+	GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error)
+	GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error)
+
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (maxBlockNumber *big.Int, err error)
 	/**
 	 * Get block headers ordered from latest to oldest.
 	 */
 	GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) (blockHeaders []common.BlockHeader, err error)
-
-	GetTokenBalances(qf BalancesQueryFilter, fields ...string) (QueryResult[common.TokenBalance], error)
-	GetTokenTransfers(qf TransfersQueryFilter, fields ...string) (QueryResult[common.TokenTransfer], error)
-
 	/**
 	 * Gets only the data required for validation.
 	 */
@@ -121,6 +146,8 @@ type IMainStorage interface {
 	 * Gets full block data with transactions, logs and traces.
 	 */
 	GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int) (blocks []common.BlockData, err error)
+
+	Close() error
 }
 
 func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
@@ -148,14 +175,59 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var conn interface{}
 	var err error
-	if cfg.Kafka != nil {
-		conn, err = NewKafkaRedisConnector(cfg.Kafka)
-	} else if cfg.Postgres != nil {
-		conn, err = NewPostgresConnector(cfg.Postgres)
-	} else if cfg.Clickhouse != nil {
-		conn, err = NewClickHouseConnector(cfg.Clickhouse)
+	
+	// Default to "auto" if Type is not specified
+	storageType := cfg.Type
+	if storageType == "" {
+		storageType = "auto"
+	}
+	
+	// Handle explicit type selection
+	if storageType != "auto" {
+		switch storageType {
+		case "kafka":
+			if cfg.Kafka == nil {
+				return *new(T), fmt.Errorf("kafka storage type specified but kafka config is nil")
+			}
+			conn, err = NewKafkaRedisConnector(cfg.Kafka)
+		case "postgres":
+			if cfg.Postgres == nil {
+				return *new(T), fmt.Errorf("postgres storage type specified but postgres config is nil")
+			}
+			conn, err = NewPostgresConnector(cfg.Postgres)
+		case "clickhouse":
+			if cfg.Clickhouse == nil {
+				return *new(T), fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
+			}
+			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		case "badger":
+			if cfg.Badger == nil {
+				return *new(T), fmt.Errorf("badger storage type specified but badger config is nil")
+			}
+			conn, err = NewBadgerConnector(cfg.Badger)
+		case "s3":
+			if cfg.S3 == nil {
+				return *new(T), fmt.Errorf("s3 storage type specified but s3 config is nil")
+			}
+			conn, err = NewS3Connector(cfg.S3)
+		default:
+			return *new(T), fmt.Errorf("unknown storage type: %s", storageType)
+		}
 	} else {
-		return *new(T), fmt.Errorf("no storage driver configured")
+		// Auto mode: use the first non-nil config (existing behavior)
+		if cfg.Kafka != nil {
+			conn, err = NewKafkaRedisConnector(cfg.Kafka)
+		} else if cfg.Postgres != nil {
+			conn, err = NewPostgresConnector(cfg.Postgres)
+		} else if cfg.Clickhouse != nil {
+			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		} else if cfg.Badger != nil {
+			conn, err = NewBadgerConnector(cfg.Badger)
+		} else if cfg.S3 != nil {
+			conn, err = NewS3Connector(cfg.S3)
+		} else {
+			return *new(T), fmt.Errorf("no storage driver configured")
+		}
 	}
 
 	if err != nil {

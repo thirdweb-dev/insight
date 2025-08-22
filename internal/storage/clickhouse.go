@@ -78,6 +78,14 @@ func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector,
 	}, nil
 }
 
+// Close closes the ClickHouse connection
+func (c *ClickHouseConnector) Close() error {
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
+}
+
 func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	port := cfg.Port
 	if port == 0 {

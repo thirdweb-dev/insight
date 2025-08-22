@@ -21,6 +21,8 @@ type Orchestrator struct {
 	committerEnabled        bool
 	reorgHandlerEnabled     bool
 	cancel                  context.CancelFunc
+	wg                      sync.WaitGroup
+	shutdownOnce            sync.Once
 }
 
 func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
@@ -43,8 +45,6 @@ func (o *Orchestrator) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	o.cancel = cancel
 
-	var wg sync.WaitGroup
-
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 
@@ -58,30 +58,32 @@ func (o *Orchestrator) Start() {
 	workModeMonitor := NewWorkModeMonitor(o.rpc, o.storage)
 
 	if o.pollerEnabled {
-		wg.Add(1)
+		o.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer o.wg.Done()
 			pollerWorkModeChan := make(chan WorkMode, 1)
 			workModeMonitor.RegisterChannel(pollerWorkModeChan)
 			defer workModeMonitor.UnregisterChannel(pollerWorkModeChan)
+
 			poller := NewPoller(o.rpc, o.storage, WithPollerWorkModeChan(pollerWorkModeChan))
 			poller.Start(ctx)
+			log.Info().Msg("Poller completed")
 		}()
 	}
 
 	if o.failureRecovererEnabled {
-		wg.Add(1)
+		o.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer o.wg.Done()
 			failureRecoverer := NewFailureRecoverer(o.rpc, o.storage)
 			failureRecoverer.Start(ctx)
 		}()
 	}
 
 	if o.committerEnabled {
-		wg.Add(1)
+		o.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer o.wg.Done()
 			committerWorkModeChan := make(chan WorkMode, 1)
 			workModeMonitor.RegisterChannel(committerWorkModeChan)
 			defer workModeMonitor.UnregisterChannel(committerWorkModeChan)
@@ -92,33 +94,35 @@ func (o *Orchestrator) Start() {
 	}
 
 	if o.reorgHandlerEnabled {
-		wg.Add(1)
+		o.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer o.wg.Done()
 			reorgHandler := NewReorgHandler(o.rpc, o.storage)
 			reorgHandler.Start(ctx)
 		}()
 	}
 
-	wg.Add(1)
+	o.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer o.wg.Done()
 		workModeMonitor.Start(ctx)
 	}()
 
 	// The chain tracker is always running
-	wg.Add(1)
+	o.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer o.wg.Done()
 		chainTracker := NewChainTracker(o.rpc)
 		chainTracker.Start(ctx)
 	}()
 
-	wg.Wait()
-}
+	o.wg.Wait()
 
-func (o *Orchestrator) Shutdown() {
-	if o.cancel != nil {
-		o.cancel()
+	// Waiting for all goroutines to complete
+
+	if err := o.storage.Close(); err != nil {
+		log.Error().Err(err).Msg("Error closing storage connections")
 	}
+
+	log.Info().Msg("Orchestrator shutdown complete")
 }
