@@ -26,6 +26,7 @@ type Committer struct {
 	blocksPerCommit    int
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
+	commitUntilBlock   *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock atomic.Uint64
 	lastPublishedBlock atomic.Uint64
@@ -60,12 +61,23 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
+	commitUntilBlock := config.Cfg.Committer.UntilBlock
+	if commitUntilBlock == 0 {
+		// default to match the poller.untilBlock
+		if config.Cfg.Poller.UntilBlock != 0 {
+			commitUntilBlock = config.Cfg.Poller.UntilBlock
+		} else {
+			commitUntilBlock = -1
+		}
+	}
+
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		commitFromBlock:   commitFromBlock,
+		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
 		workMode:          "",
@@ -204,6 +216,7 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 
 	c.runCommitLoop(ctx, interval)
+
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
 }
@@ -231,6 +244,11 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			if currentMode == "" {
 				log.Debug().Msg("Committer work mode not set, skipping commit")
 				continue
+			}
+			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() > c.commitUntilBlock.Uint64() {
+				// Completing the commit loop if we've committed more than commit until block
+				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
+				return
 			}
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
 			if err != nil {
