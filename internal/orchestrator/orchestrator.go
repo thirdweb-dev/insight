@@ -67,7 +67,10 @@ func (o *Orchestrator) Start() {
 
 			poller := NewPoller(o.rpc, o.storage, WithPollerWorkModeChan(pollerWorkModeChan))
 			poller.Start(ctx)
+
 			log.Info().Msg("Poller completed")
+			// If the poller is terminated, cancel the orchestrator
+			o.cancel()
 		}()
 	}
 
@@ -77,6 +80,8 @@ func (o *Orchestrator) Start() {
 			defer o.wg.Done()
 			failureRecoverer := NewFailureRecoverer(o.rpc, o.storage)
 			failureRecoverer.Start(ctx)
+
+			log.Info().Msg("Failure recoverer completed")
 		}()
 	}
 
@@ -90,6 +95,10 @@ func (o *Orchestrator) Start() {
 			validator := NewValidator(o.rpc, o.storage)
 			committer := NewCommitter(o.rpc, o.storage, WithCommitterWorkModeChan(committerWorkModeChan), WithValidator(validator))
 			committer.Start(ctx)
+
+			// If the committer is terminated, cancel the orchestrator
+			log.Info().Msg("Committer completed")
+			o.cancel()
 		}()
 	}
 
@@ -99,6 +108,8 @@ func (o *Orchestrator) Start() {
 			defer o.wg.Done()
 			reorgHandler := NewReorgHandler(o.rpc, o.storage)
 			reorgHandler.Start(ctx)
+
+			log.Info().Msg("Reorg handler completed")
 		}()
 	}
 
@@ -106,6 +117,8 @@ func (o *Orchestrator) Start() {
 	go func() {
 		defer o.wg.Done()
 		workModeMonitor.Start(ctx)
+
+		log.Info().Msg("Work mode monitor completed")
 	}()
 
 	// The chain tracker is always running
@@ -114,11 +127,12 @@ func (o *Orchestrator) Start() {
 		defer o.wg.Done()
 		chainTracker := NewChainTracker(o.rpc)
 		chainTracker.Start(ctx)
+
+		log.Info().Msg("Chain tracker completed")
 	}()
 
-	o.wg.Wait()
-
 	// Waiting for all goroutines to complete
+	o.wg.Wait()
 
 	if err := o.storage.Close(); err != nil {
 		log.Error().Err(err).Msg("Error closing storage connections")
