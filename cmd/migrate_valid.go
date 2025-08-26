@@ -67,7 +67,7 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 			default:
 			}
 
-			endBlock := new(big.Int).Add(currentBlock, big.NewInt(int64(migrator.migrationBatchSize-1)))
+			endBlock := new(big.Int).Add(currentBlock, big.NewInt(int64(migrator.batchSize-1)))
 			if endBlock.Cmp(rangeEndBlock) > 0 {
 				endBlock = rangeEndBlock
 			}
@@ -170,13 +170,12 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 }
 
 type Migrator struct {
-	rpcClient          rpc.IRPCClient
-	worker             *worker.Worker
-	source             storage.IStorage
-	destination        storage.IMainStorage
-	validator          *orchestrator.Validator
-	migrationBatchSize int
-	rpcBatchSize       int
+	rpcClient   rpc.IRPCClient
+	worker      *worker.Worker
+	source      storage.IStorage
+	destination storage.IMainStorage
+	validator   *orchestrator.Validator
+	batchSize   int
 }
 
 func NewMigrator() *Migrator {
@@ -212,12 +211,12 @@ func NewMigrator() *Migrator {
 	}
 
 	return &Migrator{
-		migrationBatchSize: batchSize,
-		rpcClient:          rpcClient,
-		source:             sourceConnector,
-		destination:        destinationConnector,
-		validator:          validator,
-		worker:             worker.NewWorker(rpcClient),
+		batchSize:   batchSize,
+		rpcClient:   rpcClient,
+		source:      sourceConnector,
+		destination: destinationConnector,
+		validator:   validator,
+		worker:      worker.NewWorker(rpcClient),
 	}
 }
 
