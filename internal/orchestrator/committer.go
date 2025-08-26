@@ -245,7 +245,7 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 				log.Debug().Msg("Committer work mode not set, skipping commit")
 				continue
 			}
-			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() > c.commitUntilBlock.Uint64() {
+			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitUntilBlock.Uint64() {
 				// Completing the commit loop if we've committed more than commit until block
 				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
 				return
@@ -399,9 +399,16 @@ func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, e
 
 func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBlockNumber *big.Int) (*big.Int, error) {
 	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+
+	// If a commit until block is set, then set a limit on the commit until block
+	if c.commitUntilBlock.Sign() > 0 && untilBlock.Cmp(c.commitUntilBlock) > 0 {
+		return new(big.Int).Set(c.commitUntilBlock), nil
+	}
+
 	c.workModeMutex.RLock()
 	currentMode := c.workMode
 	c.workModeMutex.RUnlock()
+
 	if currentMode == WorkModeBackfill {
 		return untilBlock, nil
 	} else {
