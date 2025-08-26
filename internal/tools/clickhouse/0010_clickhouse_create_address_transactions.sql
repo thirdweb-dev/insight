@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS address_transactions (
     `transaction_index` UInt64,
     `address` FixedString(42),
     `address_type` Enum8('from' = 1, 'to' = 2),
+    `from_address` FixedString(42),
+    `to_address` FixedString(42),
     `value` UInt256,
     `gas` UInt64,
     `gas_price` UInt256,
@@ -37,6 +39,8 @@ CREATE TABLE IF NOT EXISTS address_transactions (
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_address_type address_type TYPE bloom_filter GRANULARITY 3,
+    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 4,
     
     PROJECTION address_total_count_projection
     (

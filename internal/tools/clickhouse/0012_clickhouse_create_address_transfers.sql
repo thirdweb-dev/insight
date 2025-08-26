@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS address_transfers (
     `token_id` UInt256,
     `address` FixedString(42),
     `address_type` Enum8('from' = 1, 'to' = 2),
+    `from_address` FixedString(42),
+    `to_address` FixedString(42),
     `block_number` UInt256,
     `block_timestamp` DateTime CODEC(Delta(4), ZSTD(1)),
     `transaction_hash` FixedString(66),
@@ -18,7 +20,9 @@ CREATE TABLE IF NOT EXISTS address_transfers (
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_address_type address_type TYPE bloom_filter GRANULARITY 3,
-    
+    INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 4,
+
     PROJECTION address_state_projection (
         SELECT
             chain_id,

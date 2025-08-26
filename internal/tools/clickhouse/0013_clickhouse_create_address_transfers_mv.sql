@@ -8,6 +8,8 @@ SELECT
     token_id,
     address_tuple.1 AS address,
     address_tuple.2 AS address_type,
+    from_address,
+    to_address,
     block_number,
     block_timestamp,
     transaction_hash,

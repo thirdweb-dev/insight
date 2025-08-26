@@ -11,6 +11,8 @@ SELECT
     transaction_index,
     address_tuple.1 AS address,
     address_tuple.2 AS address_type,
+    from_address,
+    to_address,
     value,
     gas,
     gas_price,
