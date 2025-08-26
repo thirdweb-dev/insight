@@ -165,25 +165,144 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 	var storage IStorage
 	var err error
 
-	storage.OrchestratorStorage, err = NewConnector[IOrchestratorStorage](&cfg.Orchestrator)
+	storage.OrchestratorStorage, err = NewOrchestratorConnector(&cfg.Orchestrator)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create orchestrator storage: %w", err)
 	}
 
-	storage.MainStorage, err = NewConnector[IMainStorage](&cfg.Main)
-	if err != nil {
-		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
-	}
-
-	storage.StagingStorage, err = NewConnector[IStagingStorage](&cfg.Staging)
+	storage.StagingStorage, err = NewStagingConnector(&cfg.Staging)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create staging storage: %w", err)
+	}
+
+	storage.MainStorage, err = NewMainConnector(&cfg.Main)
+	if err != nil {
+		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
 	}
 
 	return storage, nil
 }
 
-func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
+func NewOrchestratorConnector(cfg *config.StorageOrchestratorConfig) (IOrchestratorStorage, error) {
+	var conn interface{}
+	var err error
+
+	// Default to "auto" if Type is not specified
+	storageType := cfg.Type
+	if storageType == "" {
+		storageType = "auto"
+	}
+
+	// Handle explicit type selection
+	if storageType != "auto" {
+		switch storageType {
+		case "redis":
+			if cfg.Redis == nil {
+				return nil, fmt.Errorf("redis storage type specified but redis config is nil")
+			}
+			conn, err = NewRedisConnector(cfg.Redis)
+		case "postgres":
+			if cfg.Postgres == nil {
+				return nil, fmt.Errorf("postgres storage type specified but postgres config is nil")
+			}
+			conn, err = NewPostgresConnector(cfg.Postgres)
+		case "clickhouse":
+			if cfg.Clickhouse == nil {
+				return nil, fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
+			}
+			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		case "badger":
+			if cfg.Badger == nil {
+				return nil, fmt.Errorf("badger storage type specified but badger config is nil")
+			}
+			conn, err = NewBadgerConnector(cfg.Badger)
+		default:
+			return nil, fmt.Errorf("unknown storage type: %s", storageType)
+		}
+	} else {
+		// Auto mode: use the first non-nil config (existing behavior)
+		if cfg.Redis != nil {
+			conn, err = NewRedisConnector(cfg.Redis)
+		} else if cfg.Postgres != nil {
+			conn, err = NewPostgresConnector(cfg.Postgres)
+		} else if cfg.Clickhouse != nil {
+			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		} else if cfg.Badger != nil {
+			conn, err = NewBadgerConnector(cfg.Badger)
+		} else {
+			return nil, fmt.Errorf("no storage driver configured")
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	typedConn, ok := conn.(IOrchestratorStorage)
+	if !ok {
+		return nil, fmt.Errorf("connector does not implement the required interface")
+	}
+
+	return typedConn, nil
+}
+
+func NewStagingConnector(cfg *config.StorageStagingConfig) (IStagingStorage, error) {
+	var conn interface{}
+	var err error
+
+	// Default to "auto" if Type is not specified
+	storageType := cfg.Type
+	if storageType == "" {
+		storageType = "auto"
+	}
+
+	// Handle explicit type selection
+	if storageType != "auto" {
+		switch storageType {
+		case "postgres":
+			if cfg.Postgres == nil {
+				return nil, fmt.Errorf("postgres storage type specified but postgres config is nil")
+			}
+			conn, err = NewPostgresConnector(cfg.Postgres)
+		case "clickhouse":
+			if cfg.Clickhouse == nil {
+				return nil, fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
+			}
+			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		case "badger":
+			if cfg.Badger == nil {
+				return nil, fmt.Errorf("badger storage type specified but badger config is nil")
+			}
+			conn, err = NewBadgerConnector(cfg.Badger)
+		default:
+			return nil, fmt.Errorf("unknown storage type: %s", storageType)
+		}
+	} else {
+		// Auto mode: use the first non-nil config (existing behavior)
+		if cfg.Postgres != nil {
+			conn, err = NewPostgresConnector(cfg.Postgres)
+		} else if cfg.Clickhouse != nil {
+			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		} else if cfg.Badger != nil {
+			conn, err = NewBadgerConnector(cfg.Badger)
+		} else {
+			return nil, fmt.Errorf("no storage driver configured")
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	typedConn, ok := conn.(IStagingStorage)
+	if !ok {
+		return nil, fmt.Errorf("connector does not implement the required interface")
+	}
+
+	return typedConn, nil
+}
+
+func NewMainConnector(cfg *config.StorageMainConfig) (IMainStorage, error) {
 	var conn interface{}
 	var err error
 
@@ -198,56 +317,56 @@ func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 		switch storageType {
 		case "kafka":
 			if cfg.Kafka == nil {
-				return *new(T), fmt.Errorf("kafka storage type specified but kafka config is nil")
+				return nil, fmt.Errorf("kafka storage type specified but kafka config is nil")
 			}
-			conn, err = NewKafkaRedisConnector(cfg.Kafka)
+			conn, err = NewKafkaConnector(cfg.Kafka)
+		case "s3":
+			if cfg.S3 == nil {
+				return nil, fmt.Errorf("s3 storage type specified but s3 config is nil")
+			}
+			conn, err = NewS3Connector(cfg.S3)
 		case "postgres":
 			if cfg.Postgres == nil {
-				return *new(T), fmt.Errorf("postgres storage type specified but postgres config is nil")
+				return nil, fmt.Errorf("postgres storage type specified but postgres config is nil")
 			}
 			conn, err = NewPostgresConnector(cfg.Postgres)
 		case "clickhouse":
 			if cfg.Clickhouse == nil {
-				return *new(T), fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
+				return nil, fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
 			}
 			conn, err = NewClickHouseConnector(cfg.Clickhouse)
 		case "badger":
 			if cfg.Badger == nil {
-				return *new(T), fmt.Errorf("badger storage type specified but badger config is nil")
+				return nil, fmt.Errorf("badger storage type specified but badger config is nil")
 			}
 			conn, err = NewBadgerConnector(cfg.Badger)
-		case "s3":
-			if cfg.S3 == nil {
-				return *new(T), fmt.Errorf("s3 storage type specified but s3 config is nil")
-			}
-			conn, err = NewS3Connector(cfg.S3)
 		default:
-			return *new(T), fmt.Errorf("unknown storage type: %s", storageType)
+			return nil, fmt.Errorf("unknown storage type: %s", storageType)
 		}
 	} else {
 		// Auto mode: use the first non-nil config (existing behavior)
 		if cfg.Kafka != nil {
-			conn, err = NewKafkaRedisConnector(cfg.Kafka)
+			conn, err = NewKafkaConnector(cfg.Kafka)
+		} else if cfg.S3 != nil {
+			conn, err = NewS3Connector(cfg.S3)
 		} else if cfg.Postgres != nil {
 			conn, err = NewPostgresConnector(cfg.Postgres)
 		} else if cfg.Clickhouse != nil {
 			conn, err = NewClickHouseConnector(cfg.Clickhouse)
 		} else if cfg.Badger != nil {
 			conn, err = NewBadgerConnector(cfg.Badger)
-		} else if cfg.S3 != nil {
-			conn, err = NewS3Connector(cfg.S3)
 		} else {
-			return *new(T), fmt.Errorf("no storage driver configured")
+			return nil, fmt.Errorf("no storage driver configured")
 		}
 	}
 
 	if err != nil {
-		return *new(T), err
+		return nil, err
 	}
 
-	typedConn, ok := conn.(T)
+	typedConn, ok := conn.(IMainStorage)
 	if !ok {
-		return *new(T), fmt.Errorf("connector does not implement the required interface")
+		return nil, fmt.Errorf("connector does not implement the required interface")
 	}
 
 	return typedConn, nil

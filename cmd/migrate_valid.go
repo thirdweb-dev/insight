@@ -67,7 +67,7 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 		wg.Add(1)
 		go func(id int, startBlock, endBlock *big.Int) {
 			defer wg.Done()
-			
+
 			// Only check boundaries per-worker if we have multiple workers
 			// For single worker, we already determined boundaries globally
 			var actualStart, actualEnd *big.Int
@@ -78,7 +78,7 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 					log.Info().Msgf("Worker %d: Range %s to %s already fully migrated", id, startBlock.String(), endBlock.String())
 					return
 				}
-				log.Info().Msgf("Worker %d starting: blocks %s to %s (adjusted from %s to %s)", 
+				log.Info().Msgf("Worker %d starting: blocks %s to %s (adjusted from %s to %s)",
 					id, actualStart.String(), actualEnd.String(), startBlock.String(), endBlock.String())
 			} else {
 				// Single worker: use the already-determined boundaries
@@ -314,7 +314,7 @@ func NewMigrator() *Migrator {
 
 	validator := orchestrator.NewValidator(rpcClient, sourceConnector)
 
-	destinationConnector, err := storage.NewConnector[storage.IMainStorage](&config.Cfg.Migrator.Destination)
+	destinationConnector, err := storage.NewMainConnector(&config.Cfg.Migrator.Destination)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize storage")
 	}
@@ -396,7 +396,7 @@ func (m *Migrator) DetermineMigrationBoundariesForRange(rangeStart, rangeEnd *bi
 
 	expectedCount := new(big.Int).Sub(rangeEnd, rangeStart)
 	expectedCount = expectedCount.Add(expectedCount, big.NewInt(1))
-	
+
 	// If all blocks are already migrated, return nil
 	if expectedCount.Cmp(blockCount) == 0 {
 		log.Debug().Msgf("Range %s to %s already fully migrated (%s blocks)", rangeStart.String(), rangeEnd.String(), blockCount.String())
@@ -414,7 +414,7 @@ func (m *Migrator) DetermineMigrationBoundariesForRange(rangeStart, rangeEnd *bi
 	if maxStoredBlock != nil && maxStoredBlock.Cmp(rangeStart) >= 0 {
 		// We have some blocks already, start from the next one
 		actualStart = new(big.Int).Add(maxStoredBlock, big.NewInt(1))
-		
+
 		// If the new start is beyond our range end, the range is fully migrated
 		if actualStart.Cmp(rangeEnd) > 0 {
 			log.Debug().Msgf("Range %s to %s already fully migrated (max block: %s)", rangeStart.String(), rangeEnd.String(), maxStoredBlock.String())
@@ -422,7 +422,7 @@ func (m *Migrator) DetermineMigrationBoundariesForRange(rangeStart, rangeEnd *bi
 		}
 	}
 
-	log.Debug().Msgf("Range %s-%s: found %s blocks, max stored: %v, will migrate from %s", 
+	log.Debug().Msgf("Range %s-%s: found %s blocks, max stored: %v, will migrate from %s",
 		rangeStart.String(), rangeEnd.String(), blockCount.String(), maxStoredBlock, actualStart.String())
 
 	return actualStart, rangeEnd

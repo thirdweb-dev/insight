@@ -48,13 +48,28 @@ type FailureRecovererConfig struct {
 }
 
 type StorageConfig struct {
-	Staging      StorageConnectionConfig `mapstructure:"staging"`
-	Main         StorageConnectionConfig `mapstructure:"main"`
-	Orchestrator StorageConnectionConfig `mapstructure:"orchestrator"`
+	Orchestrator StorageOrchestratorConfig `mapstructure:"orchestrator"`
+	Staging      StorageStagingConfig      `mapstructure:"staging"`
+	Main         StorageMainConfig         `mapstructure:"main"`
 }
 
-type StorageConnectionConfig struct {
-	Type       string            `mapstructure:"type"` // "auto", "clickhouse", "postgres", "kafka", "badger", "s3"
+type StorageOrchestratorConfig struct {
+	Type       string            `mapstructure:"type"`
+	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
+	Postgres   *PostgresConfig   `mapstructure:"postgres"`
+	Redis      *RedisConfig      `mapstructure:"redis"`
+	Badger     *BadgerConfig     `mapstructure:"badger"`
+}
+
+type StorageStagingConfig struct {
+	Type       string            `mapstructure:"type"`
+	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
+	Postgres   *PostgresConfig   `mapstructure:"postgres"`
+	Badger     *BadgerConfig     `mapstructure:"badger"`
+}
+
+type StorageMainConfig struct {
+	Type       string            `mapstructure:"type"`
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 	Kafka      *KafkaConfig      `mapstructure:"kafka"`
@@ -133,11 +148,10 @@ type RedisConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers   string       `mapstructure:"brokers"`
-	Username  string       `mapstructure:"username"`
-	Password  string       `mapstructure:"password"`
-	EnableTLS bool         `mapstructure:"enableTLS"`
-	Redis     *RedisConfig `mapstructure:"redis"`
+	Brokers   string `mapstructure:"brokers"`
+	Username  string `mapstructure:"username"`
+	Password  string `mapstructure:"password"`
+	EnableTLS bool   `mapstructure:"enableTLS"`
 }
 
 type RPCBatchRequestConfig struct {
@@ -233,10 +247,10 @@ type ValidationConfig struct {
 }
 
 type MigratorConfig struct {
-	Destination StorageConnectionConfig `mapstructure:"destination"`
-	StartBlock  uint                    `mapstructure:"startBlock"`
-	EndBlock    uint                    `mapstructure:"endBlock"`
-	BatchSize   uint                    `mapstructure:"batchSize"`
+	Destination StorageMainConfig `mapstructure:"destination"`
+	StartBlock  uint              `mapstructure:"startBlock"`
+	EndBlock    uint              `mapstructure:"endBlock"`
+	BatchSize   uint              `mapstructure:"batchSize"`
 }
 
 type Config struct {
