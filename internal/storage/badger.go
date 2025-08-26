@@ -91,8 +91,16 @@ func blockKey(chainId *big.Int, blockNumber *big.Int) []byte {
 	return []byte(fmt.Sprintf("blockdata:%s:%s", chainId.String(), blockNumber.String()))
 }
 
-func blockFailureKey(chainId *big.Int, blockNumber *big.Int, timestamp int64) []byte {
-	return []byte(fmt.Sprintf("blockfailure:%s:%s:%d", chainId.String(), blockNumber.String(), timestamp))
+func blockKeyRange(chainId *big.Int) []byte {
+	return []byte(fmt.Sprintf("blockdata:%s:", chainId.String()))
+}
+
+func blockFailureKey(chainId *big.Int, blockNumber *big.Int) []byte {
+	return []byte(fmt.Sprintf("blockfailure:%s:%s", chainId.String(), blockNumber.String()))
+}
+
+func blockFailureKeyRange(chainId *big.Int) []byte {
+	return []byte(fmt.Sprintf("blockfailure:%s:", chainId.String()))
 }
 
 func lastReorgKey(chainId *big.Int) []byte {
@@ -113,7 +121,7 @@ func (bc *BadgerConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailu
 	defer bc.mu.RUnlock()
 
 	var failures []common.BlockFailure
-	prefix := fmt.Sprintf("f:%d:", qf.ChainId.Uint64())
+	prefix := blockFailureKeyRange(qf.ChainId)
 
 	err := bc.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -160,7 +168,7 @@ func (bc *BadgerConnector) StoreBlockFailures(failures []common.BlockFailure) er
 
 	return bc.db.Update(func(txn *badger.Txn) error {
 		for _, failure := range failures {
-			key := blockFailureKey(failure.ChainId, failure.BlockNumber, time.Now().Unix())
+			key := blockFailureKey(failure.ChainId, failure.BlockNumber)
 
 			var buf bytes.Buffer
 			if err := gob.NewEncoder(&buf).Encode(failure); err != nil {
@@ -182,7 +190,7 @@ func (bc *BadgerConnector) DeleteBlockFailures(failures []common.BlockFailure) e
 	return bc.db.Update(func(txn *badger.Txn) error {
 		for _, failure := range failures {
 			// Delete all failure entries for this block
-			prefix := fmt.Sprintf("f:%d:%s:", failure.ChainId.Uint64(), failure.BlockNumber.String())
+			prefix := blockFailureKey(failure.ChainId, failure.BlockNumber)
 
 			opts := badger.DefaultIteratorOptions
 			opts.Prefix = []byte(prefix)
@@ -293,7 +301,7 @@ func (bc *BadgerConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, e
 	}
 
 	// Range query
-	prefix := fmt.Sprintf("b:%d:", qf.ChainId.Uint64())
+	prefix := blockKeyRange(qf.ChainId)
 
 	err := bc.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -366,7 +374,7 @@ func (bc *BadgerConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart
 	defer bc.mu.RUnlock()
 
 	var maxBlock *big.Int
-	prefix := fmt.Sprintf("b:%d:", chainId.Uint64())
+	prefix := blockKeyRange(chainId)
 
 	err := bc.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -481,7 +489,7 @@ func (bc *BadgerConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNum
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	prefix := fmt.Sprintf("b:%d:", chainId.Uint64())
+	prefix := blockKeyRange(chainId)
 
 	return bc.db.Update(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
