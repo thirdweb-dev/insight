@@ -107,6 +107,14 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 		},
 		MaxOpenConns: cfg.MaxOpenConns,
 		MaxIdleConns: cfg.MaxIdleConns,
+		Compression: func() *clickhouse.Compression {
+			c := &clickhouse.Compression{}
+			if cfg.EnableCompression {
+				zLog.Debug().Msg("ClickHouse LZ4 compression is enabled")
+				c.Method = clickhouse.CompressionLZ4
+			}
+			return c
+		}(),
 		Settings: func() clickhouse.Settings {
 			settings := clickhouse.Settings{
 				"do_not_merge_across_partitions_select_final": "1",
@@ -899,6 +907,19 @@ func (c *ClickHouseConnector) GetMaxBlockNumberInRange(chainId *big.Int, startBl
 		return nil, err
 	}
 	return maxBlockNumber, nil
+}
+
+func (c *ClickHouseConnector) GetBlockCount(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blockCount *big.Int, err error) {
+	tableName := c.getTableName(chainId, "blocks")
+	query := fmt.Sprintf("SELECT COUNT(DISTINCT block_number) FROM %s.%s WHERE chain_id = ? AND block_number >= ? AND block_number <= ?", c.cfg.Database, tableName)
+	err = c.conn.QueryRow(context.Background(), query, chainId, startBlock, endBlock).Scan(&blockCount)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+	return blockCount, nil
 }
 
 func (c *ClickHouseConnector) getMaxBlockNumberConsistent(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
@@ -1976,7 +1997,6 @@ func (c *ClickHouseConnector) GetValidationBlockData(chainId *big.Int, startBloc
 	for i, block := range blocksResult.blocks {
 		blockNum := block.Number.String()
 		blockData[i] = common.BlockData{
-			ChainId:      chainId.Uint64(),
 			Block:        block,
 			Logs:         logsResult.logMap[blockNum],
 			Transactions: txsResult.txMap[blockNum],
@@ -2156,7 +2176,6 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	for i, block := range blocksResult.blocks {
 		blockNum := block.Number.String()
 		blockData[i] = common.BlockData{
-			ChainId:      chainId.Uint64(),
 			Block:        block,
 			Logs:         logsResult.logMap[blockNum],
 			Transactions: txsResult.txMap[blockNum],

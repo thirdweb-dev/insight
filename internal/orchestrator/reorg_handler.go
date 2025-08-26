@@ -274,7 +274,6 @@ func (rh *ReorgHandler) handleReorg(ctx context.Context, reorgedBlockNumbers []*
 			return fmt.Errorf("cannot fix reorg: failed block %s: %w", result.BlockNumber.String(), result.Error)
 		}
 		data = append(data, common.BlockData{
-			ChainId:      rh.rpc.GetChainID().Uint64(),
 			Block:        result.Data.Block,
 			Logs:         result.Data.Logs,
 			Transactions: result.Data.Transactions,

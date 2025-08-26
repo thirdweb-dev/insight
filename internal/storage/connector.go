@@ -130,6 +130,8 @@ type IMainStorage interface {
 
 	GetMaxBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
 	GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (maxBlockNumber *big.Int, err error)
+	GetBlockCount(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blockCount *big.Int, err error)
+
 	/**
 	 * Get block headers ordered from latest to oldest.
 	 */
@@ -175,13 +177,13 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 func NewConnector[T any](cfg *config.StorageConnectionConfig) (T, error) {
 	var conn interface{}
 	var err error
-	
+
 	// Default to "auto" if Type is not specified
 	storageType := cfg.Type
 	if storageType == "" {
 		storageType = "auto"
 	}
-	
+
 	// Handle explicit type selection
 	if storageType != "auto" {
 		switch storageType {

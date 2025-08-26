@@ -4,7 +4,9 @@ import (
 	"context"
 	"math/big"
 	"os"
-	"strconv"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -13,6 +15,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 var (
@@ -27,12 +30,18 @@ var (
 )
 
 const (
-	TARGET_STORAGE_DATABASE = "temp"
-	DEFAULT_RPC_BATCH_SIZE  = 200
-	DEFAULT_BATCH_SIZE      = 1000
+	DEFAULT_RPC_BATCH_SIZE = 100
+	DEFAULT_BATCH_SIZE     = 2000
 )
 
 func RunValidationMigration(cmd *cobra.Command, args []string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
 	migrator := NewMigrator()
 	defer migrator.Close()
 
@@ -40,88 +49,159 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 
 	log.Info().Msgf("Migrating blocks from %s to %s (both ends inclusive)", rangeStartBlock.String(), rangeEndBlock.String())
 
-	// 2. Start going in loops
-	for currentBlock := rangeStartBlock; currentBlock.Cmp(rangeEndBlock) <= 0; {
-		endBlock := new(big.Int).Add(currentBlock, big.NewInt(int64(migrator.migrationBatchSize-1)))
-		if endBlock.Cmp(rangeEndBlock) > 0 {
-			endBlock = rangeEndBlock
-		}
+	// Run migration in a goroutine
+	done := make(chan struct{})
+	var migrationErr error
 
-		blockNumbers := generateBlockNumbersForRange(currentBlock, endBlock)
-		log.Info().Msgf("Processing blocks %s to %s", blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
+	go func() {
+		defer close(done)
 
-		validBlocksForRange := migrator.GetValidBlocksForRange(blockNumbers)
+		// 2. Start going in loops
+		for currentBlock := rangeStartBlock; currentBlock.Cmp(rangeEndBlock) <= 0; {
+			batchStartTime := time.Now()
 
-		blocksToInsertMap := make(map[string]common.BlockData)
-		for _, blockData := range validBlocksForRange {
-			blocksToInsertMap[blockData.Block.Number.String()] = blockData
-		}
-
-		// Loop over block numbers to find missing blocks
-		missingBlocks := make([]*big.Int, 0)
-		for _, blockNum := range blockNumbers {
-			if _, exists := blocksToInsertMap[blockNum.String()]; !exists {
-				missingBlocks = append(missingBlocks, blockNum)
+			// Check for cancellation
+			select {
+			case <-ctx.Done():
+				log.Info().Msgf("Migration interrupted at block %s", currentBlock.String())
+				return
+			default:
 			}
+
+			endBlock := new(big.Int).Add(currentBlock, big.NewInt(int64(migrator.migrationBatchSize-1)))
+			if endBlock.Cmp(rangeEndBlock) > 0 {
+				endBlock = rangeEndBlock
+			}
+
+			blockNumbers := generateBlockNumbersForRange(currentBlock, endBlock)
+			log.Info().Msgf("Processing blocks %s to %s", blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
+
+			// Fetch valid blocks from source
+			fetchStartTime := time.Now()
+			validBlocksForRange, err := migrator.GetValidBlocksForRange(blockNumbers)
+			fetchDuration := time.Since(fetchStartTime)
+			if err != nil {
+				// If we got an error fetching valid blocks, we'll continue
+				log.Error().Err(err).Msg("Failed to get valid blocks for range")
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			log.Debug().Dur("duration", fetchDuration).Int("blocks_fetched", len(validBlocksForRange)).Msg("Fetched valid blocks from source")
+
+			// Build map of fetched blocks
+			mapBuildStartTime := time.Now()
+			blocksToInsertMap := make(map[string]common.BlockData)
+			for _, blockData := range validBlocksForRange {
+				blocksToInsertMap[blockData.Block.Number.String()] = blockData
+			}
+
+			// Loop over block numbers to find missing blocks
+			missingBlocks := make([]*big.Int, 0)
+			for _, blockNum := range blockNumbers {
+				if _, exists := blocksToInsertMap[blockNum.String()]; !exists {
+					missingBlocks = append(missingBlocks, blockNum)
+				}
+			}
+			mapBuildDuration := time.Since(mapBuildStartTime)
+			log.Debug().Dur("duration", mapBuildDuration).Int("missing_blocks", len(missingBlocks)).Msg("Identified missing blocks")
+
+			// Fetch missing blocks from RPC
+			if len(missingBlocks) > 0 {
+				rpcFetchStartTime := time.Now()
+				validMissingBlocks := migrator.GetValidBlocksFromRPC(missingBlocks)
+				rpcFetchDuration := time.Since(rpcFetchStartTime)
+				log.Debug().Dur("duration", rpcFetchDuration).Int("blocks_fetched", len(validMissingBlocks)).Msg("Fetched missing blocks from RPC")
+
+				for _, blockData := range validMissingBlocks {
+					if blockData.Block.ChainId.Sign() == 0 {
+						log.Fatal().Msgf("Block %s has chain ID 0, %+v", blockData.Block.Number.String(), blockData.Block)
+					}
+					blocksToInsertMap[blockData.Block.Number.String()] = blockData
+				}
+			}
+
+			// Prepare blocks for insertion
+			prepStartTime := time.Now()
+			blocksToInsert := make([]common.BlockData, 0, len(blocksToInsertMap))
+			for _, blockData := range blocksToInsertMap {
+				blocksToInsert = append(blocksToInsert, blockData)
+			}
+			prepDuration := time.Since(prepStartTime)
+			log.Debug().Dur("duration", prepDuration).Int("blocks_to_insert", len(blocksToInsert)).Msg("Prepared blocks for insertion")
+
+			// Insert blocks to destination
+			insertStartTime := time.Now()
+			err = migrator.destination.InsertBlockData(blocksToInsert)
+			insertDuration := time.Since(insertStartTime)
+			if err != nil {
+				migrationErr = err
+				log.Error().Err(err).Dur("duration", insertDuration).Msg("Failed to insert blocks to target storage")
+				time.Sleep(3 * time.Second)
+				continue
+			}
+
+			batchDuration := time.Since(batchStartTime)
+			log.Info().
+				Dur("total_duration", batchDuration).
+				Dur("fetch_duration", fetchDuration).
+				Dur("insert_duration", insertDuration).
+				Int("blocks_processed", len(blocksToInsert)).
+				Msg("Batch processed successfully")
+
+			currentBlock = new(big.Int).Add(endBlock, big.NewInt(1))
 		}
 
-		validMissingBlocks := migrator.GetValidBlocksFromRPC(missingBlocks)
-		for _, blockData := range validMissingBlocks {
-			blocksToInsertMap[blockData.Block.Number.String()] = blockData
-		}
+		// 3. then finally copy partitions from target table to main tables
+		log.Info().Msg("Migration completed successfully")
+	}()
 
-		blocksToInsert := make([]common.BlockData, 0)
-		for _, blockData := range blocksToInsertMap {
-			blocksToInsert = append(blocksToInsert, blockData)
+	// Wait for either completion or interrupt signal
+	select {
+	case <-done:
+		if migrationErr != nil {
+			log.Fatal().Err(migrationErr).Msg("Migration failed")
 		}
-
-		err := migrator.targetConn.InsertBlockData(blocksToInsert)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to insert blocks to target storage")
-		}
-
-		currentBlock = new(big.Int).Add(endBlock, big.NewInt(1))
+		log.Info().Msg("Done")
+	case sig := <-sigChan:
+		log.Info().Msgf("Received signal: %s, initiating graceful shutdown...", sig)
+		cancel()
+		<-done
+		log.Info().Msg("Migration stopped gracefully")
 	}
-
-	// 3. then finally copy partitions from target table to main tables
-	log.Info().Msg("Done")
 }
 
 type Migrator struct {
 	rpcClient          rpc.IRPCClient
-	storage            storage.IStorage
+	worker             *worker.Worker
+	source             storage.IStorage
+	destination        storage.IMainStorage
 	validator          *orchestrator.Validator
-	targetConn         *storage.ClickHouseConnector
 	migrationBatchSize int
 	rpcBatchSize       int
 }
 
 func NewMigrator() *Migrator {
-	targetDBName := os.Getenv("TARGET_STORAGE_DATABASE")
-	if targetDBName == "" {
-		targetDBName = TARGET_STORAGE_DATABASE
-	}
 	batchSize := DEFAULT_BATCH_SIZE
-	batchSizeEnvInt, err := strconv.Atoi(os.Getenv("MIGRATION_BATCH_SIZE"))
-	if err == nil && batchSizeEnvInt > 0 {
-		batchSize = batchSizeEnvInt
+	if config.Cfg.Migrator.StorageBatchSize > 0 {
+		batchSize = int(config.Cfg.Migrator.StorageBatchSize)
 	}
 	rpcBatchSize := DEFAULT_RPC_BATCH_SIZE
-	rpcBatchSizeEnvInt, err := strconv.Atoi(os.Getenv("MIGRATION_RPC_BATCH_SIZE"))
-	if err == nil && rpcBatchSizeEnvInt > 0 {
-		rpcBatchSize = rpcBatchSizeEnvInt
+	if config.Cfg.Migrator.RpcBatchSize > 0 {
+		rpcBatchSize = int(config.Cfg.Migrator.RpcBatchSize)
 	}
+
 	rpcClient, err := rpc.Initialize()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize RPC")
 	}
-	s, err := storage.NewStorageConnector(&config.Cfg.Storage)
+
+	sourceConnector, err := storage.NewStorageConnector(&config.Cfg.Storage)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize storage")
 	}
 
 	// check if chain was indexed with block receipts. If it was, then the current RPC must support block receipts
-	validRpc, err := validateRPC(rpcClient, s)
+	validRpc, err := validateRPC(rpcClient, sourceConnector)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to validate RPC")
 	}
@@ -129,114 +209,112 @@ func NewMigrator() *Migrator {
 		log.Fatal().Msg("RPC does not support block receipts, but transactions were indexed with receipts")
 	}
 
-	validator := orchestrator.NewValidator(rpcClient, s)
+	validator := orchestrator.NewValidator(rpcClient, sourceConnector)
 
-	targetStorageConfig := *config.Cfg.Storage.Main.Clickhouse
-	targetStorageConfig.Database = targetDBName
-	targetConn, err := storage.NewClickHouseConnector(&targetStorageConfig)
+	destinationConnector, err := storage.NewConnector[storage.IMainStorage](&config.Cfg.Migrator.Destination)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize target storage")
+		log.Fatal().Err(err).Msg("Failed to initialize storage")
 	}
 
 	return &Migrator{
 		migrationBatchSize: batchSize,
 		rpcBatchSize:       rpcBatchSize,
 		rpcClient:          rpcClient,
-		storage:            s,
+		source:             sourceConnector,
+		destination:        destinationConnector,
 		validator:          validator,
-		targetConn:         targetConn,
+		worker:             worker.NewWorker(rpcClient),
 	}
 }
 
 func (m *Migrator) Close() {
 	m.rpcClient.Close()
+
+	if err := m.source.Close(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to close source storage")
+	}
+
+	if err := m.destination.Close(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to close destination storage")
+	}
 }
 
 func (m *Migrator) DetermineMigrationBoundaries() (*big.Int, *big.Int) {
 	// get latest block from main storage
-	latestBlockStored, err := m.storage.MainStorage.GetMaxBlockNumber(m.rpcClient.GetChainID())
+	latestBlockStored, err := m.source.MainStorage.GetMaxBlockNumber(m.rpcClient.GetChainID())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get latest block from main storage")
 	}
 	log.Info().Msgf("Latest block in main storage: %d", latestBlockStored)
 
 	endBlock := latestBlockStored
-	// set range end from env instead if configured
-	endBlockEnv := os.Getenv("END_BLOCK")
-	if endBlockEnv != "" {
-		configuredEndBlock, ok := new(big.Int).SetString(endBlockEnv, 10)
-		if !ok {
-			log.Fatal().Msgf("Failed to parse end block %s", endBlockEnv)
-		}
-		log.Info().Msgf("Configured end block: %s", configuredEndBlock.String())
-		// set configured end block only if it's greater than 0 and less than latest block in main storage
-		if configuredEndBlock.Sign() > 0 && configuredEndBlock.Cmp(latestBlockStored) < 0 {
-			endBlock = configuredEndBlock
-		}
+	endBlockEnv := big.NewInt(int64(config.Cfg.Migrator.EndBlock))
+	if endBlockEnv.Sign() > 0 && endBlockEnv.Cmp(latestBlockStored) < 0 {
+		endBlock = endBlockEnv
 	}
 
-	startBlock := big.NewInt(0) // default start block is 0
-	// if start block is configured, use it
-	startBlockEnv := os.Getenv("START_BLOCK")
-	if startBlockEnv != "" {
-		configuredStartBlock, ok := new(big.Int).SetString(startBlockEnv, 10)
-		if !ok {
-			log.Fatal().Msgf("Failed to parse start block %s", startBlockEnv)
-		}
-		log.Info().Msgf("Configured start block: %s", configuredStartBlock.String())
-		startBlock = configuredStartBlock
-	}
+	startBlock := big.NewInt(int64(config.Cfg.Migrator.StartBlock)) // default start block is 0
 
-	latestMigratedBlock, err := m.targetConn.GetMaxBlockNumberInRange(m.rpcClient.GetChainID(), startBlock, endBlock)
+	blockCount, err := m.destination.GetBlockCount(m.rpcClient.GetChainID(), startBlock, endBlock)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get latest block from target storage")
 	}
-	log.Info().Msgf("Latest block in target storage: %d", latestMigratedBlock)
+	log.Info().Msgf("Block count in the target storage for range %s to %s: count=%s", startBlock.String(), endBlock.String(), blockCount.String())
 
-	if latestMigratedBlock.Cmp(endBlock) >= 0 {
+	expectedCount := new(big.Int).Sub(endBlock, startBlock)
+	expectedCount = expectedCount.Add(expectedCount, big.NewInt(1))
+	if expectedCount.Cmp(blockCount) == 0 {
 		log.Fatal().Msgf("Full range is already migrated")
+		return nil, nil
 	}
 
-	// if configured start block is less than or equal to already migrated and migrated block is not 0, start from last migrated + 1
-	if startBlock.Cmp(latestMigratedBlock) <= 0 && latestMigratedBlock.Sign() > 0 {
-		startBlock = new(big.Int).Add(latestMigratedBlock, big.NewInt(1))
+	maxStoredBlock, err := m.destination.GetMaxBlockNumberInRange(m.rpcClient.GetChainID(), startBlock, endBlock)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get max block from destination storage")
+		return nil, nil
+	}
+
+	log.Info().Msgf("Block in the target storage for range %s to %s: count=%s, max=%s", startBlock.String(), endBlock.String(), blockCount.String(), maxStoredBlock.String())
+	if maxStoredBlock != nil && maxStoredBlock.Cmp(startBlock) >= 0 {
+		startBlock = new(big.Int).Add(maxStoredBlock, big.NewInt(1))
 	}
 
 	return startBlock, endBlock
 }
 
 func (m *Migrator) FetchBlocksFromRPC(blockNumbers []*big.Int) ([]common.BlockData, error) {
-	allBlockData := make([]common.BlockData, 0)
-	for i := 0; i < len(blockNumbers); i += m.rpcBatchSize {
-		end := i + m.rpcBatchSize
-		if end > len(blockNumbers) {
-			end = len(blockNumbers)
-		}
-		batch := blockNumbers[i:end]
-		blockData := m.rpcClient.GetFullBlocks(context.Background(), batch)
+	allBlockData := make([]common.BlockData, 0, len(blockNumbers))
 
-		for _, block := range blockData {
-			if block.Error != nil {
-				log.Warn().Err(block.Error).Msgf("Failed to fetch block %s from RPC", block.BlockNumber.String())
-				continue
-			}
-			allBlockData = append(allBlockData, block.Data)
+	blockData := m.worker.Run(context.Background(), blockNumbers)
+	for _, block := range blockData {
+		if block.Error != nil {
+			log.Warn().Err(block.Error).Msgf("Failed to fetch block %s from RPC", block.BlockNumber.String())
+			continue
 		}
+		allBlockData = append(allBlockData, block.Data)
 	}
 	return allBlockData, nil
 }
 
-func (m *Migrator) GetValidBlocksForRange(blockNumbers []*big.Int) []common.BlockData {
-	blockData, err := m.storage.MainStorage.GetFullBlockData(m.rpcClient.GetChainID(), blockNumbers)
+func (m *Migrator) GetValidBlocksForRange(blockNumbers []*big.Int) ([]common.BlockData, error) {
+	getFullBlockTime := time.Now()
+	blockData, err := m.source.MainStorage.GetFullBlockData(m.rpcClient.GetChainID(), blockNumbers)
+	getFullBlockDuration := time.Since(getFullBlockTime)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get full block data")
+		log.Error().Err(err).Msg("Failed to get full block data")
+		return nil, err
 	}
 
+	validateBlockTime := time.Now()
 	validBlocks, _, err := m.validator.ValidateBlocks(blockData)
+	validateBlockDuration := time.Since(validateBlockTime)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to validate blocks")
+		log.Error().Err(err).Msg("Failed to validate blocks")
+		return nil, err
 	}
-	return validBlocks
+
+	log.Debug().Dur("get_full_block", getFullBlockDuration).Dur("validate_block", validateBlockDuration).Int("count", len(blockNumbers)).Msg("Get valid blocks for range")
+	return validBlocks, nil
 }
 
 func (m *Migrator) GetValidBlocksFromRPC(blockNumbers []*big.Int) []common.BlockData {
@@ -282,7 +360,15 @@ func validateRPC(rpcClient rpc.IRPCClient, s storage.IStorage) (bool, error) {
 }
 
 func generateBlockNumbersForRange(startBlock, endBlock *big.Int) []*big.Int {
-	blockNumbers := make([]*big.Int, 0)
+	if startBlock.Cmp(endBlock) > 0 {
+		return []*big.Int{}
+	}
+
+	// Pre-calculate capacity to avoid slice growth
+	length := new(big.Int).Sub(endBlock, startBlock)
+	length.Add(length, big.NewInt(1))
+
+	blockNumbers := make([]*big.Int, 0, length.Int64())
 	for i := new(big.Int).Set(startBlock); i.Cmp(endBlock) <= 0; i.Add(i, big.NewInt(1)) {
 		blockNumbers = append(blockNumbers, new(big.Int).Set(i))
 	}

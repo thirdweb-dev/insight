@@ -237,7 +237,7 @@ func (bc *BadgerConnector) InsertStagingData(data []common.BlockData) error {
 
 	return bc.db.Update(func(txn *badger.Txn) error {
 		for _, blockData := range data {
-			key := blockKey(big.NewInt(int64(blockData.ChainId)), blockData.Block.Number)
+			key := blockKey(blockData.Block.ChainId, blockData.Block.Number)
 
 			var buf bytes.Buffer
 			if err := gob.NewEncoder(&buf).Encode(blockData); err != nil {
@@ -348,7 +348,7 @@ func (bc *BadgerConnector) DeleteStagingData(data []common.BlockData) error {
 
 	return bc.db.Update(func(txn *badger.Txn) error {
 		for _, blockData := range data {
-			key := blockKey(big.NewInt(int64(blockData.ChainId)), blockData.Block.Number)
+			key := blockKey(blockData.Block.ChainId, blockData.Block.Number)
 			if err := txn.Delete(key); err != nil && err != badger.ErrKeyNotFound {
 				return err
 			}

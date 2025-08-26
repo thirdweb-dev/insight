@@ -59,7 +59,6 @@ type BlockModel struct {
 }
 
 type BlockData struct {
-	ChainId      uint64        `json:"chain_id"`
 	Block        Block         `json:"block"`
 	Transactions []Transaction `json:"transactions"`
 	Logs         []Log         `json:"logs"`
@@ -103,7 +102,6 @@ func (b *Block) Serialize() BlockModel {
 
 func (b *BlockData) Serialize() BlockData {
 	data := BlockData{
-		ChainId:      b.ChainId,
 		Block:        b.Block,
 		Transactions: b.Transactions,
 		Logs:         b.Logs,

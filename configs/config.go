@@ -52,13 +52,6 @@ type StorageConfig struct {
 	Main         StorageConnectionConfig `mapstructure:"main"`
 	Orchestrator StorageConnectionConfig `mapstructure:"orchestrator"`
 }
-type StorageType string
-
-const (
-	StorageTypeMain         StorageType = "main"
-	StorageTypeStaging      StorageType = "staging"
-	StorageTypeOrchestrator StorageType = "orchestrator"
-)
 
 type StorageConnectionConfig struct {
 	Type       string            `mapstructure:"type"` // "auto", "clickhouse", "postgres", "kafka", "badger", "s3"
@@ -116,6 +109,7 @@ type ClickhouseConfig struct {
 	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
 	MaxQueryTime                 int                            `mapstructure:"maxQueryTime"`
 	MaxMemoryUsage               int                            `mapstructure:"maxMemoryUsage"`
+	EnableCompression            bool                           `mapstructure:"enableCompression"`
 }
 
 type PostgresConfig struct {
@@ -238,6 +232,14 @@ type ValidationConfig struct {
 	Mode string `mapstructure:"mode"` // "disabled", "minimal", "strict"
 }
 
+type MigratorConfig struct {
+	Destination      StorageConnectionConfig `mapstructure:"destination"`
+	StartBlock       uint                    `mapstructure:"startBlock"`
+	EndBlock         uint                    `mapstructure:"endBlock"`
+	StorageBatchSize uint                    `mapstructure:"storageBatchSize"`
+	RpcBatchSize     uint                    `mapstructure:"rpcBatchSize"`
+}
+
 type Config struct {
 	RPC              RPCConfig              `mapstructure:"rpc"`
 	Log              LogConfig              `mapstructure:"log"`
@@ -250,6 +252,7 @@ type Config struct {
 	Publisher        PublisherConfig        `mapstructure:"publisher"`
 	WorkMode         WorkModeConfig         `mapstructure:"workMode"`
 	Validation       ValidationConfig       `mapstructure:"validation"`
+	Migrator         MigratorConfig         `mapstructure:"migrator"`
 }
 
 var Cfg Config

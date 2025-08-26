@@ -110,7 +110,6 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 			})
 		} else {
 			successfulResults = append(successfulResults, common.BlockData{
-				ChainId:      fr.rpc.GetChainID().Uint64(),
 				Block:        result.Data.Block,
 				Logs:         result.Data.Logs,
 				Transactions: result.Data.Transactions,

@@ -212,26 +212,11 @@ func (kr *KafkaRedisConnector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, er
 }
 
 func (kr *KafkaRedisConnector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (*big.Int, error) {
-	// Get the last published block number
-	lastPublished, err := kr.GetLastPublishedBlockNumber(chainId)
-	if err != nil {
-		return nil, err
-	}
+	return nil, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
+}
 
-	// Check if it's within the range
-	if lastPublished.Cmp(startBlock) >= 0 && lastPublished.Cmp(endBlock) <= 0 {
-		return lastPublished, nil
-	}
-
-	// If outside range, return appropriate boundary
-	if lastPublished.Cmp(endBlock) > 0 {
-		return endBlock, nil
-	}
-	if lastPublished.Cmp(startBlock) < 0 {
-		return big.NewInt(0), nil
-	}
-
-	return lastPublished, nil
+func (kr *KafkaRedisConnector) GetBlockCount(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (*big.Int, error) {
+	return nil, fmt.Errorf("query operations are not supported with KafkaRedis connector - this is a write-only connector for streaming")
 }
 
 func (kr *KafkaRedisConnector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) ([]common.BlockHeader, error) {

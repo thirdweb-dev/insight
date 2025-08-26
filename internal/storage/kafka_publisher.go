@@ -18,9 +18,8 @@ import (
 )
 
 type KafkaPublisher struct {
-	client  *kgo.Client
-	mu      sync.RWMutex
-	chainID string
+	client *kgo.Client
+	mu     sync.RWMutex
 }
 
 type MessageType string
@@ -37,6 +36,7 @@ type PublishableMessagePayload struct {
 
 type PublishableMessageBlockData struct {
 	common.BlockData
+	ChainId         uint64    `json:"chain_id"`
 	IsDeleted       int8      `json:"is_deleted"`
 	InsertTimestamp time.Time `json:"insert_timestamp"`
 }
@@ -104,8 +104,7 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 	}
 
 	publisher := &KafkaPublisher{
-		client:  client,
-		chainID: chainID,
+		client: client,
 	}
 
 	return publisher, nil
@@ -116,9 +115,10 @@ func (p *KafkaPublisher) PublishBlockData(blockData []common.BlockData) error {
 }
 
 func (p *KafkaPublisher) PublishReorg(oldData []common.BlockData, newData []common.BlockData) error {
+	chainId := newData[0].Block.ChainId.Uint64()
 	newHead := uint64(newData[0].Block.Number.Uint64())
 	// Publish revert the revert to the new head - 1, so that the new updated block data can be re-processed
-	if err := p.publishBlockRevert(newData[0].ChainId, newHead-1); err != nil {
+	if err := p.publishBlockRevert(chainId, newHead-1); err != nil {
 		return fmt.Errorf("failed to revert: %v", err)
 	}
 
@@ -233,6 +233,7 @@ func (p *KafkaPublisher) createBlockDataMessage(block common.BlockData, isDelete
 
 	data := PublishableMessageBlockData{
 		BlockData:       block,
+		ChainId:         block.Block.ChainId.Uint64(),
 		IsDeleted:       0,
 		InsertTimestamp: timestamp,
 	}
@@ -251,7 +252,7 @@ func (p *KafkaPublisher) createBlockDataMessage(block common.BlockData, isDelete
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
 
-	return p.createRecord(data.GetType(), block.ChainId, block.Block.Number.Uint64(), timestamp, msgJson)
+	return p.createRecord(data.GetType(), data.ChainId, block.Block.Number.Uint64(), timestamp, msgJson)
 }
 
 func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber uint64) (*kgo.Record, error) {

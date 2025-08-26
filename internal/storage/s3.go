@@ -48,7 +48,7 @@ type DataFormatter interface {
 
 // ParquetBlockData represents the complete block data in Parquet format
 type ParquetBlockData struct {
-	ChainID        uint64 `parquet:"chain_id"`
+	ChainId        uint64 `parquet:"chain_id"`
 	BlockNumber    uint64 `parquet:"block_number"` // Numeric for efficient min/max queries
 	BlockHash      string `parquet:"block_hash"`
 	BlockTimestamp int64  `parquet:"block_timestamp"`
@@ -235,7 +235,8 @@ func (s *S3Connector) flushBuffer() error {
 	// Group blocks by chain to generate appropriate keys
 	chainGroups := make(map[uint64][]common.BlockData)
 	for _, block := range data {
-		chainGroups[block.ChainId] = append(chainGroups[block.ChainId], block)
+		chainId := block.Block.ChainId.Uint64()
+		chainGroups[chainId] = append(chainGroups[chainId], block)
 	}
 
 	for _, blocks := range chainGroups {
@@ -295,8 +296,8 @@ func (s *S3Connector) Flush() error {
 		select {
 		case <-s.flushDoneCh:
 			return nil
-		case <-time.After(30 * time.Second):
-			return fmt.Errorf("flush timeout after 30 seconds")
+		case <-time.After(60 * time.Second):
+			return fmt.Errorf("flush timeout after 60 seconds")
 		}
 	default:
 		// Flush channel is full, likely a flush is already in progress
@@ -304,8 +305,8 @@ func (s *S3Connector) Flush() error {
 		select {
 		case <-s.flushDoneCh:
 			return nil
-		case <-time.After(30 * time.Second):
-			return fmt.Errorf("flush timeout after 30 seconds")
+		case <-time.After(60 * time.Second):
+			return fmt.Errorf("flush timeout after 60 seconds")
 		}
 	}
 }
@@ -331,7 +332,7 @@ func (s *S3Connector) uploadBatch(data []common.BlockData) error {
 		return nil
 	}
 
-	chainID := data[0].ChainId
+	chainId := data[0].Block.ChainId.Uint64()
 	startBlock := data[0].Block.Number
 	endBlock := data[len(data)-1].Block.Number
 	// Use the first block's timestamp for year partitioning
@@ -344,7 +345,7 @@ func (s *S3Connector) uploadBatch(data []common.BlockData) error {
 	}
 
 	// Generate S3 key with chain_id/year partitioning based on block timestamp
-	key := s.generateS3Key(chainID, startBlock, endBlock, blockTimestamp)
+	key := s.generateS3Key(chainId, startBlock, endBlock, blockTimestamp)
 
 	// Upload to S3
 	ctx := context.Background()
@@ -354,7 +355,7 @@ func (s *S3Connector) uploadBatch(data []common.BlockData) error {
 		Body:        bytes.NewReader(formattedData),
 		ContentType: aws.String(s.formatter.GetContentType()),
 		Metadata: map[string]string{
-			"chain_id":    fmt.Sprintf("%d", chainID),
+			"chain_id":    fmt.Sprintf("%d", chainId),
 			"start_block": startBlock.String(),
 			"end_block":   endBlock.String(),
 			"block_count": fmt.Sprintf("%d", len(data)),
@@ -369,7 +370,7 @@ func (s *S3Connector) uploadBatch(data []common.BlockData) error {
 	}
 
 	log.Info().
-		Uint64("chain_id", chainID).
+		Uint64("chain_id", chainId).
 		Str("min_block", startBlock.String()).
 		Str("max_block", endBlock.String()).
 		Int("block_count", len(data)).
@@ -458,7 +459,7 @@ func (f *ParquetFormatter) FormatBlockData(data []common.BlockData) ([]byte, err
 		}
 
 		pd := ParquetBlockData{
-			ChainID:        d.ChainId,
+			ChainId:        d.Block.ChainId.Uint64(),
 			BlockNumber:    blockNum,
 			BlockHash:      d.Block.Hash,
 			BlockTimestamp: d.Block.Timestamp.Unix(),
@@ -571,7 +572,7 @@ func (s *S3Connector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) {
 	// First check the buffer for blocks from this chain
 	s.bufferMu.Lock()
 	for _, block := range s.buffer {
-		if block.ChainId == chainId.Uint64() && block.Block.Number.Cmp(maxBlock) > 0 {
+		if block.Block.ChainId.Cmp(chainId) == 0 && block.Block.Number.Cmp(maxBlock) > 0 {
 			maxBlock = new(big.Int).Set(block.Block.Number)
 		}
 	}
@@ -612,14 +613,18 @@ func (s *S3Connector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) {
 
 func (s *S3Connector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (*big.Int, error) {
 	maxBlock := big.NewInt(0)
+	foundAny := false
 
 	// First check the buffer for blocks in this range
 	s.bufferMu.Lock()
 	for _, block := range s.buffer {
-		if block.ChainId == chainId.Uint64() {
+		if block.Block.ChainId.Cmp(chainId) == 0 {
 			blockNum := block.Block.Number
-			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 && blockNum.Cmp(maxBlock) > 0 {
-				maxBlock = new(big.Int).Set(blockNum)
+			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
+				if !foundAny || blockNum.Cmp(maxBlock) > 0 {
+					maxBlock = new(big.Int).Set(blockNum)
+					foundAny = true
+				}
 			}
 		}
 	}
@@ -654,19 +659,121 @@ func (s *S3Connector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big
 
 			// Check if this file overlaps with our range
 			if fileEnd.Cmp(startBlock) >= 0 && fileStart.Cmp(endBlock) <= 0 {
-				// File overlaps with our range
-				effectiveEnd := new(big.Int).Set(fileEnd)
-				if effectiveEnd.Cmp(endBlock) > 0 {
-					effectiveEnd = endBlock
+				// The maximum block in this file that's within our range
+				maxInFile := new(big.Int).Set(fileEnd)
+				if maxInFile.Cmp(endBlock) > 0 {
+					maxInFile = endBlock
 				}
-				if effectiveEnd.Cmp(maxBlock) > 0 {
-					maxBlock = effectiveEnd
+
+				if !foundAny || maxInFile.Cmp(maxBlock) > 0 {
+					maxBlock = new(big.Int).Set(maxInFile)
+					foundAny = true
 				}
 			}
 		}
 	}
 
+	if !foundAny {
+		return big.NewInt(0), nil
+	}
+
 	return maxBlock, nil
+}
+
+func (s *S3Connector) GetBlockCount(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (*big.Int, error) {
+	minBlock := big.NewInt(0)
+	maxBlock := big.NewInt(0)
+	count := big.NewInt(0)
+	foundAny := false
+
+	// First check the buffer for blocks in this range
+	s.bufferMu.Lock()
+	for _, block := range s.buffer {
+		if block.Block.ChainId.Cmp(chainId) == 0 {
+			blockNum := block.Block.Number
+			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
+				count.Add(count, big.NewInt(1))
+
+				if !foundAny {
+					minBlock = new(big.Int).Set(blockNum)
+					maxBlock = new(big.Int).Set(blockNum)
+					foundAny = true
+				} else {
+					if blockNum.Cmp(minBlock) < 0 {
+						minBlock = new(big.Int).Set(blockNum)
+					}
+					if blockNum.Cmp(maxBlock) > 0 {
+						maxBlock = new(big.Int).Set(blockNum)
+					}
+				}
+			}
+		}
+	}
+	s.bufferMu.Unlock()
+
+	// Then check S3 files
+	prefix := fmt.Sprintf("chain_%d/", chainId.Uint64())
+	if s.config.Prefix != "" {
+		prefix = fmt.Sprintf("%s/%s", s.config.Prefix, prefix)
+	}
+
+	ctx := context.Background()
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.config.Bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		for _, obj := range page.Contents {
+			if obj.Key == nil {
+				continue
+			}
+			fileStart, fileEnd := s.extractBlockRangeFromKey(*obj.Key)
+			if fileStart == nil || fileEnd == nil {
+				continue
+			}
+
+			// Check if this file overlaps with our range
+			if fileEnd.Cmp(startBlock) >= 0 && fileStart.Cmp(endBlock) <= 0 {
+				// Calculate the effective range within our query bounds
+				effectiveStart := new(big.Int).Set(fileStart)
+				if effectiveStart.Cmp(startBlock) < 0 {
+					effectiveStart = startBlock
+				}
+				effectiveEnd := new(big.Int).Set(fileEnd)
+				if effectiveEnd.Cmp(endBlock) > 0 {
+					effectiveEnd = endBlock
+				}
+
+				// Update min/max blocks
+				if !foundAny {
+					minBlock = new(big.Int).Set(effectiveStart)
+					maxBlock = new(big.Int).Set(effectiveEnd)
+					foundAny = true
+				} else {
+					if effectiveStart.Cmp(minBlock) < 0 {
+						minBlock = new(big.Int).Set(effectiveStart)
+					}
+					if effectiveEnd.Cmp(maxBlock) > 0 {
+						maxBlock = new(big.Int).Set(effectiveEnd)
+					}
+				}
+
+				// Add the count of blocks in this file's overlapping range
+				// Note: This assumes contiguous blocks in the file
+				blocksInRange := new(big.Int).Sub(effectiveEnd, effectiveStart)
+				blocksInRange.Add(blocksInRange, big.NewInt(1)) // Add 1 because range is inclusive
+				count.Add(count, blocksInRange)
+			}
+		}
+	}
+
+	return count, nil
 }
 
 func (s *S3Connector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int, to *big.Int) ([]common.BlockHeader, error) {
@@ -675,7 +782,7 @@ func (s *S3Connector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int,
 	// First get headers from buffer
 	s.bufferMu.Lock()
 	for _, block := range s.buffer {
-		if block.ChainId == chainId.Uint64() {
+		if block.Block.ChainId.Cmp(chainId) == 0 {
 			// Check if block is in range (if from is specified)
 			if from != nil && block.Block.Number.Cmp(from) > 0 {
 				continue
@@ -738,7 +845,7 @@ func (s *S3Connector) GetValidationBlockData(chainId *big.Int, startBlock *big.I
 	// First check buffer for blocks in range
 	s.bufferMu.Lock()
 	for _, block := range s.buffer {
-		if block.ChainId == chainId.Uint64() {
+		if block.Block.ChainId.Cmp(chainId) == 0 {
 			blockNum := block.Block.Number
 			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
 				blockData = append(blockData, block)
@@ -777,7 +884,7 @@ func (s *S3Connector) FindMissingBlockNumbers(chainId *big.Int, startBlock *big.
 	// First add blocks from buffer
 	s.bufferMu.Lock()
 	for _, block := range s.buffer {
-		if block.ChainId == chainId.Uint64() {
+		if block.Block.ChainId.Cmp(chainId) == 0 {
 			blockNum := block.Block.Number
 			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
 				blockSet[blockNum.String()] = true
@@ -833,7 +940,7 @@ func (s *S3Connector) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int
 	// First check buffer for requested blocks
 	s.bufferMu.Lock()
 	for _, block := range s.buffer {
-		if block.ChainId == chainId.Uint64() {
+		if block.Block.ChainId.Cmp(chainId) == 0 {
 			if blockNumMap[block.Block.Number.String()] {
 				result = append(result, block)
 				// Remove from map so we don't fetch it from S3
@@ -1039,7 +1146,6 @@ func (s *S3Connector) downloadAndParseFile(key string, chainId *big.Int, startBl
 			}
 
 			blockData = append(blockData, common.BlockData{
-				ChainId:      pd.ChainID,
 				Block:        block,
 				Transactions: transactions,
 				Logs:         logs,
