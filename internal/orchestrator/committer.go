@@ -31,6 +31,7 @@ type Committer struct {
 	lastCommittedBlock atomic.Uint64
 	lastPublishedBlock atomic.Uint64
 	publisher          *publisher.Publisher
+	poller             *Poller
 	workMode           WorkMode
 	workModeMutex      sync.RWMutex
 	workModeChan       chan WorkMode
@@ -80,6 +81,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
+		poller:            NewBoundlessPoller(rpc, storage),
 		workMode:          "",
 	}
 	cfb := commitFromBlock.Uint64()
@@ -445,8 +447,7 @@ func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int)
 		}
 		return blocksData, nil
 	} else {
-		poller := NewBoundlessPoller(c.rpc, c.storage)
-		blocksData, err := poller.PollWithoutSaving(ctx, blockNumbers)
+		blocksData, err := c.poller.PollWithoutSaving(ctx, blockNumbers)
 		if err != nil {
 			return nil, fmt.Errorf("poller error: %v", err)
 		}
@@ -612,13 +613,11 @@ func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big
 		return nil
 	}
 
-	poller := NewBoundlessPoller(c.rpc, c.storage)
-
 	missingBlockCount := new(big.Int).Sub(actualFirstBlock.Number, expectedStartBlockNumber).Int64()
 	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
-	if missingBlockCount > poller.blocksPerPoll {
-		log.Debug().Msgf("Limiting polling missing blocks to %d blocks due to config", poller.blocksPerPoll)
-		missingBlockCount = poller.blocksPerPoll
+	if missingBlockCount > c.poller.blocksPerPoll {
+		log.Debug().Msgf("Limiting polling missing blocks to %d blocks due to config", c.poller.blocksPerPoll)
+		missingBlockCount = c.poller.blocksPerPoll
 	}
 	missingBlockNumbers := make([]*big.Int, missingBlockCount)
 	for i := int64(0); i < missingBlockCount; i++ {
@@ -627,7 +626,7 @@ func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big
 	}
 
 	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
-	poller.Poll(ctx, missingBlockNumbers)
+	c.poller.Poll(ctx, missingBlockNumbers)
 	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
 }
 
@@ -644,11 +643,10 @@ func (c *Committer) handleMissingStagingData(ctx context.Context, blocksToCommit
 	}
 	log.Debug().Msgf("Detected missing blocks in staging data starting from %s.", blocksToCommit[0].String())
 
-	poller := NewBoundlessPoller(c.rpc, c.storage)
 	blocksToPoll := blocksToCommit
-	if len(blocksToCommit) > int(poller.blocksPerPoll) {
-		blocksToPoll = blocksToCommit[:int(poller.blocksPerPoll)]
+	if len(blocksToCommit) > int(c.poller.blocksPerPoll) {
+		blocksToPoll = blocksToCommit[:int(c.poller.blocksPerPoll)]
 	}
-	poller.Poll(ctx, blocksToPoll)
+	c.poller.Poll(ctx, blocksToPoll)
 	log.Debug().Msgf("Polled %d blocks due to committer detecting them as missing. Range: %s - %s", len(blocksToPoll), blocksToPoll[0].String(), blocksToPoll[len(blocksToPoll)-1].String())
 }
