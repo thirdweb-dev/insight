@@ -88,19 +88,23 @@ func (bc *BadgerConnector) Close() error {
 
 // Key construction helpers
 func blockKey(chainId *big.Int, blockNumber *big.Int) []byte {
-	return []byte(fmt.Sprintf("b:%d:%s", chainId.Uint64(), blockNumber.String()))
+	return []byte(fmt.Sprintf("blockdata:%s:%s", chainId.String(), blockNumber.String()))
 }
 
 func blockFailureKey(chainId *big.Int, blockNumber *big.Int, timestamp int64) []byte {
-	return []byte(fmt.Sprintf("f:%d:%s:%d", chainId.Uint64(), blockNumber.String(), timestamp))
+	return []byte(fmt.Sprintf("blockfailure:%s:%s:%d", chainId.String(), blockNumber.String(), timestamp))
 }
 
 func lastReorgKey(chainId *big.Int) []byte {
-	return []byte(fmt.Sprintf("reorg:%d", chainId.Uint64()))
+	return []byte(fmt.Sprintf("reorg:%s", chainId.String()))
 }
 
 func lastPublishedKey(chainId *big.Int) []byte {
-	return []byte(fmt.Sprintf("published:%d", chainId.Uint64()))
+	return []byte(fmt.Sprintf("publish:%s", chainId.String()))
+}
+
+func lastCommittedKey(chainId *big.Int) []byte {
+	return []byte(fmt.Sprintf("commit:%s", chainId.String()))
 }
 
 // IOrchestratorStorage implementation
@@ -438,7 +442,42 @@ func (bc *BadgerConnector) SetLastPublishedBlockNumber(chainId *big.Int, blockNu
 	})
 }
 
-func (bc *BadgerConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+func (bc *BadgerConnector) GetLastCommittedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	var blockNumber *big.Int
+	err := bc.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(lastCommittedKey(chainId))
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		return item.Value(func(val []byte) error {
+			blockNumber = new(big.Int).SetBytes(val)
+			return nil
+		})
+	})
+
+	if blockNumber == nil {
+		return big.NewInt(0), nil
+	}
+	return blockNumber, err
+}
+
+func (bc *BadgerConnector) SetLastCommittedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	return bc.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(lastCommittedKey(chainId), blockNumber.Bytes())
+	})
+}
+
+func (bc *BadgerConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 

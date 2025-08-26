@@ -96,23 +96,32 @@ func (s *IStorage) Close() error {
 	return nil
 }
 
+// The orchestartor storage is a persisted key/value store
 type IOrchestratorStorage interface {
-	GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error)
-	StoreBlockFailures(failures []common.BlockFailure) error
-	DeleteBlockFailures(failures []common.BlockFailure) error
 	GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error)
 	SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
+	GetLastPublishedBlockNumber(chainId *big.Int) (blockNumber *big.Int, err error)
+	SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
+	GetLastCommittedBlockNumber(chainId *big.Int) (blockNumber *big.Int, err error)
+	SetLastCommittedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
+
 	Close() error
 }
 
+// The staging storage is a emphemeral block data store
 type IStagingStorage interface {
+	// Staging block data
 	InsertStagingData(data []common.BlockData) error
 	GetStagingData(qf QueryFilter) (data []common.BlockData, err error)
-	DeleteStagingData(data []common.BlockData) error
 	GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
-	GetLastPublishedBlockNumber(chainId *big.Int) (maxBlockNumber *big.Int, err error)
-	SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error
-	DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error
+	DeleteStagingData(data []common.BlockData) error
+	DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error
+
+	// Block failures
+	GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error)
+	StoreBlockFailures(failures []common.BlockFailure) error
+	DeleteBlockFailures(failures []common.BlockFailure) error
+
 	Close() error
 }
 

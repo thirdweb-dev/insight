@@ -341,12 +341,12 @@ func (_c *MockIStagingStorage_InsertStagingData_Call) RunAndReturn(run func([]co
 	return _c
 }
 
-// DeleteOlderThan provides a mock function with given fields: chainId, blockNumber
-func (_m *MockIStagingStorage) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+// DeleteStagingDataOlderThan provides a mock function with given fields: chainId, blockNumber
+func (_m *MockIStagingStorage) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	ret := _m.Called(chainId, blockNumber)
 
 	if len(ret) == 0 {
-		panic("no return value specified for DeleteOlderThan")
+		panic("no return value specified for DeleteStagingDataOlderThan")
 	}
 
 	var r0 error
@@ -359,31 +359,31 @@ func (_m *MockIStagingStorage) DeleteOlderThan(chainId *big.Int, blockNumber *bi
 	return r0
 }
 
-// MockIStagingStorage_DeleteOlderThan_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOlderThan'
-type MockIStagingStorage_DeleteOlderThan_Call struct {
+// MockIStagingStorage_DeleteStagingDataOlderThan_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteStagingDataOlderThan'
+type MockIStagingStorage_DeleteStagingDataOlderThan_Call struct {
 	*mock.Call
 }
 
-// DeleteOlderThan is a helper method to define mock.On call
+// DeleteStagingDataOlderThan is a helper method to define mock.On call
 //   - chainId *big.Int
 //   - blockNumber *big.Int
-func (_e *MockIStagingStorage_Expecter) DeleteOlderThan(chainId interface{}, blockNumber interface{}) *MockIStagingStorage_DeleteOlderThan_Call {
-	return &MockIStagingStorage_DeleteOlderThan_Call{Call: _e.mock.On("DeleteOlderThan", chainId, blockNumber)}
+func (_e *MockIStagingStorage_Expecter) DeleteStagingDataOlderThan(chainId interface{}, blockNumber interface{}) *MockIStagingStorage_DeleteStagingDataOlderThan_Call {
+	return &MockIStagingStorage_DeleteStagingDataOlderThan_Call{Call: _e.mock.On("DeleteStagingDataOlderThan", chainId, blockNumber)}
 }
 
-func (_c *MockIStagingStorage_DeleteOlderThan_Call) Run(run func(chainId *big.Int, blockNumber *big.Int)) *MockIStagingStorage_DeleteOlderThan_Call {
+func (_c *MockIStagingStorage_DeleteStagingDataOlderThan_Call) Run(run func(chainId *big.Int, blockNumber *big.Int)) *MockIStagingStorage_DeleteStagingDataOlderThan_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(*big.Int), args[1].(*big.Int))
 	})
 	return _c
 }
 
-func (_c *MockIStagingStorage_DeleteOlderThan_Call) Return(_a0 error) *MockIStagingStorage_DeleteOlderThan_Call {
+func (_c *MockIStagingStorage_DeleteStagingDataOlderThan_Call) Return(_a0 error) *MockIStagingStorage_DeleteStagingDataOlderThan_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockIStagingStorage_DeleteOlderThan_Call) RunAndReturn(run func(*big.Int, *big.Int) error) *MockIStagingStorage_DeleteOlderThan_Call {
+func (_c *MockIStagingStorage_DeleteStagingDataOlderThan_Call) RunAndReturn(run func(*big.Int, *big.Int) error) *MockIStagingStorage_DeleteStagingDataOlderThan_Call {
 	_c.Call.Return(run)
 	return _c
 }

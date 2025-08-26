@@ -55,7 +55,7 @@ func (fr *FailureRecoverer) Start(ctx context.Context) {
 			log.Info().Msg("Failure recoverer shutting down")
 			return
 		case <-ticker.C:
-			blockFailures, err := fr.storage.OrchestratorStorage.GetBlockFailures(storage.QueryFilter{
+			blockFailures, err := fr.storage.StagingStorage.GetBlockFailures(storage.QueryFilter{
 				ChainId: fr.rpc.GetChainID(),
 				Limit:   fr.failuresPerPoll,
 			})
@@ -122,11 +122,11 @@ func (fr *FailureRecoverer) handleWorkerResults(blockFailures []common.BlockFail
 		log.Error().Err(fmt.Errorf("error inserting block data in failure recoverer: %v", err))
 		return
 	}
-	if err := fr.storage.OrchestratorStorage.StoreBlockFailures(newBlockFailures); err != nil {
+	if err := fr.storage.StagingStorage.StoreBlockFailures(newBlockFailures); err != nil {
 		log.Error().Err(err).Msg("Error storing block failures")
 		return
 	}
-	if err := fr.storage.OrchestratorStorage.DeleteBlockFailures(failuresToDelete); err != nil {
+	if err := fr.storage.StagingStorage.DeleteBlockFailures(failuresToDelete); err != nil {
 		log.Error().Err(err).Msg("Error deleting block failures")
 		return
 	}

@@ -1147,6 +1147,31 @@ func (c *ClickHouseConnector) SetLastPublishedBlockNumber(chainId *big.Int, bloc
 	return c.conn.Exec(context.Background(), query)
 }
 
+func (c *ClickHouseConnector) GetLastCommittedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	query := fmt.Sprintf("SELECT cursor_value FROM %s.cursors FINAL WHERE cursor_type = 'commit'", c.cfg.Database)
+	if chainId.Sign() > 0 {
+		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
+	}
+	var blockNumberString string
+	err := c.conn.QueryRow(context.Background(), query).Scan(&blockNumberString)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberString)
+	}
+	return blockNumber, nil
+}
+
+func (c *ClickHouseConnector) SetLastCommittedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	query := fmt.Sprintf("INSERT INTO %s.cursors (chain_id, cursor_type, cursor_value) VALUES (%s, 'commit', '%s')", c.cfg.Database, chainId, blockNumber.String())
+	return c.conn.Exec(context.Background(), query)
+}
+
 func (c *ClickHouseConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
 	query := fmt.Sprintf("SELECT cursor_value FROM %s.cursors FINAL WHERE cursor_type = 'reorg'", c.cfg.Database)
 	if chainId.Sign() > 0 {
@@ -2186,7 +2211,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	return blockData, nil
 }
 
-func (c *ClickHouseConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+func (c *ClickHouseConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s.block_data (chain_id, block_number, is_deleted)
 		SELECT chain_id, block_number, 1

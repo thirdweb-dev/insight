@@ -109,7 +109,7 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 
 	// Initialize publisher position - always use max(lastPublished, lastCommitted) to prevent double publishing
-	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+	lastPublished, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(chainID)
 	if err != nil {
 		// It's okay to fail silently here; it's only used for staging cleanup and will be
 		// corrected by the worker loop.
@@ -126,7 +126,7 @@ func (c *Committer) Start(ctx context.Context) {
 					Msg("Publisher is behind committed position, seeking forward to committed value")
 
 				c.lastPublishedBlock.Store(latestCommittedBlockNumber.Uint64())
-				if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, latestCommittedBlockNumber); err != nil {
+				if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, latestCommittedBlockNumber); err != nil {
 					log.Error().Err(err).Msg("Failed to update last published block number after seeking forward")
 					// Fall back to the stored value on error
 					c.lastPublishedBlock.Store(lastPublished.Uint64())
@@ -167,7 +167,7 @@ func (c *Committer) Start(ctx context.Context) {
 
 	// Only update storage if we're changing the position
 	if lastPublished == nil || targetPublishBlock.Cmp(lastPublished) != 0 {
-		if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, targetPublishBlock); err != nil {
+		if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, targetPublishBlock); err != nil {
 			log.Error().Err(err).Msg("Failed to update published block number in storage")
 			// If we can't update storage, use what was there originally to avoid issues
 			if lastPublished != nil {
@@ -303,11 +303,11 @@ func (c *Committer) cleanupProcessedStagingBlocks() {
 	chainID := c.rpc.GetChainID()
 	blockNumber := new(big.Int).SetUint64(limit)
 	stagingDeleteStart := time.Now()
-	if err := c.storage.StagingStorage.DeleteOlderThan(chainID, blockNumber); err != nil {
+	if err := c.storage.StagingStorage.DeleteStagingDataOlderThan(chainID, blockNumber); err != nil {
 		log.Error().Err(err).Msg("Failed to delete staging data")
 		return
 	}
-	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
+	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingDataOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
 	metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
 }
 
@@ -358,7 +358,7 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 
 func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, error) {
 	// Get the last published block from storage (which was already corrected in Start)
-	latestPublishedBlockNumber, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
+	latestPublishedBlockNumber, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last published block number: %v", err)
 	}
@@ -550,7 +550,7 @@ func (c *Committer) publish(ctx context.Context) error {
 
 	chainID := c.rpc.GetChainID()
 	highest := blockData[len(blockData)-1].Block.Number
-	if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
+	if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
 		return err
 	}
 	c.lastPublishedBlock.Store(highest.Uint64())

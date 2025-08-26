@@ -132,11 +132,35 @@ func (kr *KafkaRedisConnector) SetLastPublishedBlockNumber(chainId *big.Int, blo
 	return kr.redisClient.Set(ctx, key, blockNumber.String(), 0).Err()
 }
 
+func (kr *KafkaRedisConnector) GetLastCommittedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	ctx := context.Background()
+	key := fmt.Sprintf("%s:%s", KeyCursorCommit, chainId.String())
+
+	val, err := kr.redisClient.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return big.NewInt(0), nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	blockNumber, ok := new(big.Int).SetString(val, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", val)
+	}
+	return blockNumber, nil
+}
+
+func (kr *KafkaRedisConnector) SetLastCommittedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	ctx := context.Background()
+	key := fmt.Sprintf("%s:%s", KeyCursorCommit, chainId.String())
+	return kr.redisClient.Set(ctx, key, blockNumber.String(), 0).Err()
+}
+
 func (kr *KafkaRedisConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
 	return nil, fmt.Errorf("staging operations are not supported with KafkaRedis connector - use a different storage backend for staging")
 }
 
-func (kr *KafkaRedisConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+func (kr *KafkaRedisConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	return fmt.Errorf("staging operations are not supported with KafkaRedis connector - use a different storage backend for staging")
 }
 

@@ -352,7 +352,7 @@ func (p *Poller) handleBlockFailures(results []rpc.GetFullBlockResult) {
 			})
 		}
 	}
-	err := p.storage.OrchestratorStorage.StoreBlockFailures(blockFailures)
+	err := p.storage.StagingStorage.StoreBlockFailures(blockFailures)
 	if err != nil {
 		// TODO: exiting if this fails, but should handle this better
 		log.Error().Err(err).Msg("Error saving block failures")
