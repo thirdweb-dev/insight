@@ -37,6 +37,7 @@ type S3Connector struct {
 	flushCh     chan struct{}
 	flushDoneCh chan struct{} // Signals when flush is complete
 	wg          sync.WaitGroup
+	closeOnce   sync.Once
 }
 
 // DataFormatter interface for different file formats
@@ -313,18 +314,23 @@ func (s *S3Connector) Flush() error {
 
 // Close closes the S3 connector and flushes any remaining data
 func (s *S3Connector) Close() error {
-	// First, ensure any pending data is flushed
-	if err := s.Flush(); err != nil {
-		log.Error().Err(err).Msg("Error flushing buffer during close")
-	}
+	var closeErr error
+	
+	s.closeOnce.Do(func() {
+		// First, ensure any pending data is flushed
+		if err := s.Flush(); err != nil {
+			log.Error().Err(err).Msg("Error flushing buffer during close")
+			closeErr = err
+		}
 
-	// Signal stop
-	close(s.stopCh)
+		// Signal stop
+		close(s.stopCh)
 
-	// Wait for worker to finish
-	s.wg.Wait()
+		// Wait for worker to finish
+		s.wg.Wait()
+	})
 
-	return nil
+	return closeErr
 }
 
 func (s *S3Connector) uploadBatch(data []common.BlockData) error {

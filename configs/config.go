@@ -76,7 +76,7 @@ type S3Config struct {
 	Format          string         `mapstructure:"format"`
 	Parquet         *ParquetConfig `mapstructure:"parquet"`
 	// Buffering configuration
-	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush (default 1024 MB = 1GB)
+	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush (default 512 MB)
 	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush (default 300 = 5 min)
 	MaxBlocksPerFile int   `mapstructure:"maxBlocksPerFile"`     // Max blocks per parquet file (0 = no limit, only size/timeout triggers)
 }
