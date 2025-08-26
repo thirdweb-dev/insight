@@ -158,8 +158,7 @@ func (p *Poller) Start(ctx context.Context) {
 
 					lastPolledBlock := p.Poll(pollCtx, blockNumbers)
 					if p.reachedPollLimit(lastPolledBlock) {
-						log.Debug().Msg("Reached poll limit, exiting poller")
-						cancel()
+						log.Info().Msgf("Reached poll limit at block %s, completing poller", lastPolledBlock.String())
 						return
 					}
 				}
@@ -262,6 +261,7 @@ func (p *Poller) convertPollResultsToBlockData(results []rpc.GetFullBlockResult)
 	blockData := make([]common.BlockData, 0, len(successfulResults))
 	for _, result := range successfulResults {
 		blockData = append(blockData, common.BlockData{
+			ChainId:      p.rpc.GetChainID().Uint64(),
 			Block:        result.Data.Block,
 			Logs:         result.Data.Logs,
 			Transactions: result.Data.Transactions,

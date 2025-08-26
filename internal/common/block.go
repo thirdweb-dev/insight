@@ -59,10 +59,11 @@ type BlockModel struct {
 }
 
 type BlockData struct {
-	Block        Block
-	Transactions []Transaction
-	Logs         []Log
-	Traces       []Trace
+	ChainId      uint64        `json:"chain_id"`
+	Block        Block         `json:"block"`
+	Transactions []Transaction `json:"transactions"`
+	Logs         []Log         `json:"logs"`
+	Traces       []Trace       `json:"traces"`
 }
 
 type BlockHeader struct {
@@ -98,4 +99,24 @@ func (b *Block) Serialize() BlockModel {
 		WithdrawalsRoot:  b.WithdrawalsRoot,
 		BaseFeePerGas:    b.BaseFeePerGas,
 	}
+}
+
+func (b *BlockData) Serialize() BlockData {
+	data := BlockData{
+		ChainId:      b.ChainId,
+		Block:        b.Block,
+		Transactions: b.Transactions,
+		Logs:         b.Logs,
+		Traces:       b.Traces,
+	}
+	if data.Transactions == nil {
+		data.Transactions = []Transaction{}
+	}
+	if data.Logs == nil {
+		data.Logs = []Log{}
+	}
+	if data.Traces == nil {
+		data.Traces = []Trace{}
+	}
+	return data
 }

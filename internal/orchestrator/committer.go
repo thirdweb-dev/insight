@@ -26,6 +26,7 @@ type Committer struct {
 	blocksPerCommit    int
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
+	commitUntilBlock   *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock atomic.Uint64
 	lastPublishedBlock atomic.Uint64
@@ -60,12 +61,23 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
+	commitUntilBlock := config.Cfg.Committer.UntilBlock
+	if commitUntilBlock == 0 {
+		// default to match the poller.untilBlock
+		if config.Cfg.Poller.UntilBlock != 0 {
+			commitUntilBlock = config.Cfg.Poller.UntilBlock
+		} else {
+			commitUntilBlock = -1
+		}
+	}
+
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		commitFromBlock:   commitFromBlock,
+		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
 		workMode:          "",
@@ -99,9 +111,34 @@ func (c *Committer) Start(ctx context.Context) {
 	// Initialize publisher position - always use max(lastPublished, lastCommitted) to prevent double publishing
 	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get last published block number from storage")
-		// If we can't read, assume we need to start from the beginning
-		lastPublished = nil
+		// It's okay to fail silently here; it's only used for staging cleanup and will be
+		// corrected by the worker loop.
+		log.Error().Err(err).Msg("failed to get last published block number")
+	} else if lastPublished != nil && lastPublished.Sign() > 0 {
+		// Always ensure publisher starts from at least the committed value
+		if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
+			if lastPublished.Cmp(latestCommittedBlockNumber) < 0 {
+				gap := new(big.Int).Sub(latestCommittedBlockNumber, lastPublished)
+				log.Warn().
+					Str("last_published", lastPublished.String()).
+					Str("latest_committed", latestCommittedBlockNumber.String()).
+					Str("gap", gap.String()).
+					Msg("Publisher is behind committed position, seeking forward to committed value")
+
+				c.lastPublishedBlock.Store(latestCommittedBlockNumber.Uint64())
+				if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, latestCommittedBlockNumber); err != nil {
+					log.Error().Err(err).Msg("Failed to update last published block number after seeking forward")
+					// Fall back to the stored value on error
+					c.lastPublishedBlock.Store(lastPublished.Uint64())
+				}
+			} else {
+				c.lastPublishedBlock.Store(lastPublished.Uint64())
+			}
+		} else {
+			c.lastPublishedBlock.Store(lastPublished.Uint64())
+		}
+	} else {
+		c.lastPublishedBlock.Store(c.lastCommittedBlock.Load())
 	}
 
 	// Determine the correct publish position - always take the maximum to avoid going backwards
@@ -179,6 +216,7 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 
 	c.runCommitLoop(ctx, interval)
+
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
 }
@@ -206,6 +244,11 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			if currentMode == "" {
 				log.Debug().Msg("Committer work mode not set, skipping commit")
 				continue
+			}
+			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitUntilBlock.Uint64() {
+				// Completing the commit loop if we've committed more than commit until block
+				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
+				return
 			}
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
 			if err != nil {
@@ -356,9 +399,16 @@ func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, e
 
 func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBlockNumber *big.Int) (*big.Int, error) {
 	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+
+	// If a commit until block is set, then set a limit on the commit until block
+	if c.commitUntilBlock.Sign() > 0 && untilBlock.Cmp(c.commitUntilBlock) > 0 {
+		return new(big.Int).Set(c.commitUntilBlock), nil
+	}
+
 	c.workModeMutex.RLock()
 	currentMode := c.workMode
 	c.workModeMutex.RUnlock()
+
 	if currentMode == WorkModeBackfill {
 		return untilBlock, nil
 	} else {

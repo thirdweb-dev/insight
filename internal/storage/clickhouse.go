@@ -78,6 +78,14 @@ func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector,
 	}, nil
 }
 
+// Close closes the ClickHouse connection
+func (c *ClickHouseConnector) Close() error {
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
+}
+
 func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	port := cfg.Port
 	if port == 0 {
@@ -1968,6 +1976,7 @@ func (c *ClickHouseConnector) GetValidationBlockData(chainId *big.Int, startBloc
 	for i, block := range blocksResult.blocks {
 		blockNum := block.Number.String()
 		blockData[i] = common.BlockData{
+			ChainId:      chainId.Uint64(),
 			Block:        block,
 			Logs:         logsResult.logMap[blockNum],
 			Transactions: txsResult.txMap[blockNum],
@@ -2147,6 +2156,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	for i, block := range blocksResult.blocks {
 		blockNum := block.Number.String()
 		blockData[i] = common.BlockData{
+			ChainId:      chainId.Uint64(),
 			Block:        block,
 			Logs:         logsResult.logMap[blockNum],
 			Transactions: txsResult.txMap[blockNum],

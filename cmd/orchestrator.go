@@ -32,12 +32,19 @@ func RunOrchestrator(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create orchestrator")
 	}
+
 	// Start Prometheus metrics server
 	log.Info().Msg("Starting Metrics Server on port 2112")
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(":2112", nil)
+		if err := http.ListenAndServe(":2112", nil); err != nil {
+			log.Error().Err(err).Msg("Metrics server error")
+		}
 	}()
 
+	// Start orchestrator (blocks until shutdown)
+	// The orchestrator handles signals internally and coordinates shutdown
 	orchestrator.Start()
+
+	log.Info().Msg("Shutdown complete")
 }

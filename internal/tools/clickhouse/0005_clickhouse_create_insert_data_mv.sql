@@ -1,4 +1,4 @@
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_blocks_inserts
+CREATE MATERIALIZED VIEW IF NOT EXISTS insert_blocks_mv
 TO blocks
 AS
 SELECT
@@ -25,10 +25,10 @@ SELECT
     block.20 AS withdrawals_root,
     block.21 AS base_fee_per_gas,
     insert_timestamp,
-    sign
-FROM inserts_null_table;
+    is_deleted
+FROM insert_null_block_data;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_transactions_inserts
+CREATE MATERIALIZED VIEW IF NOT EXISTS insert_transactions_mv
 TO transactions
 AS
 SELECT
@@ -65,11 +65,11 @@ SELECT
     t.30 AS logs_bloom,
     t.31 AS status,
     insert_timestamp,
-    sign
-FROM inserts_null_table
+    is_deleted
+FROM insert_null_block_data
 ARRAY JOIN transactions AS t;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_logs_inserts
+CREATE MATERIALIZED VIEW IF NOT EXISTS insert_logs_mv
 TO logs
 AS
 SELECT
@@ -87,11 +87,11 @@ SELECT
     l.11 AS topic_2,
     l.12 AS topic_3,
     insert_timestamp,
-    sign
-FROM inserts_null_table
+    is_deleted
+FROM insert_null_block_data
 ARRAY JOIN logs AS l;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_traces_inserts
+CREATE MATERIALIZED VIEW IF NOT EXISTS insert_traces_mv
 TO traces
 AS
 SELECT
@@ -117,6 +117,6 @@ SELECT
     tr.19 AS reward_type,
     tr.20 AS refund_address,
     insert_timestamp,
-    sign
-FROM inserts_null_table
+    is_deleted
+FROM insert_null_block_data
 ARRAY JOIN traces AS tr;
