@@ -186,5 +186,6 @@ func (v *Validator) FindAndFixGaps(startBlock *big.Int, endBlock *big.Int) error
 		log.Error().Err(err).Msgf("Failed to insert missing blocks: %v", polledBlocks)
 		return err
 	}
+
 	return nil
 }

@@ -11,20 +11,26 @@ import (
 
 // KafkaConnector uses Redis for metadata storage and Kafka for block data delivery
 type KafkaConnector struct {
-	cfg            *config.KafkaConfig
-	kafkaPublisher *KafkaPublisher
+	cfg                 *config.KafkaConfig
+	kafkaPublisher      *KafkaPublisher
+	orchestratorStorage IOrchestratorStorage
 }
 
-func NewKafkaConnector(cfg *config.KafkaConfig) (*KafkaConnector, error) {
+func NewKafkaConnector(cfg *config.KafkaConfig, orchestratorStorage *IOrchestratorStorage) (*KafkaConnector, error) {
 	// Initialize Kafka publisher
 	kafkaPublisher, err := NewKafkaPublisher(cfg)
 	if err != nil {
 		return nil, err
 	}
 
+	if orchestratorStorage == nil {
+		return nil, fmt.Errorf("orchestrator storage must be provided for kafka connector")
+	}
+
 	return &KafkaConnector{
-		cfg:            cfg,
-		kafkaPublisher: kafkaPublisher,
+		cfg:                 cfg,
+		kafkaPublisher:      kafkaPublisher,
+		orchestratorStorage: *orchestratorStorage,
 	}, nil
 }
 
@@ -41,6 +47,12 @@ func (kr *KafkaConnector) InsertBlockData(data []common.BlockData) error {
 	log.Debug().
 		Int("blocks", len(data)).
 		Msg("Published block data to Kafka")
+
+	chainId := data[0].Block.ChainId
+	maxBlockNumber := data[len(data)-1].Block.Number
+	if err := kr.orchestratorStorage.SetLastCommittedBlockNumber(chainId, maxBlockNumber); err != nil {
+		return fmt.Errorf("failed to update last committed block number in orchestrator storage: %w", err)
+	}
 
 	return nil
 }
@@ -63,7 +75,7 @@ func (kr *KafkaConnector) ReplaceBlockData(data []common.BlockData) ([]common.Bl
 }
 
 func (kr *KafkaConnector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) {
-	return nil, fmt.Errorf("query operations are not supported with Kafka connector - this is a write-only connector for streaming")
+	return kr.orchestratorStorage.GetLastCommittedBlockNumber(chainId)
 }
 
 func (kr *KafkaConnector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (*big.Int, error) {

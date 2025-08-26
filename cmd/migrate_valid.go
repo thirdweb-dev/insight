@@ -314,7 +314,7 @@ func NewMigrator() *Migrator {
 
 	validator := orchestrator.NewValidator(rpcClient, sourceConnector)
 
-	destinationConnector, err := storage.NewMainConnector(&config.Cfg.Migrator.Destination)
+	destinationConnector, err := storage.NewMainConnector(&config.Cfg.Migrator.Destination, &sourceConnector.OrchestratorStorage)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize storage")
 	}

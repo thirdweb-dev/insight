@@ -175,7 +175,7 @@ func NewStorageConnector(cfg *config.StorageConfig) (IStorage, error) {
 		return IStorage{}, fmt.Errorf("failed to create staging storage: %w", err)
 	}
 
-	storage.MainStorage, err = NewMainConnector(&cfg.Main)
+	storage.MainStorage, err = NewMainConnector(&cfg.Main, &storage.OrchestratorStorage)
 	if err != nil {
 		return IStorage{}, fmt.Errorf("failed to create main storage: %w", err)
 	}
@@ -302,7 +302,7 @@ func NewStagingConnector(cfg *config.StorageStagingConfig) (IStagingStorage, err
 	return typedConn, nil
 }
 
-func NewMainConnector(cfg *config.StorageMainConfig) (IMainStorage, error) {
+func NewMainConnector(cfg *config.StorageMainConfig, orchestratorStorage *IOrchestratorStorage) (IMainStorage, error) {
 	var conn interface{}
 	var err error
 
@@ -319,7 +319,10 @@ func NewMainConnector(cfg *config.StorageMainConfig) (IMainStorage, error) {
 			if cfg.Kafka == nil {
 				return nil, fmt.Errorf("kafka storage type specified but kafka config is nil")
 			}
-			conn, err = NewKafkaConnector(cfg.Kafka)
+			if orchestratorStorage == nil {
+				return nil, fmt.Errorf("orchestrator storage must be provided for kafka main storage")
+			}
+			conn, err = NewKafkaConnector(cfg.Kafka, orchestratorStorage)
 		case "s3":
 			if cfg.S3 == nil {
 				return nil, fmt.Errorf("s3 storage type specified but s3 config is nil")
@@ -346,7 +349,10 @@ func NewMainConnector(cfg *config.StorageMainConfig) (IMainStorage, error) {
 	} else {
 		// Auto mode: use the first non-nil config (existing behavior)
 		if cfg.Kafka != nil {
-			conn, err = NewKafkaConnector(cfg.Kafka)
+			if orchestratorStorage == nil {
+				return nil, fmt.Errorf("orchestrator storage must be provided for kafka main storage")
+			}
+			conn, err = NewKafkaConnector(cfg.Kafka, orchestratorStorage)
 		} else if cfg.S3 != nil {
 			conn, err = NewS3Connector(cfg.S3)
 		} else if cfg.Postgres != nil {
