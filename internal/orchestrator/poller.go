@@ -159,7 +159,6 @@ func (p *Poller) Start(ctx context.Context) {
 					lastPolledBlock := p.Poll(pollCtx, blockNumbers)
 					if p.reachedPollLimit(lastPolledBlock) {
 						log.Info().Msgf("Reached poll limit at block %s, completing poller", lastPolledBlock.String())
-						cancel()
 						return
 					}
 				}
