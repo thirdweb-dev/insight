@@ -30,8 +30,7 @@ var (
 )
 
 const (
-	DEFAULT_RPC_BATCH_SIZE = 100
-	DEFAULT_BATCH_SIZE     = 2000
+	DEFAULT_BATCH_SIZE = 2000
 )
 
 func RunValidationMigration(cmd *cobra.Command, args []string) {
@@ -182,12 +181,8 @@ type Migrator struct {
 
 func NewMigrator() *Migrator {
 	batchSize := DEFAULT_BATCH_SIZE
-	if config.Cfg.Migrator.StorageBatchSize > 0 {
-		batchSize = int(config.Cfg.Migrator.StorageBatchSize)
-	}
-	rpcBatchSize := DEFAULT_RPC_BATCH_SIZE
-	if config.Cfg.Migrator.RpcBatchSize > 0 {
-		rpcBatchSize = int(config.Cfg.Migrator.RpcBatchSize)
+	if config.Cfg.Migrator.BatchSize > 0 {
+		batchSize = int(config.Cfg.Migrator.BatchSize)
 	}
 
 	rpcClient, err := rpc.Initialize()
@@ -218,7 +213,6 @@ func NewMigrator() *Migrator {
 
 	return &Migrator{
 		migrationBatchSize: batchSize,
-		rpcBatchSize:       rpcBatchSize,
 		rpcClient:          rpcClient,
 		source:             sourceConnector,
 		destination:        destinationConnector,

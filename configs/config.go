@@ -233,11 +233,10 @@ type ValidationConfig struct {
 }
 
 type MigratorConfig struct {
-	Destination      StorageConnectionConfig `mapstructure:"destination"`
-	StartBlock       uint                    `mapstructure:"startBlock"`
-	EndBlock         uint                    `mapstructure:"endBlock"`
-	StorageBatchSize uint                    `mapstructure:"storageBatchSize"`
-	RpcBatchSize     uint                    `mapstructure:"rpcBatchSize"`
+	Destination StorageConnectionConfig `mapstructure:"destination"`
+	StartBlock  uint                    `mapstructure:"startBlock"`
+	EndBlock    uint                    `mapstructure:"endBlock"`
+	BatchSize   uint                    `mapstructure:"batchSize"`
 }
 
 type Config struct {
