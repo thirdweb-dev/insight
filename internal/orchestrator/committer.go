@@ -631,18 +631,7 @@ func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big
 }
 
 func (c *Committer) handleMissingStagingData(ctx context.Context, blocksToCommit []*big.Int) {
-	// Checks if there are any blocks in staging after the current range end
-	lastStagedBlockNumber, err := c.storage.StagingStorage.GetLastStagedBlockNumber(c.rpc.GetChainID(), blocksToCommit[len(blocksToCommit)-1], big.NewInt(0))
-	if err != nil {
-		log.Error().Err(err).Msg("Error checking staged data for missing range")
-		return
-	}
-	if lastStagedBlockNumber == nil || lastStagedBlockNumber.Sign() <= 0 {
-		log.Debug().Msgf("Committer is caught up with staging. No need to poll for missing blocks.")
-		return
-	}
 	log.Debug().Msgf("Detected missing blocks in staging data starting from %s.", blocksToCommit[0].String())
-
 	blocksToPoll := blocksToCommit
 	if len(blocksToCommit) > int(c.poller.blocksPerPoll) {
 		blocksToPoll = blocksToCommit[:int(c.poller.blocksPerPoll)]
