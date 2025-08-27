@@ -27,15 +27,15 @@ type S3Connector struct {
 	client    *s3.Client
 	config    *config.S3Config
 	formatter DataFormatter
+	buffer    *BlockBuffer
 
-	// Buffering
-	buffer      []common.BlockData
-	bufferMu    sync.Mutex
-	bufferSize  int64 // Current buffer size in bytes
-	bufferTimer *time.Timer
+	// Flush control
 	stopCh      chan struct{}
 	flushCh     chan struct{}
 	flushDoneCh chan struct{} // Signals when flush is complete
+	flushTimer  *time.Timer
+	timerMu     sync.Mutex
+	lastAddTime time.Time
 	wg          sync.WaitGroup
 	closeOnce   sync.Once
 }
@@ -114,11 +114,14 @@ func NewS3Connector(cfg *config.S3Config) (*S3Connector, error) {
 		return nil, fmt.Errorf("unsupported format: %s", cfg.Format)
 	}
 
+	// Create buffer with configured settings
+	buffer := NewBlockBuffer(cfg.BufferSize, cfg.MaxBlocksPerFile)
+
 	s3c := &S3Connector{
 		client:      s3Client,
 		config:      cfg,
 		formatter:   formatter,
-		buffer:      make([]common.BlockData, 0),
+		buffer:      buffer,
 		stopCh:      make(chan struct{}),
 		flushCh:     make(chan struct{}, 1),
 		flushDoneCh: make(chan struct{}),
@@ -136,9 +139,6 @@ func (s *S3Connector) InsertBlockData(data []common.BlockData) error {
 		return nil
 	}
 
-	s.bufferMu.Lock()
-	defer s.bufferMu.Unlock()
-
 	// Calculate actual serialized size for accurate memory tracking
 	formattedData, err := s.formatter.FormatBlockData(data)
 	if err != nil {
@@ -147,42 +147,36 @@ func (s *S3Connector) InsertBlockData(data []common.BlockData) error {
 
 	// Use actual serialized size for accurate memory tracking
 	actualSize := int64(len(formattedData))
-	s.bufferSize += actualSize
 	log.Debug().
 		Int("block_count", len(data)).
 		Int64("size_bytes", actualSize).
 		Int64("avg_bytes_per_block", actualSize/int64(len(data))).
 		Msg("Calculated actual block data size")
 
-	// Add to buffer
-	s.buffer = append(s.buffer, data...)
+	// Add to buffer and check if flush is needed
+	shouldFlush := s.buffer.Add(data, actualSize)
 
-	// Reset timer if this is the first data in buffer
-	if len(s.buffer) == len(data) && s.bufferTimer == nil {
-		s.bufferTimer = time.AfterFunc(time.Duration(s.config.BufferTimeout)*time.Second, func() {
+	// Start or reset timer when first data is added
+	s.timerMu.Lock()
+	sizeBytes, blockCount := s.buffer.Size()
+	if sizeBytes == actualSize && blockCount == len(data) && s.config.BufferTimeout > 0 {
+		// First data added to buffer, track time and start timer
+		s.lastAddTime = time.Now()
+		if s.flushTimer != nil {
+			s.flushTimer.Stop()
+		}
+		s.flushTimer = time.AfterFunc(time.Duration(s.config.BufferTimeout)*time.Second, func() {
 			select {
 			case s.flushCh <- struct{}{}:
 			default:
 			}
 		})
 	}
-
-	// Check if we should flush based on size or block count
-	shouldFlush := s.bufferSize >= s.config.BufferSize*1024*1024 // Convert MB to bytes
-
-	// Only check block count if MaxBlocksPerFile is set (> 0)
-	if s.config.MaxBlocksPerFile > 0 && len(s.buffer) >= s.config.MaxBlocksPerFile {
-		shouldFlush = true
-	}
+	s.timerMu.Unlock()
 
 	if shouldFlush {
-		// Stop timer if running
-		if s.bufferTimer != nil {
-			s.bufferTimer.Stop()
-			s.bufferTimer = nil
-		}
-
-		// Trigger flush
+		// Stop timer and trigger flush
+		s.stopFlushTimer()
 		select {
 		case s.flushCh <- struct{}{}:
 		default:
@@ -195,6 +189,10 @@ func (s *S3Connector) InsertBlockData(data []common.BlockData) error {
 // flushWorker runs in background and handles buffer flushes
 func (s *S3Connector) flushWorker() {
 	defer s.wg.Done()
+
+	// Check periodically for expired buffers
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -209,30 +207,56 @@ func (s *S3Connector) flushWorker() {
 			case s.flushDoneCh <- struct{}{}:
 			default:
 			}
+		case <-ticker.C:
+			// Check if buffer has expired based on our own tracking
+			if s.isBufferExpired() {
+				s.flushBuffer()
+			}
 		}
 	}
 }
 
+// stopFlushTimer stops the flush timer if it's running
+func (s *S3Connector) stopFlushTimer() {
+	s.timerMu.Lock()
+	defer s.timerMu.Unlock()
+
+	if s.flushTimer != nil {
+		s.flushTimer.Stop()
+		s.flushTimer = nil
+	}
+}
+
+// isBufferExpired checks if the buffer has exceeded the timeout duration
+func (s *S3Connector) isBufferExpired() bool {
+	s.timerMu.Lock()
+	defer s.timerMu.Unlock()
+
+	if s.config.BufferTimeout <= 0 || s.lastAddTime.IsZero() || s.buffer.IsEmpty() {
+		return false
+	}
+
+	return time.Since(s.lastAddTime) > time.Duration(s.config.BufferTimeout)*time.Second
+}
+
 // flushBuffer writes buffered data to S3
 func (s *S3Connector) flushBuffer() error {
-	s.bufferMu.Lock()
-	if len(s.buffer) == 0 {
-		s.bufferMu.Unlock()
+	data := s.buffer.Flush()
+	if len(data) == 0 {
 		return nil
 	}
 
-	// Take ownership of buffer
-	data := s.buffer
-	s.buffer = make([]common.BlockData, 0)
-	s.bufferSize = 0
+	// Stop timer and reset last add time since we're flushing
+	s.stopFlushTimer()
+	s.timerMu.Lock()
+	s.lastAddTime = time.Time{}
+	s.timerMu.Unlock()
 
-	// Stop timer if running
-	if s.bufferTimer != nil {
-		s.bufferTimer.Stop()
-		s.bufferTimer = nil
-	}
-	s.bufferMu.Unlock()
+	return s.uploadBatchData(data)
+}
 
+// uploadBatchData handles uploading batched data to S3, grouped by chain
+func (s *S3Connector) uploadBatchData(data []common.BlockData) error {
 	// Group blocks by chain to generate appropriate keys
 	chainGroups := make(map[uint64][]common.BlockData)
 	for _, block := range data {
@@ -276,11 +300,7 @@ func (s *S3Connector) flushBuffer() error {
 // Flush manually triggers a buffer flush and waits for completion
 func (s *S3Connector) Flush() error {
 	// Check if buffer has data
-	s.bufferMu.Lock()
-	hasData := len(s.buffer) > 0
-	s.bufferMu.Unlock()
-
-	if !hasData {
+	if s.buffer.IsEmpty() {
 		return nil
 	}
 
@@ -315,8 +335,11 @@ func (s *S3Connector) Flush() error {
 // Close closes the S3 connector and flushes any remaining data
 func (s *S3Connector) Close() error {
 	var closeErr error
-	
+
 	s.closeOnce.Do(func() {
+		// Stop the flush timer
+		s.stopFlushTimer()
+
 		// First, ensure any pending data is flushed
 		if err := s.Flush(); err != nil {
 			log.Error().Err(err).Msg("Error flushing buffer during close")
@@ -573,16 +596,11 @@ func (s *S3Connector) GetTokenTransfers(qf TransfersQueryFilter, fields ...strin
 }
 
 func (s *S3Connector) GetMaxBlockNumber(chainId *big.Int) (*big.Int, error) {
-	maxBlock := big.NewInt(0)
-
 	// First check the buffer for blocks from this chain
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
-		if block.Block.ChainId.Cmp(chainId) == 0 && block.Block.Number.Cmp(maxBlock) > 0 {
-			maxBlock = new(big.Int).Set(block.Block.Number)
-		}
+	maxBlock := s.buffer.GetMaxBlockNumber(chainId)
+	if maxBlock == nil {
+		maxBlock = big.NewInt(0)
 	}
-	s.bufferMu.Unlock()
 
 	// Then check S3 for the maximum block number
 	prefix := fmt.Sprintf("chain_%d/", chainId.Uint64())
@@ -622,19 +640,14 @@ func (s *S3Connector) GetMaxBlockNumberInRange(chainId *big.Int, startBlock *big
 	foundAny := false
 
 	// First check the buffer for blocks in this range
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
-		if block.Block.ChainId.Cmp(chainId) == 0 {
-			blockNum := block.Block.Number
-			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
-				if !foundAny || blockNum.Cmp(maxBlock) > 0 {
-					maxBlock = new(big.Int).Set(blockNum)
-					foundAny = true
-				}
-			}
+	bufferBlocks := s.buffer.GetBlocksInRange(chainId, startBlock, endBlock)
+	for _, block := range bufferBlocks {
+		blockNum := block.Block.Number
+		if !foundAny || blockNum.Cmp(maxBlock) > 0 {
+			maxBlock = new(big.Int).Set(blockNum)
+			foundAny = true
 		}
 	}
-	s.bufferMu.Unlock()
 
 	// Then check S3 files
 	prefix := fmt.Sprintf("chain_%d/", chainId.Uint64())
@@ -693,29 +706,24 @@ func (s *S3Connector) GetBlockCount(chainId *big.Int, startBlock *big.Int, endBl
 	foundAny := false
 
 	// First check the buffer for blocks in this range
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
-		if block.Block.ChainId.Cmp(chainId) == 0 {
-			blockNum := block.Block.Number
-			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
-				count.Add(count, big.NewInt(1))
+	bufferBlocks := s.buffer.GetBlocksInRange(chainId, startBlock, endBlock)
+	for _, block := range bufferBlocks {
+		blockNum := block.Block.Number
+		count.Add(count, big.NewInt(1))
 
-				if !foundAny {
-					minBlock = new(big.Int).Set(blockNum)
-					maxBlock = new(big.Int).Set(blockNum)
-					foundAny = true
-				} else {
-					if blockNum.Cmp(minBlock) < 0 {
-						minBlock = new(big.Int).Set(blockNum)
-					}
-					if blockNum.Cmp(maxBlock) > 0 {
-						maxBlock = new(big.Int).Set(blockNum)
-					}
-				}
+		if !foundAny {
+			minBlock = new(big.Int).Set(blockNum)
+			maxBlock = new(big.Int).Set(blockNum)
+			foundAny = true
+		} else {
+			if blockNum.Cmp(minBlock) < 0 {
+				minBlock = new(big.Int).Set(blockNum)
+			}
+			if blockNum.Cmp(maxBlock) > 0 {
+				maxBlock = new(big.Int).Set(blockNum)
 			}
 		}
 	}
-	s.bufferMu.Unlock()
 
 	// Then check S3 files
 	prefix := fmt.Sprintf("chain_%d/", chainId.Uint64())
@@ -786,8 +794,8 @@ func (s *S3Connector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int,
 	var headers []common.BlockHeader
 
 	// First get headers from buffer
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
+	bufferData := s.buffer.GetData()
+	for _, block := range bufferData {
 		if block.Block.ChainId.Cmp(chainId) == 0 {
 			// Check if block is in range (if from is specified)
 			if from != nil && block.Block.Number.Cmp(from) > 0 {
@@ -804,7 +812,6 @@ func (s *S3Connector) GetBlockHeadersDescending(chainId *big.Int, from *big.Int,
 			})
 		}
 	}
-	s.bufferMu.Unlock()
 
 	// If we need more headers, get from S3
 	if to == nil || len(headers) < int(to.Int64()) {
@@ -846,19 +853,8 @@ func (s *S3Connector) GetValidationBlockData(chainId *big.Int, startBlock *big.I
 		return nil, fmt.Errorf("start block must be less than or equal to end block")
 	}
 
-	var blockData []common.BlockData
-
 	// First check buffer for blocks in range
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
-		if block.Block.ChainId.Cmp(chainId) == 0 {
-			blockNum := block.Block.Number
-			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
-				blockData = append(blockData, block)
-			}
-		}
-	}
-	s.bufferMu.Unlock()
+	blockData := s.buffer.GetBlocksInRange(chainId, startBlock, endBlock)
 
 	// Then find and download relevant files from S3
 	files, err := s.findFilesInRange(chainId, startBlock, endBlock)
@@ -888,16 +884,10 @@ func (s *S3Connector) FindMissingBlockNumbers(chainId *big.Int, startBlock *big.
 	blockSet := make(map[string]bool)
 
 	// First add blocks from buffer
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
-		if block.Block.ChainId.Cmp(chainId) == 0 {
-			blockNum := block.Block.Number
-			if blockNum.Cmp(startBlock) >= 0 && blockNum.Cmp(endBlock) <= 0 {
-				blockSet[blockNum.String()] = true
-			}
-		}
+	bufferBlocks := s.buffer.GetBlocksInRange(chainId, startBlock, endBlock)
+	for _, block := range bufferBlocks {
+		blockSet[block.Block.Number.String()] = true
 	}
-	s.bufferMu.Unlock()
 
 	// Then check S3 files in range
 	files, err := s.findFilesInRange(chainId, startBlock, endBlock)
@@ -944,8 +934,8 @@ func (s *S3Connector) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int
 	var result []common.BlockData
 
 	// First check buffer for requested blocks
-	s.bufferMu.Lock()
-	for _, block := range s.buffer {
+	bufferData := s.buffer.GetData()
+	for _, block := range bufferData {
 		if block.Block.ChainId.Cmp(chainId) == 0 {
 			if blockNumMap[block.Block.Number.String()] {
 				result = append(result, block)
@@ -954,7 +944,6 @@ func (s *S3Connector) GetFullBlockData(chainId *big.Int, blockNumbers []*big.Int
 			}
 		}
 	}
-	s.bufferMu.Unlock()
 
 	// If all blocks were in buffer, return early
 	if len(blockNumMap) == 0 {
