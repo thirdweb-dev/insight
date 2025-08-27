@@ -22,7 +22,6 @@ type Orchestrator struct {
 	reorgHandlerEnabled     bool
 	cancel                  context.CancelFunc
 	wg                      sync.WaitGroup
-	shutdownOnce            sync.Once
 }
 
 func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
@@ -65,7 +64,10 @@ func (o *Orchestrator) Start() {
 			workModeMonitor.RegisterChannel(pollerWorkModeChan)
 			defer workModeMonitor.UnregisterChannel(pollerWorkModeChan)
 
-			poller := NewPoller(o.rpc, o.storage, WithPollerWorkModeChan(pollerWorkModeChan))
+			poller := NewPoller(o.rpc, o.storage,
+				WithPollerWorkModeChan(pollerWorkModeChan),
+				WithPollerS3Source(config.Cfg.Poller.S3),
+			)
 			poller.Start(ctx)
 
 			log.Info().Msg("Poller completed")

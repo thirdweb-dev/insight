@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -16,13 +17,14 @@ type LogConfig struct {
 }
 
 type PollerConfig struct {
-	Enabled         bool `mapstructure:"enabled"`
-	Interval        int  `mapstructure:"interval"`
-	BlocksPerPoll   int  `mapstructure:"blocksPerPoll"`
-	FromBlock       int  `mapstructure:"fromBlock"`
-	ForceFromBlock  bool `mapstructure:"forceFromBlock"`
-	UntilBlock      int  `mapstructure:"untilBlock"`
-	ParallelPollers int  `mapstructure:"parallelPollers"`
+	Enabled         bool            `mapstructure:"enabled"`
+	Interval        int             `mapstructure:"interval"`
+	BlocksPerPoll   int             `mapstructure:"blocksPerPoll"`
+	FromBlock       int             `mapstructure:"fromBlock"`
+	ForceFromBlock  bool            `mapstructure:"forceFromBlock"`
+	UntilBlock      int             `mapstructure:"untilBlock"`
+	ParallelPollers int             `mapstructure:"parallelPollers"`
+	S3              *S3SourceConfig `mapstructure:"s3"`
 }
 
 type CommitterConfig struct {
@@ -74,7 +76,7 @@ type StorageMainConfig struct {
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 	Kafka      *KafkaConfig      `mapstructure:"kafka"`
 	Badger     *BadgerConfig     `mapstructure:"badger"`
-	S3         *S3Config         `mapstructure:"s3"`
+	S3         *S3StorageConfig  `mapstructure:"s3"`
 }
 
 type BadgerConfig struct {
@@ -82,14 +84,18 @@ type BadgerConfig struct {
 }
 
 type S3Config struct {
-	Bucket          string         `mapstructure:"bucket"`
-	Region          string         `mapstructure:"region"`
-	Prefix          string         `mapstructure:"prefix"`
-	AccessKeyID     string         `mapstructure:"accessKeyId"`
-	SecretAccessKey string         `mapstructure:"secretAccessKey"`
-	Endpoint        string         `mapstructure:"endpoint"`
-	Format          string         `mapstructure:"format"`
-	Parquet         *ParquetConfig `mapstructure:"parquet"`
+	Bucket          string `mapstructure:"bucket"`
+	Region          string `mapstructure:"region"`
+	Prefix          string `mapstructure:"prefix"`
+	AccessKeyID     string `mapstructure:"accessKeyId"`
+	SecretAccessKey string `mapstructure:"secretAccessKey"`
+	Endpoint        string `mapstructure:"endpoint"`
+}
+
+type S3StorageConfig struct {
+	S3Config `mapstructure:",squash"`
+	Format   string         `mapstructure:"format"`
+	Parquet  *ParquetConfig `mapstructure:"parquet"`
 	// Buffering configuration
 	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush (default 512 MB)
 	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush (default 300 = 5 min)
@@ -235,6 +241,16 @@ type PublisherConfig struct {
 	Transactions TransactionPublisherConfig `mapstructure:"transactions"`
 	Traces       TracePublisherConfig       `mapstructure:"traces"`
 	Events       EventPublisherConfig       `mapstructure:"events"`
+}
+
+type S3SourceConfig struct {
+	S3Config               `mapstructure:",squash"`
+	CacheDir               string        `mapstructure:"cacheDir"`
+	MetadataTTL            time.Duration `mapstructure:"metadataTTL"`
+	FileCacheTTL           time.Duration `mapstructure:"fileCacheTTL"`
+	MaxCacheSize           int64         `mapstructure:"maxCacheSize"`
+	CleanupInterval        time.Duration `mapstructure:"cleanupInterval"`
+	MaxConcurrentDownloads int           `mapstructure:"maxConcurrentDownloads"`
 }
 
 type WorkModeConfig struct {

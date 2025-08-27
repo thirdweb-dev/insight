@@ -25,7 +25,7 @@ import (
 
 type S3Connector struct {
 	client    *s3.Client
-	config    *config.S3Config
+	config    *config.S3StorageConfig
 	formatter DataFormatter
 	buffer    *BlockBuffer
 
@@ -59,7 +59,7 @@ type ParquetBlockData struct {
 	Traces         []byte `parquet:"traces_json"`
 }
 
-func NewS3Connector(cfg *config.S3Config) (*S3Connector, error) {
+func NewS3Connector(cfg *config.S3StorageConfig) (*S3Connector, error) {
 	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
 		awsconfig.WithRegion(cfg.Region),
 	)
