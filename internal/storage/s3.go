@@ -115,10 +115,11 @@ func NewS3Connector(cfg *config.S3StorageConfig) (*S3Connector, error) {
 	}
 
 	// Create buffer with configured settings
-	buffer, err := NewBlockBufferWithBadger(cfg.BufferSize, cfg.MaxBlocksPerFile)
+	var buffer IBlockBuffer
+	buffer, err = NewBadgerBlockBuffer(cfg.BufferSize, cfg.MaxBlocksPerFile)
 	if err != nil {
-		// Fall back to in-memory buffer if Badger fails
-		log.Warn().Err(err).Msg("Failed to create Badger buffer, falling back to in-memory buffer")
+		// fallback
+		log.Error().Err(err).Msg("Failed to create Badger buffer, falling back to in-memory buffer")
 		buffer = NewBlockBuffer(cfg.BufferSize, cfg.MaxBlocksPerFile)
 	}
 
@@ -144,27 +145,14 @@ func (s *S3Connector) InsertBlockData(data []common.BlockData) error {
 		return nil
 	}
 
-	// Calculate actual serialized size for accurate memory tracking
-	formattedData, err := s.formatter.FormatBlockData(data)
-	if err != nil {
-		return fmt.Errorf("failed to format block data for size calculation: %w", err)
-	}
-
-	// Use actual serialized size for accurate memory tracking
-	actualSize := int64(len(formattedData))
-	log.Debug().
-		Int("block_count", len(data)).
-		Int64("size_bytes", actualSize).
-		Int64("avg_bytes_per_block", actualSize/int64(len(data))).
-		Msg("Calculated actual block data size")
-
 	// Add to buffer and check if flush is needed
-	shouldFlush := s.buffer.Add(data, actualSize)
+	shouldFlush := s.buffer.Add(data)
 
 	// Start or reset timer when first data is added
 	s.timerMu.Lock()
-	sizeBytes, blockCount := s.buffer.Size()
-	if sizeBytes == actualSize && blockCount == len(data) && s.config.BufferTimeout > 0 {
+	_, blockCount := s.buffer.Size()
+	// Check if this is the first batch added (buffer was empty before)
+	if blockCount == len(data) && s.config.BufferTimeout > 0 {
 		// First data added to buffer, track time and start timer
 		s.lastAddTime = time.Now()
 		if s.flushTimer != nil {
@@ -357,13 +345,11 @@ func (s *S3Connector) Close() error {
 		// Wait for worker to finish
 		s.wg.Wait()
 
-		// Clean up buffer resources (especially important for BadgerBlockBuffer)
-		if badgerBuffer, ok := s.buffer.(*BadgerBlockBuffer); ok {
-			if err := badgerBuffer.Close(); err != nil {
-				log.Error().Err(err).Msg("Error closing badger buffer")
-				if closeErr == nil {
-					closeErr = err
-				}
+		// Clean up buffer resources
+		if err := s.buffer.Close(); err != nil {
+			log.Error().Err(err).Msg("Error closing buffer")
+			if closeErr == nil {
+				closeErr = err
 			}
 		}
 	})

@@ -43,7 +43,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 		},
 	}
 
-	buffer.Add(blocks, 1024)
+	buffer.Add(blocks)
 
 	// Test O(1) GetMaxBlockNumber
 	start := time.Now()
@@ -82,7 +82,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 			},
 		},
 	}
-	buffer.Add(newBlocks, 512)
+	buffer.Add(newBlocks)
 	
 	maxBlock = buffer.GetMaxBlockNumber(chainId)
 	assert.NotNil(t, maxBlock)
@@ -107,7 +107,7 @@ func BenchmarkBadgerBlockBufferGetMaxBlockNumber(b *testing.B) {
 				},
 			},
 		}
-		buffer.Add(blocks, 1024)
+		buffer.Add(blocks)
 	}
 
 	b.ResetTimer()
@@ -133,7 +133,7 @@ func BenchmarkBadgerBlockBufferStats(b *testing.B) {
 					},
 				},
 			}
-			buffer.Add(blocks, 1024)
+			buffer.Add(blocks)
 		}
 	}
 

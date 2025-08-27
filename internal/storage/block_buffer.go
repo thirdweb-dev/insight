@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"math/big"
 	"sync"
@@ -20,7 +22,7 @@ type BlockBuffer struct {
 
 // IBlockBuffer defines the interface for block buffer implementations
 type IBlockBuffer interface {
-	Add(blocks []common.BlockData, actualSizeBytes int64) bool
+	Add(blocks []common.BlockData) bool
 	Flush() []common.BlockData
 	ShouldFlush() bool
 	Size() (int64, int)
@@ -31,6 +33,7 @@ type IBlockBuffer interface {
 	GetMaxBlockNumber(chainId *big.Int) *big.Int
 	Clear()
 	Stats() BufferStats
+	Close() error
 }
 
 // NewBlockBuffer creates a new in-memory block buffer
@@ -49,7 +52,7 @@ func NewBlockBufferWithBadger(maxSizeMB int64, maxBlocks int) (IBlockBuffer, err
 }
 
 // Add adds blocks to the buffer and returns true if flush is needed
-func (b *BlockBuffer) Add(blocks []common.BlockData, actualSizeBytes int64) bool {
+func (b *BlockBuffer) Add(blocks []common.BlockData) bool {
 	if len(blocks) == 0 {
 		return false
 	}
@@ -57,13 +60,27 @@ func (b *BlockBuffer) Add(blocks []common.BlockData, actualSizeBytes int64) bool
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// Calculate actual size by marshaling the entire batch once
+	// This gives us accurate size with minimal overhead since we marshal once per Add call
+	var actualSize int64
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+
+	// Marshal all blocks to get actual serialized size
+	if err := enc.Encode(blocks); err != nil {
+		// If encoding fails, use estimation as fallback
+		log.Warn().Err(err).Msg("Failed to marshal blocks for size calculation, buffer size is not reported correctly")
+	} else {
+		actualSize = int64(buf.Len())
+	}
+
 	// Add to buffer
 	b.data = append(b.data, blocks...)
-	b.sizeBytes += actualSizeBytes
+	b.sizeBytes += actualSize
 
 	log.Debug().
 		Int("block_count", len(blocks)).
-		Int64("size_bytes", actualSizeBytes).
+		Int64("actual_size_bytes", actualSize).
 		Int64("total_size_bytes", b.sizeBytes).
 		Int("total_blocks", len(b.data)).
 		Msg("Added blocks to buffer")
@@ -248,3 +265,18 @@ func (s BufferStats) String() string {
 	return fmt.Sprintf("BufferStats{blocks=%d, size=%dMB, chains=%d}",
 		s.BlockCount, s.SizeBytes/(1024*1024), s.ChainCount)
 }
+
+// Close closes the buffer (no-op for in-memory buffer)
+func (b *BlockBuffer) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// Clear the buffer to free memory
+	b.data = nil
+	b.sizeBytes = 0
+
+	return nil
+}
+
+// Ensure BlockBuffer implements IBlockBuffer interface
+var _ IBlockBuffer = (*BlockBuffer)(nil)

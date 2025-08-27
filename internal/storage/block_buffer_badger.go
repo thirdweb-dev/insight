@@ -20,7 +20,6 @@ type BadgerBlockBuffer struct {
 	mu           sync.RWMutex
 	db           *badger.DB
 	tempDir      string
-	sizeBytes    int64
 	maxSizeBytes int64
 	maxBlocks    int
 	blockCount   int
@@ -97,7 +96,7 @@ func NewBadgerBlockBuffer(maxSizeMB int64, maxBlocks int) (*BadgerBlockBuffer, e
 }
 
 // Add adds blocks to the buffer and returns true if flush is needed
-func (b *BadgerBlockBuffer) Add(blocks []common.BlockData, actualSizeBytes int64) bool {
+func (b *BadgerBlockBuffer) Add(blocks []common.BlockData) bool {
 	if len(blocks) == 0 {
 		return false
 	}
@@ -128,7 +127,6 @@ func (b *BadgerBlockBuffer) Add(blocks []common.BlockData, actualSizeBytes int64
 
 	// Update counters
 	b.blockCount += len(blocks)
-	b.sizeBytes += actualSizeBytes
 
 	// Update chain metadata for O(1) lookups
 	for _, block := range blocks {
@@ -154,8 +152,6 @@ func (b *BadgerBlockBuffer) Add(blocks []common.BlockData, actualSizeBytes int64
 
 	log.Debug().
 		Int("block_count", len(blocks)).
-		Int64("size_bytes", actualSizeBytes).
-		Int64("total_size_bytes", b.sizeBytes).
 		Int("total_blocks", b.blockCount).
 		Msg("Added blocks to badger buffer")
 
@@ -212,7 +208,6 @@ func (b *BadgerBlockBuffer) Flush() []common.BlockData {
 	// Reset counters and metadata
 	oldCount := b.blockCount
 	b.blockCount = 0
-	b.sizeBytes = 0
 	b.chainMetadata = make(map[uint64]*ChainMetadata)
 
 	log.Info().
@@ -233,7 +228,10 @@ func (b *BadgerBlockBuffer) ShouldFlush() bool {
 func (b *BadgerBlockBuffer) Size() (int64, int) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return b.sizeBytes, b.blockCount
+	
+	// Get actual size from Badger's LSM tree
+	lsm, _ := b.db.Size()
+	return lsm, b.blockCount
 }
 
 // IsEmpty returns true if the buffer is empty
@@ -382,7 +380,6 @@ func (b *BadgerBlockBuffer) Clear() {
 	}
 
 	b.blockCount = 0
-	b.sizeBytes = 0
 	b.chainMetadata = make(map[uint64]*ChainMetadata)
 }
 
@@ -391,9 +388,12 @@ func (b *BadgerBlockBuffer) Stats() BufferStats {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
+	// Get actual size from Badger
+	lsm, _ := b.db.Size()
+	
 	stats := BufferStats{
 		BlockCount: b.blockCount,
-		SizeBytes:  b.sizeBytes,
+		SizeBytes:  lsm,
 		ChainCount: len(b.chainMetadata),
 		ChainStats: make(map[uint64]ChainStats),
 	}
@@ -439,9 +439,12 @@ func (b *BadgerBlockBuffer) Close() error {
 // Private methods
 
 func (b *BadgerBlockBuffer) shouldFlushLocked() bool {
-	// Check size limit
-	if b.maxSizeBytes > 0 && b.sizeBytes >= b.maxSizeBytes {
-		return true
+	// Check size limit using Badger's actual size
+	if b.maxSizeBytes > 0 {
+		lsm, _ := b.db.Size()
+		if lsm >= b.maxSizeBytes {
+			return true
+		}
 	}
 
 	// Check block count limit
@@ -474,3 +477,6 @@ func (b *BadgerBlockBuffer) runGC() {
 		}
 	}
 }
+
+// Ensure BadgerBlockBuffer implements IBlockBuffer interface
+var _ IBlockBuffer = (*BadgerBlockBuffer)(nil)
