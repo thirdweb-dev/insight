@@ -239,6 +239,7 @@ func init() {
 	rootCmd.PersistentFlags().Uint("migrator-batchSize", 2000, "Batch size for storage operations in migrator")
 	rootCmd.PersistentFlags().Uint("migrator-startBlock", 0, "Start block for migration")
 	rootCmd.PersistentFlags().Uint("migrator-endBlock", 0, "End block for migration")
+	rootCmd.PersistentFlags().Uint("migrator-workerCount", 0, "Worker count for migration")
 
 	viper.BindPFlag("rpc.url", rootCmd.PersistentFlags().Lookup("rpc-url"))
 	viper.BindPFlag("rpc.blocks.blocksPerRequest", rootCmd.PersistentFlags().Lookup("rpc-blocks-blocksPerRequest"))
@@ -443,6 +444,8 @@ func init() {
 	viper.BindPFlag("migrator.startBlock", rootCmd.PersistentFlags().Lookup("migrator-startBlock"))
 	viper.BindPFlag("migrator.endBlock", rootCmd.PersistentFlags().Lookup("migrator-endBlock"))
 	viper.BindPFlag("migrator.batchSize", rootCmd.PersistentFlags().Lookup("migrator-batchSize"))
+	viper.BindPFlag("migrator.workerCount", rootCmd.PersistentFlags().Lookup("migrator-workerCount"))
+
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
 	rootCmd.AddCommand(validateAndFixCmd)

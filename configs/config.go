@@ -267,6 +267,7 @@ type MigratorConfig struct {
 	StartBlock  uint              `mapstructure:"startBlock"`
 	EndBlock    uint              `mapstructure:"endBlock"`
 	BatchSize   uint              `mapstructure:"batchSize"`
+	WorkerCount uint              `mapstructure:"workerCount"`
 }
 
 type Config struct {

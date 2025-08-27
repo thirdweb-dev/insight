@@ -55,6 +55,9 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 
 	// Calculate work distribution for workers
 	numWorkers := DEFAULT_WORKERS
+	if config.Cfg.Migrator.WorkerCount > 0 {
+		numWorkers = int(config.Cfg.Migrator.WorkerCount)
+	}
 	workRanges := divideBlockRange(rangeStartBlock, rangeEndBlock, numWorkers)
 	log.Info().Msgf("Starting %d workers to process migration", len(workRanges))
 
@@ -376,7 +379,9 @@ func (m *Migrator) DetermineMigrationBoundaries(targetStartBlock, targetEndBlock
 	}
 
 	log.Info().Msgf("Block in the target storage for range %s to %s: count=%s, max=%s", startBlock.String(), endBlock.String(), blockCount.String(), maxStoredBlock.String())
-	if maxStoredBlock != nil && maxStoredBlock.Cmp(startBlock) >= 0 {
+	// Only adjust start block if we actually have blocks stored (count > 0)
+	// When count is 0, maxStoredBlock might be 0 but that doesn't mean block 0 exists
+	if blockCount.Sign() > 0 && maxStoredBlock != nil && maxStoredBlock.Cmp(startBlock) >= 0 {
 		startBlock = new(big.Int).Add(maxStoredBlock, big.NewInt(1))
 	}
 
@@ -411,7 +416,9 @@ func (m *Migrator) DetermineMigrationBoundariesForRange(rangeStart, rangeEnd *bi
 	}
 
 	actualStart := rangeStart
-	if maxStoredBlock != nil && maxStoredBlock.Cmp(rangeStart) >= 0 {
+	// Only adjust start block if we actually have blocks stored (blockCount > 0)
+	// When blockCount is 0, maxStoredBlock might be 0 but that doesn't mean block 0 exists
+	if blockCount.Sign() > 0 && maxStoredBlock != nil && maxStoredBlock.Cmp(rangeStart) >= 0 {
 		// We have some blocks already, start from the next one
 		actualStart = new(big.Int).Add(maxStoredBlock, big.NewInt(1))
 
