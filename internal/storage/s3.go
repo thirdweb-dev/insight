@@ -27,7 +27,7 @@ type S3Connector struct {
 	client    *s3.Client
 	config    *config.S3StorageConfig
 	formatter DataFormatter
-	buffer    *BlockBuffer
+	buffer    IBlockBuffer
 
 	// Flush control
 	stopCh      chan struct{}
@@ -115,7 +115,12 @@ func NewS3Connector(cfg *config.S3StorageConfig) (*S3Connector, error) {
 	}
 
 	// Create buffer with configured settings
-	buffer := NewBlockBuffer(cfg.BufferSize, cfg.MaxBlocksPerFile)
+	buffer, err := NewBlockBufferWithBadger(cfg.BufferSize, cfg.MaxBlocksPerFile)
+	if err != nil {
+		// Fall back to in-memory buffer if Badger fails
+		log.Warn().Err(err).Msg("Failed to create Badger buffer, falling back to in-memory buffer")
+		buffer = NewBlockBuffer(cfg.BufferSize, cfg.MaxBlocksPerFile)
+	}
 
 	s3c := &S3Connector{
 		client:      s3Client,
@@ -351,6 +356,16 @@ func (s *S3Connector) Close() error {
 
 		// Wait for worker to finish
 		s.wg.Wait()
+
+		// Clean up buffer resources (especially important for BadgerBlockBuffer)
+		if badgerBuffer, ok := s.buffer.(*BadgerBlockBuffer); ok {
+			if err := badgerBuffer.Close(); err != nil {
+				log.Error().Err(err).Msg("Error closing badger buffer")
+				if closeErr == nil {
+					closeErr = err
+				}
+			}
+		}
 	})
 
 	return closeErr
@@ -481,7 +496,6 @@ func (f *ParquetFormatter) FormatBlockData(data []common.BlockData) ([]byte, err
 		}
 
 		// Convert block number to uint64 for efficient queries
-		// If block number is too large for uint64, use MaxUint64
 		blockNum := d.Block.Number.Uint64()
 		if d.Block.Number.BitLen() > 64 {
 			return nil, fmt.Errorf("block number exceeds uint64 is not supported")

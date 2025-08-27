@@ -18,13 +18,34 @@ type BlockBuffer struct {
 	maxBlocks    int
 }
 
-// NewBlockBuffer creates a new block buffer
+// IBlockBuffer defines the interface for block buffer implementations
+type IBlockBuffer interface {
+	Add(blocks []common.BlockData, actualSizeBytes int64) bool
+	Flush() []common.BlockData
+	ShouldFlush() bool
+	Size() (int64, int)
+	IsEmpty() bool
+	GetData() []common.BlockData
+	GetBlocksInRange(chainId *big.Int, startBlock, endBlock *big.Int) []common.BlockData
+	GetBlockByNumber(chainId *big.Int, blockNumber *big.Int) *common.BlockData
+	GetMaxBlockNumber(chainId *big.Int) *big.Int
+	Clear()
+	Stats() BufferStats
+}
+
+// NewBlockBuffer creates a new in-memory block buffer
 func NewBlockBuffer(maxSizeMB int64, maxBlocks int) *BlockBuffer {
 	return &BlockBuffer{
 		data:         make([]common.BlockData, 0),
 		maxSizeBytes: maxSizeMB * 1024 * 1024,
 		maxBlocks:    maxBlocks,
 	}
+}
+
+// NewBlockBufferWithBadger creates a new Badger-backed block buffer for better memory management
+// This uses ephemeral storage with optimized settings for caching
+func NewBlockBufferWithBadger(maxSizeMB int64, maxBlocks int) (IBlockBuffer, error) {
+	return NewBadgerBlockBuffer(maxSizeMB, maxBlocks)
 }
 
 // Add adds blocks to the buffer and returns true if flush is needed
