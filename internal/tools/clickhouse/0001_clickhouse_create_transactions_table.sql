@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     PROJECTION from_address_projection
     (
         SELECT
-          *
+          _part_offset
         ORDER BY 
           chain_id,
           from_address,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     PROJECTION to_address_projection
     (
         SELECT
-          *
+          _part_offset
         ORDER BY
           chain_id,
           to_address,
@@ -67,11 +67,12 @@ CREATE TABLE IF NOT EXISTS transactions (
         SELECT
           chain_id,
           from_address,
-          countState() AS tx_count_state,
-          minState(block_number) AS min_block_number_state,
-          minState(block_timestamp) AS min_block_timestamp_state,
-          maxState(block_number) AS max_block_number_state,
-          maxState(block_timestamp) AS max_block_timestamp_state
+          count() AS tx_count,
+          uniqExact(hash) AS unique_tx_count,
+          min(block_number) AS min_block_number,
+          min(block_timestamp) AS min_block_timestamp,
+          max(block_number) AS max_block_number,
+          max(block_timestamp) AS max_block_timestamp
         GROUP BY
           chain_id,
           from_address
@@ -81,11 +82,12 @@ CREATE TABLE IF NOT EXISTS transactions (
         SELECT
           chain_id,
           to_address,
-          countState() AS tx_count_state,
-          minState(block_number) AS min_block_number_state,
-          minState(block_timestamp) AS min_block_timestamp_state,
-          maxState(block_number) AS max_block_number_state,
-          maxState(block_timestamp) AS max_block_timestamp_state
+          count() AS tx_count,
+          uniqExact(hash) AS unique_tx_count,
+          min(block_number) AS min_block_number,
+          min(block_timestamp) AS min_block_timestamp,
+          max(block_number) AS max_block_number,
+          max(block_timestamp) AS max_block_timestamp
         GROUP BY
           chain_id,
           to_address
@@ -93,4 +95,4 @@ CREATE TABLE IF NOT EXISTS transactions (
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number, hash)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
-SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';
+SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild', allow_part_offset_column_in_projections=1;

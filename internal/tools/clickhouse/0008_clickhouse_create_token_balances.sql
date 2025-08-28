@@ -52,9 +52,16 @@ CREATE TABLE IF NOT EXISTS token_balances
       maxState(block_number) AS max_block_number_state,
       maxState(block_timestamp) AS max_block_timestamp_state
     GROUP BY chain_id, token_address, token_id, owner_address
+  ),
+
+  PROJECTION token_projection
+  (
+    SELECT
+      _part_offset
+    ORDER BY chain_id, token_address, token_id, owner_address
   )
 )
 ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 PARTITION BY chain_id
 ORDER BY (chain_id, owner_address, token_address, token_id, block_number, transaction_index, log_index, direction)
-SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild', deduplicate_merge_projection_mode = 'rebuild';
+SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild', deduplicate_merge_projection_mode = 'rebuild', allow_part_offset_column_in_projections=1;

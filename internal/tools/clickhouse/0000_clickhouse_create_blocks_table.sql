@@ -27,6 +27,22 @@ CREATE TABLE IF NOT EXISTS blocks (
 
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_hash hash TYPE bloom_filter GRANULARITY 2,
+
+    PROJECTION chain_state_projection
+    (
+        SELECT
+          chain_id,
+          count() AS count,
+          uniqExact(block_number) AS unique_block_count,
+          min(block_number) AS min_block_number,
+          min(block_timestamp) AS min_block_timestamp,
+          max(block_number) AS max_block_number,
+          max(block_timestamp) AS max_block_timestamp
+        GROUP BY
+          chain_id
+    )
+
+
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))

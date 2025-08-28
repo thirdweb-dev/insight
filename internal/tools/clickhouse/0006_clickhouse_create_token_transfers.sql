@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS token_transfers
 
     PROJECTION from_address_projection (
         SELECT
-            *
+            _part_offset
         ORDER BY
             chain_id,
             from_address,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS token_transfers
     ),
     PROJECTION to_address_projection (
         SELECT
-            *
+            _part_offset
         ORDER BY
             chain_id,
             to_address,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS token_transfers
     ),
     PROJECTION token_id_projection (
         SELECT 
-            *
+            _part_offset
         ORDER BY
             chain_id,
             token_address,
@@ -59,12 +59,12 @@ CREATE TABLE IF NOT EXISTS token_transfers
             from_address,
             token_address,
             token_type,
-            countState() AS transfer_count_state,
-            sumState(toInt256(amount)) AS total_amount_state,
-            minState(block_number) AS min_block_number_state,
-            minState(block_timestamp) AS min_block_timestamp_state,
-            maxState(block_number) AS max_block_number_state,
-            maxState(block_timestamp) AS max_block_timestamp_state
+            count() AS transfer_count,
+            sum(toInt256(amount)) AS total_amount,
+            min(block_number) AS min_block_number,
+            min(block_timestamp) AS min_block_timestamp,
+            max(block_number) AS max_block_number,
+            max(block_timestamp) AS max_block_timestamp
         GROUP BY
             chain_id,
             from_address,
@@ -77,12 +77,12 @@ CREATE TABLE IF NOT EXISTS token_transfers
             to_address,
             token_address,
             token_type,
-            countState() AS transfer_count_state,
-            sumState(toInt256(amount)) AS total_amount_state,
-            minState(block_number) AS min_block_number_state,
-            minState(block_timestamp) AS min_block_timestamp_state,
-            maxState(block_number) AS max_block_number_state,
-            maxState(block_timestamp) AS max_block_timestamp_state
+            count() AS transfer_count,
+            sum(toInt256(amount)) AS total_amount,
+            min(block_number) AS min_block_number,
+            min(block_timestamp) AS min_block_timestamp,
+            max(block_number) AS max_block_number,
+            max(block_timestamp) AS max_block_timestamp
         GROUP BY
             chain_id,
             to_address,
@@ -95,12 +95,12 @@ CREATE TABLE IF NOT EXISTS token_transfers
             token_address,
             token_id,
             token_type,
-            countState() AS transfer_count_state,
-            sumState(toInt256(amount)) AS total_volume_state,
-            minState(block_number) AS min_block_number_state,
-            minState(block_timestamp) AS min_block_timestamp_state,
-            maxState(block_number) AS max_block_number_state,
-            maxState(block_timestamp) AS max_block_timestamp_state
+            count() AS transfer_count,
+            sum(toInt256(amount)) AS total_volume,
+            min(block_number) AS min_block_number,
+            min(block_timestamp) AS min_block_timestamp,
+            max(block_number) AS max_block_number,
+            max(block_timestamp) AS max_block_timestamp
         GROUP BY
             chain_id,
             token_address,
@@ -111,4 +111,4 @@ CREATE TABLE IF NOT EXISTS token_transfers
 ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
 ORDER BY (chain_id, token_address, block_number, transaction_index, log_index)
-SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild', deduplicate_merge_projection_mode = 'rebuild';
+SETTINGS index_granularity = 8192, lightweight_mutation_projection_mode = 'rebuild', deduplicate_merge_projection_mode = 'rebuild', allow_part_offset_column_in_projections=1;

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS traces (
     PROJECTION from_address_projection
     (
         SELECT
-          *
+          _part_offset
         ORDER BY 
           chain_id,
           from_address,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS traces (
     PROJECTION to_address_projection
     (
         SELECT
-          *
+          _part_offset
         ORDER BY 
           chain_id,
           to_address,
@@ -55,4 +55,4 @@ CREATE TABLE IF NOT EXISTS traces (
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, transaction_hash, trace_address)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
-SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';
+SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild', allow_part_offset_column_in_projections=1;

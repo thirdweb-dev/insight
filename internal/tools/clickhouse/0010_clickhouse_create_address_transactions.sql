@@ -47,11 +47,12 @@ CREATE TABLE IF NOT EXISTS address_transactions (
         SELECT
           chain_id,
           address,
-          countState() AS tx_count_state,
-          minState(block_number) AS min_block_number_state,
-          minState(block_timestamp) AS min_block_timestamp_state,
-          maxState(block_number) AS max_block_number_state,
-          maxState(block_timestamp) AS max_block_timestamp_state
+          count() AS tx_count,
+          uniqExact(hash) AS unique_tx_count,
+          min(block_number) AS min_block_number,
+          min(block_timestamp) AS min_block_timestamp,
+          max(block_number) AS max_block_number,
+          max(block_timestamp) AS max_block_timestamp
         GROUP BY
           chain_id,
           address

@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS logs (
     PROJECTION chain_address_topic0_projection
     (
         SELECT
-            *
+            _part_offset
         ORDER BY 
             chain_id,
             address,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS logs (
     PROJECTION chain_topic0_projection
     (
         SELECT
-            *
+            _part_offset
         ORDER BY 
             chain_id,
             topic_0,
@@ -55,11 +55,11 @@ CREATE TABLE IF NOT EXISTS logs (
             chain_id,
             address,
             topic_0,
-            countState() AS log_count_state,
-            minState(block_number) AS min_block_number_state,
-            minState(block_timestamp) AS min_block_timestamp_state,
-            maxState(block_number) AS max_block_number_state,
-            maxState(block_timestamp) AS max_block_timestamp_state
+            count() AS log_count,
+            min(block_number) AS min_block_number,
+            min(block_timestamp) AS min_block_timestamp,
+            max(block_number) AS max_block_number,
+            max(block_timestamp) AS max_block_timestamp
         GROUP BY
             chain_id,
             address,
@@ -68,4 +68,4 @@ CREATE TABLE IF NOT EXISTS logs (
 ) ENGINE = ReplacingMergeTree(insert_timestamp, is_deleted)
 ORDER BY (chain_id, block_number, transaction_hash, log_index)
 PARTITION BY (chain_id, toStartOfQuarter(block_timestamp))
-SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild';
+SETTINGS deduplicate_merge_projection_mode = 'rebuild', lightweight_mutation_projection_mode = 'rebuild', allow_part_offset_column_in_projections=1;

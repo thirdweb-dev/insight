@@ -30,12 +30,12 @@ CREATE TABLE IF NOT EXISTS address_transfers (
             address_type,
             token_address,
             token_type,
-            countState() AS transfer_count_state,
-            sumState(toInt256(amount)) AS total_amount_state,
-            minState(block_number) AS min_block_number_state,
-            minState(block_timestamp) AS min_block_timestamp_state,
-            maxState(block_number) AS max_block_number_state,
-            maxState(block_timestamp) AS max_block_timestamp_state
+            count() AS transfer_count,
+            sum(toInt256(amount)) AS total_amount,
+            min(block_number) AS min_block_number,
+            min(block_timestamp) AS min_block_timestamp,
+            max(block_number) AS max_block_number,
+            max(block_timestamp) AS max_block_timestamp
         GROUP BY
             chain_id,
             address,
@@ -49,12 +49,12 @@ CREATE TABLE IF NOT EXISTS address_transfers (
             address,
             token_address,
             token_type,
-            countState() AS transfer_count_state,
-            sumState(toInt256(amount)) AS total_amount_state,
-            minState(block_number) AS min_block_number_state,
-            minState(block_timestamp) AS min_block_timestamp_state,
-            maxState(block_number) AS max_block_number_state,
-            maxState(block_timestamp) AS max_block_timestamp_state
+            count() AS transfer_count,
+            sum(toInt256(amount)) AS total_amount,
+            min(block_number) AS min_block_number,
+            min(block_timestamp) AS min_block_timestamp,
+            max(block_number) AS max_block_number,
+            max(block_timestamp) AS max_block_timestamp
         GROUP BY
             chain_id,
             address,
