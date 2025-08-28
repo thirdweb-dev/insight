@@ -98,8 +98,11 @@ func (v *Validator) ValidateBlock(blockData common.BlockData) (valid bool, err e
 			return true, nil
 		}
 
-		// TODO: remove this once we know how to validate all tx types
 		for _, tx := range blockData.Transactions {
+			if tx.TransactionType == 0x7E {
+				// TODO: Need to properly validate op-stack deposit transaction
+				return true, nil
+			}
 			if tx.TransactionType > 4 { // Currently supported types are 0-4
 				log.Warn().Msgf("Skipping transaction root validation for block %s due to unsupported transaction type %d", blockData.Block.Number, tx.TransactionType)
 				return true, nil
@@ -183,5 +186,6 @@ func (v *Validator) FindAndFixGaps(startBlock *big.Int, endBlock *big.Int) error
 		log.Error().Err(err).Msgf("Failed to insert missing blocks: %v", polledBlocks)
 		return err
 	}
+
 	return nil
 }

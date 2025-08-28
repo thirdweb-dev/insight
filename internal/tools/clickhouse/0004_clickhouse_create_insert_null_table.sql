@@ -1,5 +1,6 @@
-CREATE TABLE IF NOT EXISTS inserts_null_table (
+CREATE TABLE IF NOT EXISTS insert_null_block_data (
     chain_id UInt256,
+
     block Tuple(
         block_number UInt256,
         block_timestamp DateTime,
@@ -92,8 +93,7 @@ CREATE TABLE IF NOT EXISTS inserts_null_table (
         reward_type LowCardinality(Nullable(String)),
         refund_address Nullable(FixedString(42))
     )),
+
     insert_timestamp DateTime DEFAULT now(),
-    sign Int8 DEFAULT 1
-) ENGINE = MergeTree
-ORDER BY (chain_id, insert_timestamp)
-PARTITION BY chain_id;
+    is_deleted UInt8 DEFAULT 0
+) ENGINE = Null;

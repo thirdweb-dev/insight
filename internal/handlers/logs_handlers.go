@@ -224,7 +224,8 @@ func decodeLogsIfNeeded(chainId string, logs []common.Log, eventABI *abi.Event, 
 func getMainStorage() (storage.IMainStorage, error) {
 	storageOnce.Do(func() {
 		var err error
-		mainStorage, err = storage.NewConnector[storage.IMainStorage](&config.Cfg.Storage.Main)
+		// TODO: move this to a QueryConnector later to decouple read/write connector
+		mainStorage, err = storage.NewMainConnector(&config.Cfg.Storage.Main, nil)
 		if err != nil {
 			storageErr = err
 			log.Error().Err(err).Msg("Error creating storage connector")

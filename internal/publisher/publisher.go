@@ -76,6 +76,9 @@ func (p *Publisher) initialize() error {
 			User: config.Cfg.Publisher.Username,
 			Pass: config.Cfg.Publisher.Password,
 		}.AsMechanism()))
+	}
+
+	if config.Cfg.Publisher.EnableTLS {
 		tlsDialer := &tls.Dialer{NetDialer: &net.Dialer{Timeout: 10 * time.Second}}
 		opts = append(opts, kgo.Dialer(tlsDialer.DialContext))
 	}

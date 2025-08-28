@@ -78,6 +78,14 @@ func NewClickHouseConnector(cfg *config.ClickhouseConfig) (*ClickHouseConnector,
 	}, nil
 }
 
+// Close closes the ClickHouse connection
+func (c *ClickHouseConnector) Close() error {
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
+}
+
 func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	port := cfg.Port
 	if port == 0 {
@@ -99,6 +107,14 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 		},
 		MaxOpenConns: cfg.MaxOpenConns,
 		MaxIdleConns: cfg.MaxIdleConns,
+		Compression: func() *clickhouse.Compression {
+			c := &clickhouse.Compression{}
+			if cfg.EnableCompression {
+				zLog.Debug().Msg("ClickHouse LZ4 compression is enabled")
+				c.Method = clickhouse.CompressionLZ4
+			}
+			return c
+		}(),
 		Settings: func() clickhouse.Settings {
 			settings := clickhouse.Settings{
 				"do_not_merge_across_partitions_select_final": "1",
@@ -893,6 +909,19 @@ func (c *ClickHouseConnector) GetMaxBlockNumberInRange(chainId *big.Int, startBl
 	return maxBlockNumber, nil
 }
 
+func (c *ClickHouseConnector) GetBlockCount(chainId *big.Int, startBlock *big.Int, endBlock *big.Int) (blockCount *big.Int, err error) {
+	tableName := c.getTableName(chainId, "blocks")
+	query := fmt.Sprintf("SELECT COUNT(DISTINCT block_number) FROM %s.%s WHERE chain_id = ? AND block_number >= ? AND block_number <= ?", c.cfg.Database, tableName)
+	err = c.conn.QueryRow(context.Background(), query, chainId, startBlock, endBlock).Scan(&blockCount)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+	return blockCount, nil
+}
+
 func (c *ClickHouseConnector) getMaxBlockNumberConsistent(chainId *big.Int) (maxBlockNumber *big.Int, err error) {
 	tableName := c.getTableName(chainId, "blocks")
 	query := fmt.Sprintf("SELECT block_number FROM %s.%s WHERE chain_id = ? ORDER BY block_number DESC LIMIT 1 SETTINGS select_sequential_consistency = 1", c.cfg.Database, tableName)
@@ -1115,6 +1144,31 @@ func (c *ClickHouseConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*bi
 
 func (c *ClickHouseConnector) SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
 	query := fmt.Sprintf("INSERT INTO %s.cursors (chain_id, cursor_type, cursor_value) VALUES (%s, 'publish', '%s')", c.cfg.Database, chainId, blockNumber.String())
+	return c.conn.Exec(context.Background(), query)
+}
+
+func (c *ClickHouseConnector) GetLastCommittedBlockNumber(chainId *big.Int) (*big.Int, error) {
+	query := fmt.Sprintf("SELECT cursor_value FROM %s.cursors FINAL WHERE cursor_type = 'commit'", c.cfg.Database)
+	if chainId.Sign() > 0 {
+		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
+	}
+	var blockNumberString string
+	err := c.conn.QueryRow(context.Background(), query).Scan(&blockNumberString)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
+		return nil, err
+	}
+	blockNumber, ok := new(big.Int).SetString(blockNumberString, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberString)
+	}
+	return blockNumber, nil
+}
+
+func (c *ClickHouseConnector) SetLastCommittedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
+	query := fmt.Sprintf("INSERT INTO %s.cursors (chain_id, cursor_type, cursor_value) VALUES (%s, 'commit', '%s')", c.cfg.Database, chainId, blockNumber.String())
 	return c.conn.Exec(context.Background(), query)
 }
 
@@ -2157,7 +2211,7 @@ func (c *ClickHouseConnector) GetFullBlockData(chainId *big.Int, blockNumbers []
 	return blockData, nil
 }
 
-func (c *ClickHouseConnector) DeleteOlderThan(chainId *big.Int, blockNumber *big.Int) error {
+func (c *ClickHouseConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s.block_data (chain_id, block_number, is_deleted)
 		SELECT chain_id, block_number, 1

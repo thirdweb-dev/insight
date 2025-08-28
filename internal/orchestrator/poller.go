@@ -12,6 +12,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
+	"github.com/thirdweb-dev/indexer/internal/source"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
@@ -21,6 +22,7 @@ const DEFAULT_TRIGGER_INTERVAL = 1000
 
 type Poller struct {
 	rpc                  rpc.IRPCClient
+	worker               *worker.Worker
 	blocksPerPoll        int64
 	triggerIntervalMs    int64
 	storage              storage.IStorage
@@ -47,15 +49,33 @@ func WithPollerWorkModeChan(ch chan WorkMode) PollerOption {
 	}
 }
 
+func WithPollerS3Source(cfg *config.S3SourceConfig) PollerOption {
+	return func(p *Poller) {
+		if cfg == nil || cfg.Region == "" || cfg.Bucket == "" {
+			return
+		}
+
+		source, err := source.NewS3Source(cfg, p.rpc.GetChainID())
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to create S3 source")
+		}
+
+		log.Info().Msg("Poller S3 source configuration detected, setting up S3 source for poller")
+		p.worker = worker.NewWorkerWithArchive(p.rpc, source)
+	}
+}
+
 func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOption) *Poller {
 	blocksPerPoll := config.Cfg.Poller.BlocksPerPoll
 	if blocksPerPoll == 0 {
 		blocksPerPoll = DEFAULT_BLOCKS_PER_POLL
 	}
+
 	triggerInterval := config.Cfg.Poller.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_TRIGGER_INTERVAL
 	}
+
 	poller := &Poller{
 		rpc:               rpc,
 		triggerIntervalMs: int64(triggerInterval),
@@ -66,6 +86,10 @@ func NewBoundlessPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Po
 
 	for _, opt := range opts {
 		opt(poller)
+	}
+
+	if poller.worker == nil {
+		poller.worker = worker.NewWorker(poller.rpc)
 	}
 
 	return poller
@@ -158,8 +182,7 @@ func (p *Poller) Start(ctx context.Context) {
 
 					lastPolledBlock := p.Poll(pollCtx, blockNumbers)
 					if p.reachedPollLimit(lastPolledBlock) {
-						log.Debug().Msg("Reached poll limit, exiting poller")
-						cancel()
+						log.Info().Msgf("Reached poll limit at block %s, completing poller", lastPolledBlock.String())
 						return
 					}
 				}
@@ -236,8 +259,7 @@ func (p *Poller) PollWithoutSaving(ctx context.Context, blockNumbers []*big.Int)
 	endBlockNumberFloat, _ := endBlock.Float64()
 	metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
 
-	worker := worker.NewWorker(p.rpc)
-	results := worker.Run(ctx, blockNumbers)
+	results := p.worker.Run(ctx, blockNumbers)
 	blockData, failedResults := p.convertPollResultsToBlockData(results)
 	return blockData, failedResults
 }
@@ -353,7 +375,7 @@ func (p *Poller) handleBlockFailures(results []rpc.GetFullBlockResult) {
 			})
 		}
 	}
-	err := p.storage.OrchestratorStorage.StoreBlockFailures(blockFailures)
+	err := p.storage.StagingStorage.StoreBlockFailures(blockFailures)
 	if err != nil {
 		// TODO: exiting if this fails, but should handle this better
 		log.Error().Err(err).Msg("Error saving block failures")

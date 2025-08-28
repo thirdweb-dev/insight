@@ -26,10 +26,12 @@ type Committer struct {
 	blocksPerCommit    int
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
+	commitUntilBlock   *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock atomic.Uint64
 	lastPublishedBlock atomic.Uint64
 	publisher          *publisher.Publisher
+	poller             *Poller
 	workMode           WorkMode
 	workModeMutex      sync.RWMutex
 	workModeChan       chan WorkMode
@@ -60,14 +62,26 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
+	commitUntilBlock := config.Cfg.Committer.UntilBlock
+	if commitUntilBlock == 0 {
+		// default to match the poller.untilBlock
+		if config.Cfg.Poller.UntilBlock != 0 {
+			commitUntilBlock = config.Cfg.Poller.UntilBlock
+		} else {
+			commitUntilBlock = -1
+		}
+	}
+
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
 		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		commitFromBlock:   commitFromBlock,
+		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
+		poller:            NewBoundlessPoller(rpc, storage),
 		workMode:          "",
 	}
 	cfb := commitFromBlock.Uint64()
@@ -97,11 +111,36 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 
 	// Initialize publisher position - always use max(lastPublished, lastCommitted) to prevent double publishing
-	lastPublished, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(chainID)
+	lastPublished, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get last published block number from storage")
-		// If we can't read, assume we need to start from the beginning
-		lastPublished = nil
+		// It's okay to fail silently here; it's only used for staging cleanup and will be
+		// corrected by the worker loop.
+		log.Error().Err(err).Msg("failed to get last published block number")
+	} else if lastPublished != nil && lastPublished.Sign() > 0 {
+		// Always ensure publisher starts from at least the committed value
+		if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
+			if lastPublished.Cmp(latestCommittedBlockNumber) < 0 {
+				gap := new(big.Int).Sub(latestCommittedBlockNumber, lastPublished)
+				log.Warn().
+					Str("last_published", lastPublished.String()).
+					Str("latest_committed", latestCommittedBlockNumber.String()).
+					Str("gap", gap.String()).
+					Msg("Publisher is behind committed position, seeking forward to committed value")
+
+				c.lastPublishedBlock.Store(latestCommittedBlockNumber.Uint64())
+				if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, latestCommittedBlockNumber); err != nil {
+					log.Error().Err(err).Msg("Failed to update last published block number after seeking forward")
+					// Fall back to the stored value on error
+					c.lastPublishedBlock.Store(lastPublished.Uint64())
+				}
+			} else {
+				c.lastPublishedBlock.Store(lastPublished.Uint64())
+			}
+		} else {
+			c.lastPublishedBlock.Store(lastPublished.Uint64())
+		}
+	} else {
+		c.lastPublishedBlock.Store(c.lastCommittedBlock.Load())
 	}
 
 	// Determine the correct publish position - always take the maximum to avoid going backwards
@@ -130,7 +169,7 @@ func (c *Committer) Start(ctx context.Context) {
 
 	// Only update storage if we're changing the position
 	if lastPublished == nil || targetPublishBlock.Cmp(lastPublished) != 0 {
-		if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, targetPublishBlock); err != nil {
+		if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, targetPublishBlock); err != nil {
 			log.Error().Err(err).Msg("Failed to update published block number in storage")
 			// If we can't update storage, use what was there originally to avoid issues
 			if lastPublished != nil {
@@ -179,6 +218,7 @@ func (c *Committer) Start(ctx context.Context) {
 	}
 
 	c.runCommitLoop(ctx, interval)
+
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
 }
@@ -206,6 +246,11 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			if currentMode == "" {
 				log.Debug().Msg("Committer work mode not set, skipping commit")
 				continue
+			}
+			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitUntilBlock.Uint64() {
+				// Completing the commit loop if we've committed more than commit until block
+				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
+				return
 			}
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
 			if err != nil {
@@ -260,11 +305,11 @@ func (c *Committer) cleanupProcessedStagingBlocks() {
 	chainID := c.rpc.GetChainID()
 	blockNumber := new(big.Int).SetUint64(limit)
 	stagingDeleteStart := time.Now()
-	if err := c.storage.StagingStorage.DeleteOlderThan(chainID, blockNumber); err != nil {
+	if err := c.storage.StagingStorage.DeleteStagingDataOlderThan(chainID, blockNumber); err != nil {
 		log.Error().Err(err).Msg("Failed to delete staging data")
 		return
 	}
-	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
+	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingDataOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
 	metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
 }
 
@@ -315,7 +360,7 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 
 func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, error) {
 	// Get the last published block from storage (which was already corrected in Start)
-	latestPublishedBlockNumber, err := c.storage.StagingStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
+	latestPublishedBlockNumber, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last published block number: %v", err)
 	}
@@ -356,9 +401,16 @@ func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, e
 
 func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBlockNumber *big.Int) (*big.Int, error) {
 	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+
+	// If a commit until block is set, then set a limit on the commit until block
+	if c.commitUntilBlock.Sign() > 0 && untilBlock.Cmp(c.commitUntilBlock) > 0 {
+		return new(big.Int).Set(c.commitUntilBlock), nil
+	}
+
 	c.workModeMutex.RLock()
 	currentMode := c.workMode
 	c.workModeMutex.RUnlock()
+
 	if currentMode == WorkModeBackfill {
 		return untilBlock, nil
 	} else {
@@ -395,8 +447,7 @@ func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int)
 		}
 		return blocksData, nil
 	} else {
-		poller := NewBoundlessPoller(c.rpc, c.storage)
-		blocksData, err := poller.PollWithoutSaving(ctx, blockNumbers)
+		blocksData, err := c.poller.PollWithoutSaving(ctx, blockNumbers)
 		if err != nil {
 			return nil, fmt.Errorf("poller error: %v", err)
 		}
@@ -500,7 +551,7 @@ func (c *Committer) publish(ctx context.Context) error {
 
 	chainID := c.rpc.GetChainID()
 	highest := blockData[len(blockData)-1].Block.Number
-	if err := c.storage.StagingStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
+	if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
 		return err
 	}
 	c.lastPublishedBlock.Store(highest.Uint64())
@@ -562,13 +613,11 @@ func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big
 		return nil
 	}
 
-	poller := NewBoundlessPoller(c.rpc, c.storage)
-
 	missingBlockCount := new(big.Int).Sub(actualFirstBlock.Number, expectedStartBlockNumber).Int64()
 	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
-	if missingBlockCount > poller.blocksPerPoll {
-		log.Debug().Msgf("Limiting polling missing blocks to %d blocks due to config", poller.blocksPerPoll)
-		missingBlockCount = poller.blocksPerPoll
+	if missingBlockCount > c.poller.blocksPerPoll {
+		log.Debug().Msgf("Limiting polling missing blocks to %d blocks due to config", c.poller.blocksPerPoll)
+		missingBlockCount = c.poller.blocksPerPoll
 	}
 	missingBlockNumbers := make([]*big.Int, missingBlockCount)
 	for i := int64(0); i < missingBlockCount; i++ {
@@ -577,7 +626,7 @@ func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big
 	}
 
 	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
-	poller.Poll(ctx, missingBlockNumbers)
+	c.poller.Poll(ctx, missingBlockNumbers)
 	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
 }
 
@@ -594,11 +643,10 @@ func (c *Committer) handleMissingStagingData(ctx context.Context, blocksToCommit
 	}
 	log.Debug().Msgf("Detected missing blocks in staging data starting from %s.", blocksToCommit[0].String())
 
-	poller := NewBoundlessPoller(c.rpc, c.storage)
 	blocksToPoll := blocksToCommit
-	if len(blocksToCommit) > int(poller.blocksPerPoll) {
-		blocksToPoll = blocksToCommit[:int(poller.blocksPerPoll)]
+	if len(blocksToCommit) > int(c.poller.blocksPerPoll) {
+		blocksToPoll = blocksToCommit[:int(c.poller.blocksPerPoll)]
 	}
-	poller.Poll(ctx, blocksToPoll)
+	c.poller.Poll(ctx, blocksToPoll)
 	log.Debug().Msgf("Polled %d blocks due to committer detecting them as missing. Range: %s - %s", len(blocksToPoll), blocksToPoll[0].String(), blocksToPoll[len(blocksToPoll)-1].String())
 }

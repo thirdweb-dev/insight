@@ -336,7 +336,7 @@ func TestCommitDeletesAfterPublish(t *testing.T) {
 
 	mockRPC.EXPECT().GetChainID().Return(chainID)
 	mockMainStorage.EXPECT().InsertBlockData(blockData).Return(nil)
-	mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
+	mockStagingStorage.EXPECT().DeleteStagingDataOlderThan(chainID, big.NewInt(102)).RunAndReturn(func(*big.Int, *big.Int) error {
 		close(deleteDone)
 		return nil
 	})
@@ -347,7 +347,7 @@ func TestCommitDeletesAfterPublish(t *testing.T) {
 	select {
 	case <-deleteDone:
 	case <-time.After(2 * time.Second):
-		t.Fatal("DeleteOlderThan was not called within timeout period")
+		t.Fatal("DeleteStagingDataOlderThan was not called within timeout period")
 	}
 }
 
@@ -380,7 +380,7 @@ func TestCommitParallelPublisherMode(t *testing.T) {
 
 	mockStagingStorage.AssertNotCalled(t, "GetLastPublishedBlockNumber", mock.Anything)
 	mockStagingStorage.AssertNotCalled(t, "SetLastPublishedBlockNumber", mock.Anything, mock.Anything)
-	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "DeleteStagingDataOlderThan", mock.Anything, mock.Anything)
 }
 
 func TestCleanupProcessedStagingBlocks(t *testing.T) {
@@ -400,11 +400,11 @@ func TestCleanupProcessedStagingBlocks(t *testing.T) {
 	committer.lastPublishedBlock.Store(0)
 
 	committer.cleanupProcessedStagingBlocks()
-	mockStagingStorage.AssertNotCalled(t, "DeleteOlderThan", mock.Anything, mock.Anything)
+	mockStagingStorage.AssertNotCalled(t, "DeleteStagingDataOlderThan", mock.Anything, mock.Anything)
 
 	committer.lastPublishedBlock.Store(90)
 	mockRPC.EXPECT().GetChainID().Return(chainID)
-	mockStagingStorage.EXPECT().DeleteOlderThan(chainID, big.NewInt(90)).Return(nil)
+	mockStagingStorage.EXPECT().DeleteStagingDataOlderThan(chainID, big.NewInt(90)).Return(nil)
 	committer.cleanupProcessedStagingBlocks()
 }
 func TestHandleGap(t *testing.T) {
@@ -426,6 +426,7 @@ func TestHandleGap(t *testing.T) {
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{
 		Blocks: 5,
 	})
+	// GetChainID is not called in this flow since there are no block failures
 	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(100), big.NewInt(101), big.NewInt(102), big.NewInt(103), big.NewInt(104)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(100), Data: common.BlockData{Block: common.Block{Number: big.NewInt(100)}}},
 		{BlockNumber: big.NewInt(101), Data: common.BlockData{Block: common.Block{Number: big.NewInt(101)}}},

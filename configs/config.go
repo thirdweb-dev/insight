@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -16,13 +17,14 @@ type LogConfig struct {
 }
 
 type PollerConfig struct {
-	Enabled         bool `mapstructure:"enabled"`
-	Interval        int  `mapstructure:"interval"`
-	BlocksPerPoll   int  `mapstructure:"blocksPerPoll"`
-	FromBlock       int  `mapstructure:"fromBlock"`
-	ForceFromBlock  bool `mapstructure:"forceFromBlock"`
-	UntilBlock      int  `mapstructure:"untilBlock"`
-	ParallelPollers int  `mapstructure:"parallelPollers"`
+	Enabled         bool            `mapstructure:"enabled"`
+	Interval        int             `mapstructure:"interval"`
+	BlocksPerPoll   int             `mapstructure:"blocksPerPoll"`
+	FromBlock       int             `mapstructure:"fromBlock"`
+	ForceFromBlock  bool            `mapstructure:"forceFromBlock"`
+	UntilBlock      int             `mapstructure:"untilBlock"`
+	ParallelPollers int             `mapstructure:"parallelPollers"`
+	S3              *S3SourceConfig `mapstructure:"s3"`
 }
 
 type CommitterConfig struct {
@@ -30,6 +32,7 @@ type CommitterConfig struct {
 	Interval        int  `mapstructure:"interval"`
 	BlocksPerCommit int  `mapstructure:"blocksPerCommit"`
 	FromBlock       int  `mapstructure:"fromBlock"`
+	UntilBlock      int  `mapstructure:"untilBlock"`
 }
 
 type ReorgHandlerConfig struct {
@@ -47,21 +50,62 @@ type FailureRecovererConfig struct {
 }
 
 type StorageConfig struct {
-	Staging      StorageConnectionConfig `mapstructure:"staging"`
-	Main         StorageConnectionConfig `mapstructure:"main"`
-	Orchestrator StorageConnectionConfig `mapstructure:"orchestrator"`
+	Orchestrator StorageOrchestratorConfig `mapstructure:"orchestrator"`
+	Staging      StorageStagingConfig      `mapstructure:"staging"`
+	Main         StorageMainConfig         `mapstructure:"main"`
 }
-type StorageType string
 
-const (
-	StorageTypeMain         StorageType = "main"
-	StorageTypeStaging      StorageType = "staging"
-	StorageTypeOrchestrator StorageType = "orchestrator"
-)
-
-type StorageConnectionConfig struct {
+type StorageOrchestratorConfig struct {
+	Type       string            `mapstructure:"type"`
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
+	Redis      *RedisConfig      `mapstructure:"redis"`
+	Badger     *BadgerConfig     `mapstructure:"badger"`
+}
+
+type StorageStagingConfig struct {
+	Type       string            `mapstructure:"type"`
+	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
+	Postgres   *PostgresConfig   `mapstructure:"postgres"`
+	Badger     *BadgerConfig     `mapstructure:"badger"`
+}
+
+type StorageMainConfig struct {
+	Type       string            `mapstructure:"type"`
+	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
+	Postgres   *PostgresConfig   `mapstructure:"postgres"`
+	Kafka      *KafkaConfig      `mapstructure:"kafka"`
+	Badger     *BadgerConfig     `mapstructure:"badger"`
+	S3         *S3StorageConfig  `mapstructure:"s3"`
+}
+
+type BadgerConfig struct {
+	Path string `mapstructure:"path"`
+}
+
+type S3Config struct {
+	Bucket          string `mapstructure:"bucket"`
+	Region          string `mapstructure:"region"`
+	Prefix          string `mapstructure:"prefix"`
+	AccessKeyID     string `mapstructure:"accessKeyId"`
+	SecretAccessKey string `mapstructure:"secretAccessKey"`
+	Endpoint        string `mapstructure:"endpoint"`
+}
+
+type S3StorageConfig struct {
+	S3Config `mapstructure:",squash"`
+	Format   string         `mapstructure:"format"`
+	Parquet  *ParquetConfig `mapstructure:"parquet"`
+	// Buffering configuration
+	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush (default 512 MB)
+	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush (default 300 = 5 min)
+	MaxBlocksPerFile int   `mapstructure:"maxBlocksPerFile"`     // Max blocks per parquet file (0 = no limit, only size/timeout triggers)
+}
+
+type ParquetConfig struct {
+	Compression  string `mapstructure:"compression"`
+	RowGroupSize int64  `mapstructure:"rowGroupSize"`
+	PageSize     int64  `mapstructure:"pageSize"`
 }
 
 type TableConfig struct {
@@ -86,6 +130,7 @@ type ClickhouseConfig struct {
 	EnableParallelViewProcessing bool                           `mapstructure:"enableParallelViewProcessing"`
 	MaxQueryTime                 int                            `mapstructure:"maxQueryTime"`
 	MaxMemoryUsage               int                            `mapstructure:"maxMemoryUsage"`
+	EnableCompression            bool                           `mapstructure:"enableCompression"`
 }
 
 type PostgresConfig struct {
@@ -99,6 +144,21 @@ type PostgresConfig struct {
 	MaxIdleConns    int    `mapstructure:"maxIdleConns"`
 	MaxConnLifetime int    `mapstructure:"maxConnLifetime"`
 	ConnectTimeout  int    `mapstructure:"connectTimeout"`
+}
+
+type RedisConfig struct {
+	Host      string `mapstructure:"host"`
+	Port      int    `mapstructure:"port"`
+	Password  string `mapstructure:"password"`
+	DB        int    `mapstructure:"db"`
+	EnableTLS bool   `mapstructure:"enableTLS"`
+}
+
+type KafkaConfig struct {
+	Brokers   string `mapstructure:"brokers"`
+	Username  string `mapstructure:"username"`
+	Password  string `mapstructure:"password"`
+	EnableTLS bool   `mapstructure:"enableTLS"`
 }
 
 type RPCBatchRequestConfig struct {
@@ -177,10 +237,21 @@ type PublisherConfig struct {
 	Brokers      string                     `mapstructure:"brokers"`
 	Username     string                     `mapstructure:"username"`
 	Password     string                     `mapstructure:"password"`
+	EnableTLS    bool                       `mapstructure:"enableTLS"`
 	Blocks       BlockPublisherConfig       `mapstructure:"blocks"`
 	Transactions TransactionPublisherConfig `mapstructure:"transactions"`
 	Traces       TracePublisherConfig       `mapstructure:"traces"`
 	Events       EventPublisherConfig       `mapstructure:"events"`
+}
+
+type S3SourceConfig struct {
+	S3Config               `mapstructure:",squash"`
+	CacheDir               string        `mapstructure:"cacheDir"`
+	MetadataTTL            time.Duration `mapstructure:"metadataTTL"`
+	FileCacheTTL           time.Duration `mapstructure:"fileCacheTTL"`
+	MaxCacheSize           int64         `mapstructure:"maxCacheSize"`
+	CleanupInterval        time.Duration `mapstructure:"cleanupInterval"`
+	MaxConcurrentDownloads int           `mapstructure:"maxConcurrentDownloads"`
 }
 
 type WorkModeConfig struct {
@@ -190,6 +261,14 @@ type WorkModeConfig struct {
 
 type ValidationConfig struct {
 	Mode string `mapstructure:"mode"` // "disabled", "minimal", "strict"
+}
+
+type MigratorConfig struct {
+	Destination StorageMainConfig `mapstructure:"destination"`
+	StartBlock  uint              `mapstructure:"startBlock"`
+	EndBlock    uint              `mapstructure:"endBlock"`
+	BatchSize   uint              `mapstructure:"batchSize"`
+	WorkerCount uint              `mapstructure:"workerCount"`
 }
 
 type Config struct {
@@ -204,6 +283,7 @@ type Config struct {
 	Publisher        PublisherConfig        `mapstructure:"publisher"`
 	WorkMode         WorkModeConfig         `mapstructure:"workMode"`
 	Validation       ValidationConfig       `mapstructure:"validation"`
+	Migrator         MigratorConfig         `mapstructure:"migrator"`
 }
 
 var Cfg Config
