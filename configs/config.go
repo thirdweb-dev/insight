@@ -147,10 +147,11 @@ type PostgresConfig struct {
 }
 
 type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	Host      string `mapstructure:"host"`
+	Port      int    `mapstructure:"port"`
+	Password  string `mapstructure:"password"`
+	DB        int    `mapstructure:"db"`
+	EnableTLS bool   `mapstructure:"enableTLS"`
 }
 
 type KafkaConfig struct {

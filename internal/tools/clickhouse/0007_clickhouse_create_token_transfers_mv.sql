@@ -80,52 +80,56 @@ WHERE topic_0 = '0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0
 -- ERC1155 (batch)
 CREATE MATERIALIZED VIEW IF NOT EXISTS token_transfers_erc1155_batch_mv
 TO token_transfers
-AS
-SELECT
-    chain_id,
-    address AS token_address,
-    'erc1155' AS token_type,
-    reinterpretAsUInt256(reverse(unhex(id_hex))) AS token_id,
-    concat('0x', substring(topic_2, 27, 40)) AS from_address,
-    concat('0x', substring(topic_3, 27, 40)) AS to_address,
+AS 
+SELECT 
+  chain_id, 
+  address AS token_address, 
+  'erc1155' AS token_type, 
+  reinterpretAsUInt256(reverse(substring(bin, (ids_base + ((i - 1) * 32)) + 1, 32))) AS token_id, 
+  concat('0x', substring(topic_2, 27, 40)) AS from_address, 
+  concat('0x', substring(topic_3, 27, 40)) AS to_address, 
+  block_number, 
+  block_timestamp, 
+  transaction_hash, 
+  transaction_index, 
+  reinterpretAsUInt256(reverse(substring(bin, (am_base + ((i - 1) * 32)) + 1, 32))) AS amount,
+  log_index,
+  toNullable(toUInt16(i - 1)) AS batch_index,
+  insert_timestamp,
+  is_deleted 
+FROM (
+  SELECT 
+    chain_id, 
+    address, 
+    topic_2,
+    topic_3,
     block_number,
     block_timestamp,
     transaction_hash,
     transaction_index,
-    reinterpretAsUInt256(reverse(unhex(amount_hex))) AS amount,
     log_index,
-    toNullable(toUInt16(array_index - 1)) AS batch_index,
-    insert_timestamp,
-    is_deleted
-FROM (
-    SELECT 
-        chain_id, 
-        address, 
-        topic_2, 
-        topic_3,
-        block_number, 
-        block_timestamp, 
-        transaction_hash, 
-        transaction_index, 
-        log_index, 
-        is_deleted, 
-        insert_timestamp,
-        toUInt32(reinterpretAsUInt256(reverse(unhex(substring(data, 3, 64))))) AS ids_offset,
-        toUInt32(reinterpretAsUInt256(reverse(unhex(substring(data, 67, 64))))) AS amounts_offset,
-        toUInt32(reinterpretAsUInt256(reverse(unhex(substring(data, 3 + ids_offset * 2, 64))))) AS ids_length,
-        toUInt32(reinterpretAsUInt256(reverse(unhex(substring(data, 3 + amounts_offset * 2, 64))))) AS amounts_length,
-        arrayMap(i -> substring(data, 3 + ids_offset * 2 + 64 + (i-1)*64, 64), range(1, least(ids_length, 10000) + 1)) AS ids_array,
-        arrayMap(i -> substring(data, 3 + amounts_offset * 2 + 64 + (i-1)*64, 64), range(1, least(amounts_length, 10000) + 1)) AS amounts_array
-    FROM logs
-    WHERE topic_0 = '0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb'
-      AND length(topic_2) = 66 
-      AND length(topic_3) = 66
-      AND ids_length = amounts_length
-)
-ARRAY JOIN 
-    ids_array AS id_hex,
-    amounts_array AS amount_hex,
-    arrayEnumerate(ids_array) AS array_index;
+    is_deleted,
+    insert_timestamp, 
+    unhex(substring(data, 3)) AS bin,
+    length(unhex(substring(data, 3))) AS bin_len, 
+    toUInt32(reinterpretAsUInt256(reverse(substring(unhex(substring(data, 3)), 1, 32)))) AS ids_off,
+    toUInt32(reinterpretAsUInt256(reverse(substring(unhex(substring(data, 3)), 33, 32)))) AS am_off,
+    toUInt32(reinterpretAsUInt256(reverse(substring(unhex(substring(data, 3)), ids_off + 1, 32)))) AS ids_len,
+    toUInt32(reinterpretAsUInt256(reverse(substring(unhex(substring(data, 3)), am_off + 1, 32)))) AS am_len,
+    ids_off + 32 AS ids_base,
+    am_off + 32 AS am_base
+FROM default.logs
+WHERE (topic_0 = '0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb')
+  AND (length(topic_2) = 66)
+  AND (length(topic_3) = 66)
+  AND (ids_len = am_len)
+  AND (ids_len > 0)
+  AND ((ids_off + 32) <= bin_len)
+  AND ((am_off + 32) <= bin_len)
+  AND ((ids_base + (ids_len * 32)) <= bin_len)
+  AND ((am_base + (am_len * 32)) <= bin_len)
+) ARRAY JOIN range(1, ids_len + 1) AS i;
+
 
 -- ERC6909
 CREATE MATERIALIZED VIEW IF NOT EXISTS token_transfers_erc6909_mv
