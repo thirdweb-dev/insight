@@ -426,7 +426,7 @@ func TestHandleGap(t *testing.T) {
 	mockRPC.EXPECT().GetBlocksPerRequest().Return(rpc.BlocksPerRequestConfig{
 		Blocks: 5,
 	})
-	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
+	// GetChainID is not called in this flow since there are no block failures
 	mockRPC.EXPECT().GetFullBlocks(context.Background(), []*big.Int{big.NewInt(100), big.NewInt(101), big.NewInt(102), big.NewInt(103), big.NewInt(104)}).Return([]rpc.GetFullBlockResult{
 		{BlockNumber: big.NewInt(100), Data: common.BlockData{Block: common.Block{Number: big.NewInt(100)}}},
 		{BlockNumber: big.NewInt(101), Data: common.BlockData{Block: common.Block{Number: big.NewInt(101)}}},
