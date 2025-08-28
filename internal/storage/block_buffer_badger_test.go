@@ -17,7 +17,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 	defer buffer.Close()
 
 	chainId := big.NewInt(1)
-	
+
 	// Add blocks
 	blocks := []common.BlockData{
 		{
@@ -49,7 +49,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 	start := time.Now()
 	maxBlock := buffer.GetMaxBlockNumber(chainId)
 	elapsed := time.Since(start)
-	
+
 	assert.NotNil(t, maxBlock)
 	assert.Equal(t, big.NewInt(101), maxBlock)
 	assert.Less(t, elapsed, time.Millisecond, "GetMaxBlockNumber should be O(1) and very fast")
@@ -58,7 +58,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 	start = time.Now()
 	stats := buffer.Stats()
 	elapsed = time.Since(start)
-	
+
 	assert.Equal(t, 3, stats.BlockCount)
 	assert.Equal(t, 1, stats.ChainCount)
 	chainStats := stats.ChainStats[1]
@@ -71,7 +71,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 	buffer.Flush()
 	maxBlock = buffer.GetMaxBlockNumber(chainId)
 	assert.Nil(t, maxBlock)
-	
+
 	// Add new blocks and verify metadata is rebuilt
 	newBlocks := []common.BlockData{
 		{
@@ -83,7 +83,7 @@ func TestBadgerBlockBufferMetadataOptimization(t *testing.T) {
 		},
 	}
 	buffer.Add(newBlocks)
-	
+
 	maxBlock = buffer.GetMaxBlockNumber(chainId)
 	assert.NotNil(t, maxBlock)
 	assert.Equal(t, big.NewInt(200), maxBlock)
@@ -95,7 +95,7 @@ func BenchmarkBadgerBlockBufferGetMaxBlockNumber(b *testing.B) {
 	defer buffer.Close()
 
 	chainId := big.NewInt(1)
-	
+
 	// Add many blocks
 	for i := 0; i < 1000; i++ {
 		blocks := []common.BlockData{

@@ -228,7 +228,7 @@ func (b *BadgerBlockBuffer) ShouldFlush() bool {
 func (b *BadgerBlockBuffer) Size() (int64, int) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	// Get actual size from Badger's LSM tree
 	lsm, _ := b.db.Size()
 	return lsm, b.blockCount
@@ -390,7 +390,7 @@ func (b *BadgerBlockBuffer) Stats() BufferStats {
 
 	// Get actual size from Badger
 	lsm, _ := b.db.Size()
-	
+
 	stats := BufferStats{
 		BlockCount: b.blockCount,
 		SizeBytes:  lsm,
