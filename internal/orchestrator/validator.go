@@ -11,19 +11,20 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/validation"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 type Validator struct {
 	storage storage.IStorage
 	rpc     rpc.IRPCClient
-	poller  *Poller
+	worker  *worker.Worker
 }
 
-func NewValidator(rpcClient rpc.IRPCClient, s storage.IStorage) *Validator {
+func NewValidator(rpcClient rpc.IRPCClient, s storage.IStorage, w *worker.Worker) *Validator {
 	return &Validator{
 		rpc:     rpcClient,
 		storage: s,
-		poller:  NewBoundlessPoller(rpcClient, s),
+		worker:  w,
 	}
 }
 
@@ -145,12 +146,9 @@ func (v *Validator) FixBlocks(invalidBlocks []*big.Int, fixBatchSize int) error 
 		}
 		batch := invalidBlocks[i:end]
 
-		polledBlocks, failedBlocks := v.poller.PollWithoutSaving(context.Background(), batch)
+		polledBlocksRun := v.worker.Run(context.Background(), batch)
+		polledBlocks := v.convertResultsToBlockData(polledBlocksRun)
 		log.Debug().Msgf("Batch of invalid blocks polled: %d to %d", batch[0], batch[len(batch)-1])
-		if len(failedBlocks) > 0 {
-			log.Error().Msgf("Failed to poll %d blocks: %v", len(failedBlocks), failedBlocks)
-			return fmt.Errorf("failed to poll %d blocks: %v", len(failedBlocks), failedBlocks)
-		}
 
 		_, err := v.storage.MainStorage.ReplaceBlockData(polledBlocks)
 		if err != nil {
@@ -174,12 +172,9 @@ func (v *Validator) FindAndFixGaps(startBlock *big.Int, endBlock *big.Int) error
 	log.Debug().Msgf("Found %d missing blocks: %v", len(missingBlockNumbers), missingBlockNumbers)
 
 	// query missing blocks
-	polledBlocks, failedBlocks := v.poller.PollWithoutSaving(context.Background(), missingBlockNumbers)
-	log.Debug().Msg("Missing blocks polled")
-	if len(failedBlocks) > 0 {
-		log.Error().Msgf("Failed to poll %d blocks: %v", len(failedBlocks), failedBlocks)
-		return fmt.Errorf("failed to poll %d blocks: %v", len(failedBlocks), failedBlocks)
-	}
+	polledBlocksRun := v.worker.Run(context.Background(), missingBlockNumbers)
+	polledBlocks := v.convertResultsToBlockData(polledBlocksRun)
+	log.Debug().Msgf("Missing blocks polled: %v", len(polledBlocks))
 
 	err = v.storage.MainStorage.InsertBlockData(polledBlocks)
 	if err != nil {
@@ -188,4 +183,17 @@ func (v *Validator) FindAndFixGaps(startBlock *big.Int, endBlock *big.Int) error
 	}
 
 	return nil
+}
+
+func (v *Validator) convertResultsToBlockData(results []rpc.GetFullBlockResult) []common.BlockData {
+	blockData := make([]common.BlockData, 0, len(results))
+	for _, result := range results {
+		blockData = append(blockData, common.BlockData{
+			Block:        result.Data.Block,
+			Logs:         result.Data.Logs,
+			Transactions: result.Data.Transactions,
+			Traces:       result.Data.Traces,
+		})
+	}
+	return blockData
 }

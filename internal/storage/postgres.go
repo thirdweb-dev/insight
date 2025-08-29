@@ -333,32 +333,6 @@ func (p *PostgresConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, 
 	return blockDataList, rows.Err()
 }
 
-func (p *PostgresConnector) DeleteStagingData(data []common.BlockData) error {
-	if len(data) == 0 {
-		return nil
-	}
-
-	// Build single DELETE query with all tuples
-	tuples := make([]string, 0, len(data))
-	args := make([]interface{}, 0, len(data)*2)
-
-	for i, blockData := range data {
-		tuples = append(tuples, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
-		args = append(args, blockData.Block.ChainId.String(), blockData.Block.Number.String())
-	}
-
-	query := fmt.Sprintf(`DELETE FROM block_data
-	WHERE ctid IN (
-		SELECT ctid
-		FROM block_failures
-		WHERE (chain_id, block_number) IN (%s)
-		FOR UPDATE SKIP LOCKED
-	)`, strings.Join(tuples, ","))
-
-	_, err := p.db.Exec(query, args...)
-	return err
-}
-
 func (p *PostgresConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*big.Int, error) {
 	query := `SELECT cursor_value FROM cursors WHERE cursor_type = 'publish' AND chain_id = $1`
 
@@ -417,49 +391,6 @@ func (p *PostgresConnector) SetLastCommittedBlockNumber(chainId *big.Int, blockN
 	return err
 }
 
-func (p *PostgresConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
-	query := `SELECT MAX(block_number) FROM block_data WHERE 1=1`
-
-	args := []interface{}{}
-	argCount := 0
-
-	if chainId != nil && chainId.Sign() > 0 {
-		argCount++
-		query += fmt.Sprintf(" AND chain_id = $%d", argCount)
-		args = append(args, chainId.String())
-	}
-
-	if rangeStart != nil && rangeStart.Sign() > 0 {
-		argCount++
-		query += fmt.Sprintf(" AND block_number >= $%d", argCount)
-		args = append(args, rangeStart.String())
-	}
-
-	if rangeEnd != nil && rangeEnd.Sign() > 0 {
-		argCount++
-		query += fmt.Sprintf(" AND block_number <= $%d", argCount)
-		args = append(args, rangeEnd.String())
-	}
-
-	var blockNumberStr sql.NullString
-	err := p.db.QueryRow(query, args...).Scan(&blockNumberStr)
-	if err != nil {
-		return nil, err
-	}
-
-	// MAX returns NULL when no rows match
-	if !blockNumberStr.Valid {
-		return big.NewInt(0), nil
-	}
-
-	blockNumber, ok := new(big.Int).SetString(blockNumberStr.String, 10)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse block number: %s", blockNumberStr.String)
-	}
-
-	return blockNumber, nil
-}
-
 func (p *PostgresConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	query := `DELETE FROM block_data
 	WHERE ctid IN (
@@ -471,6 +402,39 @@ func (p *PostgresConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNu
 	)`
 	_, err := p.db.Exec(query, chainId.String(), blockNumber.String())
 	return err
+}
+
+// GetStagingDataBlockRange returns the minimum and maximum block numbers stored for a given chain
+func (p *PostgresConnector) GetStagingDataBlockRange(chainId *big.Int) (*big.Int, *big.Int, error) {
+	query := `SELECT MIN(block_number), MAX(block_number) 
+	          FROM block_data 
+	          WHERE chain_id = $1`
+
+	var minStr, maxStr sql.NullString
+	err := p.db.QueryRow(query, chainId.String()).Scan(&minStr, &maxStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+
+	// If either min or max is NULL (no data), return nil for both
+	if !minStr.Valid || !maxStr.Valid {
+		return nil, nil, nil
+	}
+
+	minBlock, ok := new(big.Int).SetString(minStr.String, 10)
+	if !ok {
+		return nil, nil, fmt.Errorf("failed to parse min block number: %s", minStr.String)
+	}
+
+	maxBlock, ok := new(big.Int).SetString(maxStr.String, 10)
+	if !ok {
+		return nil, nil, fmt.Errorf("failed to parse max block number: %s", maxStr.String)
+	}
+
+	return minBlock, maxBlock, nil
 }
 
 // Close closes the database connection

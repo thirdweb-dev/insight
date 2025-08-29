@@ -14,6 +14,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
 	"github.com/thirdweb-dev/indexer/internal/validation"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 var (
@@ -116,7 +117,7 @@ func RunValidateAndFix(cmd *cobra.Command, args []string) {
  * Validates a range of blocks (end and start are inclusive) for a given chain and fixes any problems it finds
  */
 func validateAndFixRange(rpcClient rpc.IRPCClient, s storage.IStorage, conn clickhouse.Conn, startBlock *big.Int, endBlock *big.Int, fixBatchSize int) error {
-	validator := orchestrator.NewValidator(rpcClient, s)
+	validator := orchestrator.NewValidator(rpcClient, s, worker.NewWorker(rpcClient))
 
 	chainId := rpcClient.GetChainID()
 	err := validation.FindAndRemoveDuplicates(conn, chainId, startBlock, endBlock)

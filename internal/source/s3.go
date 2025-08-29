@@ -27,18 +27,10 @@ import (
 
 // FileMetadata represents cached information about S3 files
 type FileMetadata struct {
-	Key        string
-	MinBlock   *big.Int
-	MaxBlock   *big.Int
-	Size       int64
-	LastAccess time.Time
-}
-
-// BlockIndex represents the index of blocks within a file
-type BlockIndex struct {
-	BlockNumber uint64
-	RowOffset   int64
-	RowSize     int
+	Key      string
+	MinBlock *big.Int
+	MaxBlock *big.Int
+	Size     int64
 }
 
 type S3Source struct {
@@ -64,9 +56,8 @@ type S3Source struct {
 
 	// Local file cache
 	cacheMu    sync.RWMutex
-	cacheMap   map[string]time.Time    // Track cache file access times
-	blockIndex map[string][]BlockIndex // File -> block indices
-	downloadMu sync.Mutex              // Prevent duplicate downloads
+	cacheMap   map[string]time.Time // Track cache file access times
+	downloadMu sync.Mutex           // Prevent duplicate downloads
 
 	// Download tracking
 	downloading map[string]*sync.WaitGroup // Files currently downloading
@@ -74,6 +65,9 @@ type S3Source struct {
 	// Active use tracking
 	activeUseMu sync.RWMutex
 	activeUse   map[string]int // Files currently being read (reference count)
+
+	// Memory management
+	memorySem chan struct{} // Semaphore for memory-limited operations
 }
 
 // ParquetBlockData represents the block data structure in parquet files
@@ -88,7 +82,7 @@ type ParquetBlockData struct {
 	Traces         []byte `parquet:"traces_json"`
 }
 
-func NewS3Source(cfg *config.S3SourceConfig, chainId *big.Int) (*S3Source, error) {
+func NewS3Source(chainId *big.Int, cfg *config.S3SourceConfig) (*S3Source, error) {
 	// Apply defaults
 	if cfg.MetadataTTL == 0 {
 		cfg.MetadataTTL = 10 * time.Minute
@@ -138,6 +132,12 @@ func NewS3Source(cfg *config.S3SourceConfig, chainId *big.Int) (*S3Source, error
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
+	// Create memory semaphore with 10 concurrent operations by default
+	memoryOps := 10
+	if cfg.MaxConcurrentDownloads > 0 {
+		memoryOps = cfg.MaxConcurrentDownloads * 2
+	}
+
 	archive := &S3Source{
 		client:                 s3Client,
 		config:                 cfg,
@@ -150,9 +150,9 @@ func NewS3Source(cfg *config.S3SourceConfig, chainId *big.Int) (*S3Source, error
 		maxConcurrentDownloads: cfg.MaxConcurrentDownloads,
 		fileMetadata:           make(map[string]*FileMetadata),
 		cacheMap:               make(map[string]time.Time),
-		blockIndex:             make(map[string][]BlockIndex),
 		downloading:            make(map[string]*sync.WaitGroup),
 		activeUse:              make(map[string]int),
+		memorySem:              make(chan struct{}, memoryOps),
 	}
 
 	// Start cache cleanup goroutine
@@ -183,24 +183,13 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 		return s.makeErrorResults(blockNumbers, err)
 	}
 
-	// Sort block numbers for efficient file access
-	sortedBlocks := make([]*big.Int, len(blockNumbers))
-	copy(sortedBlocks, blockNumbers)
-	sort.Slice(sortedBlocks, func(i, j int) bool {
-		return sortedBlocks[i].Cmp(sortedBlocks[j]) < 0
-	})
-
 	// Group blocks by files that contain them
-	fileGroups := s.groupBlocksByFiles(sortedBlocks)
+	fileGroups := s.groupBlocksByFiles(blockNumbers)
 
 	// Mark files as being actively used
 	s.activeUseMu.Lock()
 	for fileKey := range fileGroups {
 		s.activeUse[fileKey]++
-		log.Trace().
-			Str("file", fileKey).
-			Int("new_count", s.activeUse[fileKey]).
-			Msg("Incrementing file reference count")
 	}
 	s.activeUseMu.Unlock()
 
@@ -209,10 +198,6 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 		s.activeUseMu.Lock()
 		for fileKey := range fileGroups {
 			s.activeUse[fileKey]--
-			log.Trace().
-				Str("file", fileKey).
-				Int("new_count", s.activeUse[fileKey]).
-				Msg("Decrementing file reference count")
 			if s.activeUse[fileKey] <= 0 {
 				delete(s.activeUse, fileKey)
 			}
@@ -241,7 +226,6 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 	for fileKey, blocks := range fileGroups {
 		localPath := s.getCacheFilePath(fileKey)
 
-		// Double-check file still exists (defensive programming)
 		if !s.isFileCached(localPath) {
 			log.Error().Str("file", fileKey).Str("path", localPath).Msg("File disappeared after ensureFilesAvailable")
 			// Try to re-download the file synchronously as a last resort
@@ -557,8 +541,8 @@ func (s *S3Source) downloadFile(ctx context.Context, fileKey string) error {
 		return err
 	}
 
-	// Build block index for the file
-	go s.buildBlockIndex(localPath, fileKey)
+	// Don't build block index immediately - build on demand to save memory
+	// Block indices will be built lazily when needed
 
 	// Update cache map
 	s.cacheMu.Lock()
@@ -572,94 +556,11 @@ func (s *S3Source) downloadFile(ctx context.Context, fileKey string) error {
 
 // Optimized parquet reading
 
-func (s *S3Source) buildBlockIndex(filePath, fileKey string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		return err
-	}
-
-	pFile, err := parquet.OpenFile(file, stat.Size())
-	if err != nil {
-		return err
-	}
-
-	// Read only the block_number column to build index
-	blockNumCol := -1
-	for i, field := range pFile.Schema().Fields() {
-		if field.Name() == "block_number" {
-			blockNumCol = i
-			break
-		}
-	}
-
-	if blockNumCol < 0 {
-		return fmt.Errorf("block_number column not found")
-	}
-
-	var index []BlockIndex
-	for _, rg := range pFile.RowGroups() {
-		chunk := rg.ColumnChunks()[blockNumCol]
-		pages := chunk.Pages()
-		offset := int64(0)
-
-		for {
-			page, err := pages.ReadPage()
-			if err != nil {
-				break
-			}
-
-			values := page.Values()
-			// Type assert to the specific reader type
-			switch reader := values.(type) {
-			case parquet.Int64Reader:
-				// Handle int64 block numbers
-				blockNums := make([]int64, page.NumValues())
-				n, _ := reader.ReadInt64s(blockNums)
-
-				for i := 0; i < n; i++ {
-					if blockNums[i] >= 0 {
-						index = append(index, BlockIndex{
-							BlockNumber: uint64(blockNums[i]),
-							RowOffset:   offset + int64(i),
-							RowSize:     1,
-						})
-					}
-				}
-			default:
-				// Try to read as generic values
-				values := make([]parquet.Value, page.NumValues())
-				n, _ := reader.ReadValues(values)
-
-				for i := 0; i < n; i++ {
-					if !values[i].IsNull() {
-						blockNum := values[i].Uint64()
-						index = append(index, BlockIndex{
-							BlockNumber: blockNum,
-							RowOffset:   offset + int64(i),
-							RowSize:     1,
-						})
-					}
-				}
-			}
-			offset += int64(page.NumValues())
-		}
-	}
-
-	// Store index
-	s.cacheMu.Lock()
-	s.blockIndex[fileKey] = index
-	s.cacheMu.Unlock()
-
-	return nil
-}
-
 func (s *S3Source) readBlocksFromLocalFile(filePath string, blockNumbers []*big.Int) (map[uint64]rpc.GetFullBlockResult, error) {
+	// Acquire memory semaphore to limit concurrent memory usage
+	s.memorySem <- struct{}{}
+	defer func() { <-s.memorySem }()
+
 	// Update access time for this file
 	fileKey := s.getFileKeyFromPath(filePath)
 	if fileKey != "" {
@@ -692,63 +593,91 @@ func (s *S3Source) readBlocksFromLocalFile(filePath string, blockNumbers []*big.
 	}
 
 	results := make(map[uint64]rpc.GetFullBlockResult)
+	foundBlocks := make(map[uint64]bool)
 
 	// Read row groups
-	for _, rg := range pFile.RowGroups() {
+	for rgIdx, rg := range pFile.RowGroups() {
+		// Check if we've found all blocks already
+		if len(foundBlocks) == len(blockMap) {
+			break
+		}
+
 		// Check row group statistics to see if it contains our blocks
 		if !s.rowGroupContainsBlocks(rg, blockMap) {
 			continue
 		}
 
-		// Read rows from this row group using generic reader
-		rows := make([]parquet.Row, rg.NumRows())
-		reader := parquet.NewRowGroupReader(rg)
-
-		n, err := reader.ReadRows(rows)
-		if err != nil && err != io.EOF {
-			log.Warn().Err(err).Msg("Error reading row group")
+		// Use row-by-row reading to avoid loading entire row group into memory
+		if err := s.readRowGroupStreamingly(rg, blockMap, foundBlocks, results); err != nil {
+			log.Warn().
+				Err(err).
+				Int("row_group", rgIdx).
+				Str("file", filePath).
+				Msg("Error reading row group")
 			continue
-		}
-
-		// Convert rows to our struct
-		for i := 0; i < n; i++ {
-			row := rows[i]
-			if len(row) < 8 {
-				continue // Not enough columns
-			}
-
-			// Extract block number first to check if we need this row
-			blockNum := row[1].Uint64() // block_number is second column
-
-			// Skip if not in requested blocks
-			if !blockMap[blockNum] {
-				continue
-			}
-
-			// Build ParquetBlockData from row
-			pd := ParquetBlockData{
-				ChainId:        row[0].Uint64(),
-				BlockNumber:    blockNum,
-				BlockHash:      row[2].String(),
-				BlockTimestamp: row[3].Int64(),
-				Block:          row[4].ByteArray(),
-				Transactions:   row[5].ByteArray(),
-				Logs:           row[6].ByteArray(),
-				Traces:         row[7].ByteArray(),
-			}
-
-			// Parse block data
-			result, err := s.parseBlockData(pd)
-			if err != nil {
-				log.Warn().Err(err).Uint64("block", pd.BlockNumber).Msg("Failed to parse block data")
-				continue
-			}
-
-			results[pd.BlockNumber] = result
 		}
 	}
 
 	return results, nil
+}
+
+// readRowGroupStreamingly reads a row group row-by-row to minimize memory usage
+func (s *S3Source) readRowGroupStreamingly(rg parquet.RowGroup, blockMap map[uint64]bool, foundBlocks map[uint64]bool, results map[uint64]rpc.GetFullBlockResult) error {
+	reader := parquet.NewRowGroupReader(rg)
+
+	// Process rows one at a time instead of loading all into memory
+	for {
+		// Read single row
+		row := make([]parquet.Row, 1)
+		n, err := reader.ReadRows(row)
+		if err == io.EOF || n == 0 {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read row: %w", err)
+		}
+
+		if len(row[0]) < 8 {
+			continue // Not enough columns
+		}
+
+		// Extract block number first to check if we need this row
+		blockNum := row[0][1].Uint64() // block_number is second column
+
+		// Skip if not in requested blocks or already found
+		if !blockMap[blockNum] || foundBlocks[blockNum] {
+			continue
+		}
+
+		// Build ParquetBlockData from row
+		pd := ParquetBlockData{
+			ChainId:        row[0][0].Uint64(),
+			BlockNumber:    blockNum,
+			BlockHash:      row[0][2].String(),
+			BlockTimestamp: row[0][3].Int64(),
+			Block:          row[0][4].ByteArray(),
+			Transactions:   row[0][5].ByteArray(),
+			Logs:           row[0][6].ByteArray(),
+			Traces:         row[0][7].ByteArray(),
+		}
+
+		// Parse block data
+		result, err := s.parseBlockData(pd)
+		if err != nil {
+			log.Warn().Err(err).Uint64("block", pd.BlockNumber).Msg("Failed to parse block data")
+			continue
+		}
+
+		results[pd.BlockNumber] = result
+		foundBlocks[pd.BlockNumber] = true
+
+		// Check if we've found all blocks
+		if len(foundBlocks) == len(blockMap) {
+			break
+		}
+	}
+
+	return nil
 }
 
 func (s *S3Source) rowGroupContainsBlocks(rg parquet.RowGroup, blockMap map[uint64]bool) bool {
@@ -823,49 +752,6 @@ func (s *S3Source) parseBlockData(pd ParquetBlockData) (rpc.GetFullBlockResult, 
 		},
 		Error: nil,
 	}, nil
-}
-
-// RefreshMetadata forces a refresh of the metadata cache
-func (s *S3Source) RefreshMetadata(ctx context.Context) error {
-	s.metaMu.Lock()
-	s.metaLoaded = false
-	s.metaLoadTime = time.Time{}
-	s.metaMu.Unlock()
-
-	return s.loadMetadata(ctx)
-}
-
-// GetCacheStats returns statistics about the cache
-func (s *S3Source) GetCacheStats() (fileCount int, totalSize int64, oldestAccess time.Time) {
-	s.cacheMu.RLock()
-	defer s.cacheMu.RUnlock()
-
-	fileCount = len(s.cacheMap)
-	now := time.Now()
-
-	for key, accessTime := range s.cacheMap {
-		path := s.getCacheFilePath(key)
-		if info, err := os.Stat(path); err == nil {
-			totalSize += info.Size()
-		}
-		if oldestAccess.IsZero() || accessTime.Before(oldestAccess) {
-			oldestAccess = accessTime
-		}
-	}
-
-	// Also check metadata freshness
-	s.metaMu.RLock()
-	metaAge := now.Sub(s.metaLoadTime)
-	s.metaMu.RUnlock()
-
-	log.Debug().
-		Int("file_count", fileCount).
-		Int64("total_size_mb", totalSize/(1024*1024)).
-		Dur("oldest_file_age", now.Sub(oldestAccess)).
-		Dur("metadata_age", metaAge).
-		Msg("Cache statistics")
-
-	return fileCount, totalSize, oldestAccess
 }
 
 // Helper functions
@@ -1019,7 +905,6 @@ func (s *S3Source) cleanupCache() {
 					Msg("Removing expired file from cache")
 				os.Remove(cacheFile)
 				delete(s.cacheMap, fileKey)
-				delete(s.blockIndex, fileKey)
 			}
 		}
 
@@ -1113,7 +998,6 @@ func (s *S3Source) enforceMaxCacheSize() {
 
 		os.Remove(f.path)
 		delete(s.cacheMap, f.key)
-		delete(s.blockIndex, f.key)
 		totalSize -= f.size
 	}
 }

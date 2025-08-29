@@ -71,98 +71,6 @@ func (_c *MockIStagingStorage_Close_Call) RunAndReturn(run func() error) *MockIS
 	return _c
 }
 
-// DeleteBlockFailures provides a mock function with given fields: failures
-func (_m *MockIStagingStorage) DeleteBlockFailures(failures []common.BlockFailure) error {
-	ret := _m.Called(failures)
-
-	if len(ret) == 0 {
-		panic("no return value specified for DeleteBlockFailures")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func([]common.BlockFailure) error); ok {
-		r0 = rf(failures)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockIStagingStorage_DeleteBlockFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteBlockFailures'
-type MockIStagingStorage_DeleteBlockFailures_Call struct {
-	*mock.Call
-}
-
-// DeleteBlockFailures is a helper method to define mock.On call
-//   - failures []common.BlockFailure
-func (_e *MockIStagingStorage_Expecter) DeleteBlockFailures(failures interface{}) *MockIStagingStorage_DeleteBlockFailures_Call {
-	return &MockIStagingStorage_DeleteBlockFailures_Call{Call: _e.mock.On("DeleteBlockFailures", failures)}
-}
-
-func (_c *MockIStagingStorage_DeleteBlockFailures_Call) Run(run func(failures []common.BlockFailure)) *MockIStagingStorage_DeleteBlockFailures_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]common.BlockFailure))
-	})
-	return _c
-}
-
-func (_c *MockIStagingStorage_DeleteBlockFailures_Call) Return(_a0 error) *MockIStagingStorage_DeleteBlockFailures_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockIStagingStorage_DeleteBlockFailures_Call) RunAndReturn(run func([]common.BlockFailure) error) *MockIStagingStorage_DeleteBlockFailures_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// DeleteStagingData provides a mock function with given fields: data
-func (_m *MockIStagingStorage) DeleteStagingData(data []common.BlockData) error {
-	ret := _m.Called(data)
-
-	if len(ret) == 0 {
-		panic("no return value specified for DeleteStagingData")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func([]common.BlockData) error); ok {
-		r0 = rf(data)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockIStagingStorage_DeleteStagingData_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteStagingData'
-type MockIStagingStorage_DeleteStagingData_Call struct {
-	*mock.Call
-}
-
-// DeleteStagingData is a helper method to define mock.On call
-//   - data []common.BlockData
-func (_e *MockIStagingStorage_Expecter) DeleteStagingData(data interface{}) *MockIStagingStorage_DeleteStagingData_Call {
-	return &MockIStagingStorage_DeleteStagingData_Call{Call: _e.mock.On("DeleteStagingData", data)}
-}
-
-func (_c *MockIStagingStorage_DeleteStagingData_Call) Run(run func(data []common.BlockData)) *MockIStagingStorage_DeleteStagingData_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]common.BlockData))
-	})
-	return _c
-}
-
-func (_c *MockIStagingStorage_DeleteStagingData_Call) Return(_a0 error) *MockIStagingStorage_DeleteStagingData_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockIStagingStorage_DeleteStagingData_Call) RunAndReturn(run func([]common.BlockData) error) *MockIStagingStorage_DeleteStagingData_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // DeleteStagingDataOlderThan provides a mock function with given fields: chainId, blockNumber
 func (_m *MockIStagingStorage) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
 	ret := _m.Called(chainId, blockNumber)
@@ -206,124 +114,6 @@ func (_c *MockIStagingStorage_DeleteStagingDataOlderThan_Call) Return(_a0 error)
 }
 
 func (_c *MockIStagingStorage_DeleteStagingDataOlderThan_Call) RunAndReturn(run func(*big.Int, *big.Int) error) *MockIStagingStorage_DeleteStagingDataOlderThan_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetBlockFailures provides a mock function with given fields: qf
-func (_m *MockIStagingStorage) GetBlockFailures(qf storage.QueryFilter) ([]common.BlockFailure, error) {
-	ret := _m.Called(qf)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetBlockFailures")
-	}
-
-	var r0 []common.BlockFailure
-	var r1 error
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) ([]common.BlockFailure, error)); ok {
-		return rf(qf)
-	}
-	if rf, ok := ret.Get(0).(func(storage.QueryFilter) []common.BlockFailure); ok {
-		r0 = rf(qf)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]common.BlockFailure)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(storage.QueryFilter) error); ok {
-		r1 = rf(qf)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockIStagingStorage_GetBlockFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBlockFailures'
-type MockIStagingStorage_GetBlockFailures_Call struct {
-	*mock.Call
-}
-
-// GetBlockFailures is a helper method to define mock.On call
-//   - qf storage.QueryFilter
-func (_e *MockIStagingStorage_Expecter) GetBlockFailures(qf interface{}) *MockIStagingStorage_GetBlockFailures_Call {
-	return &MockIStagingStorage_GetBlockFailures_Call{Call: _e.mock.On("GetBlockFailures", qf)}
-}
-
-func (_c *MockIStagingStorage_GetBlockFailures_Call) Run(run func(qf storage.QueryFilter)) *MockIStagingStorage_GetBlockFailures_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(storage.QueryFilter))
-	})
-	return _c
-}
-
-func (_c *MockIStagingStorage_GetBlockFailures_Call) Return(_a0 []common.BlockFailure, _a1 error) *MockIStagingStorage_GetBlockFailures_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockIStagingStorage_GetBlockFailures_Call) RunAndReturn(run func(storage.QueryFilter) ([]common.BlockFailure, error)) *MockIStagingStorage_GetBlockFailures_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetLastStagedBlockNumber provides a mock function with given fields: chainId, rangeStart, rangeEnd
-func (_m *MockIStagingStorage) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (*big.Int, error) {
-	ret := _m.Called(chainId, rangeStart, rangeEnd)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetLastStagedBlockNumber")
-	}
-
-	var r0 *big.Int
-	var r1 error
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) (*big.Int, error)); ok {
-		return rf(chainId, rangeStart, rangeEnd)
-	}
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int, *big.Int) *big.Int); ok {
-		r0 = rf(chainId, rangeStart, rangeEnd)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*big.Int)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int, *big.Int) error); ok {
-		r1 = rf(chainId, rangeStart, rangeEnd)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockIStagingStorage_GetLastStagedBlockNumber_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLastStagedBlockNumber'
-type MockIStagingStorage_GetLastStagedBlockNumber_Call struct {
-	*mock.Call
-}
-
-// GetLastStagedBlockNumber is a helper method to define mock.On call
-//   - chainId *big.Int
-//   - rangeStart *big.Int
-//   - rangeEnd *big.Int
-func (_e *MockIStagingStorage_Expecter) GetLastStagedBlockNumber(chainId interface{}, rangeStart interface{}, rangeEnd interface{}) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
-	return &MockIStagingStorage_GetLastStagedBlockNumber_Call{Call: _e.mock.On("GetLastStagedBlockNumber", chainId, rangeStart, rangeEnd)}
-}
-
-func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) Run(run func(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int)) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*big.Int), args[1].(*big.Int), args[2].(*big.Int))
-	})
-	return _c
-}
-
-func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) Return(maxBlockNumber *big.Int, err error) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
-	_c.Call.Return(maxBlockNumber, err)
-	return _c
-}
-
-func (_c *MockIStagingStorage_GetLastStagedBlockNumber_Call) RunAndReturn(run func(*big.Int, *big.Int, *big.Int) (*big.Int, error)) *MockIStagingStorage_GetLastStagedBlockNumber_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -386,6 +176,73 @@ func (_c *MockIStagingStorage_GetStagingData_Call) RunAndReturn(run func(storage
 	return _c
 }
 
+// GetStagingDataBlockRange provides a mock function with given fields: chainId
+func (_m *MockIStagingStorage) GetStagingDataBlockRange(chainId *big.Int) (*big.Int, *big.Int, error) {
+	ret := _m.Called(chainId)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStagingDataBlockRange")
+	}
+
+	var r0 *big.Int
+	var r1 *big.Int
+	var r2 error
+	if rf, ok := ret.Get(0).(func(*big.Int) (*big.Int, *big.Int, error)); ok {
+		return rf(chainId)
+	}
+	if rf, ok := ret.Get(0).(func(*big.Int) *big.Int); ok {
+		r0 = rf(chainId)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*big.Int) *big.Int); ok {
+		r1 = rf(chainId)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(*big.Int) error); ok {
+		r2 = rf(chainId)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// MockIStagingStorage_GetStagingDataBlockRange_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStagingDataBlockRange'
+type MockIStagingStorage_GetStagingDataBlockRange_Call struct {
+	*mock.Call
+}
+
+// GetStagingDataBlockRange is a helper method to define mock.On call
+//   - chainId *big.Int
+func (_e *MockIStagingStorage_Expecter) GetStagingDataBlockRange(chainId interface{}) *MockIStagingStorage_GetStagingDataBlockRange_Call {
+	return &MockIStagingStorage_GetStagingDataBlockRange_Call{Call: _e.mock.On("GetStagingDataBlockRange", chainId)}
+}
+
+func (_c *MockIStagingStorage_GetStagingDataBlockRange_Call) Run(run func(chainId *big.Int)) *MockIStagingStorage_GetStagingDataBlockRange_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*big.Int))
+	})
+	return _c
+}
+
+func (_c *MockIStagingStorage_GetStagingDataBlockRange_Call) Return(minBlockNumber *big.Int, maxBlockNumber *big.Int, err error) *MockIStagingStorage_GetStagingDataBlockRange_Call {
+	_c.Call.Return(minBlockNumber, maxBlockNumber, err)
+	return _c
+}
+
+func (_c *MockIStagingStorage_GetStagingDataBlockRange_Call) RunAndReturn(run func(*big.Int) (*big.Int, *big.Int, error)) *MockIStagingStorage_GetStagingDataBlockRange_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // InsertStagingData provides a mock function with given fields: data
 func (_m *MockIStagingStorage) InsertStagingData(data []common.BlockData) error {
 	ret := _m.Called(data)
@@ -428,52 +285,6 @@ func (_c *MockIStagingStorage_InsertStagingData_Call) Return(_a0 error) *MockISt
 }
 
 func (_c *MockIStagingStorage_InsertStagingData_Call) RunAndReturn(run func([]common.BlockData) error) *MockIStagingStorage_InsertStagingData_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// StoreBlockFailures provides a mock function with given fields: failures
-func (_m *MockIStagingStorage) StoreBlockFailures(failures []common.BlockFailure) error {
-	ret := _m.Called(failures)
-
-	if len(ret) == 0 {
-		panic("no return value specified for StoreBlockFailures")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func([]common.BlockFailure) error); ok {
-		r0 = rf(failures)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockIStagingStorage_StoreBlockFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StoreBlockFailures'
-type MockIStagingStorage_StoreBlockFailures_Call struct {
-	*mock.Call
-}
-
-// StoreBlockFailures is a helper method to define mock.On call
-//   - failures []common.BlockFailure
-func (_e *MockIStagingStorage_Expecter) StoreBlockFailures(failures interface{}) *MockIStagingStorage_StoreBlockFailures_Call {
-	return &MockIStagingStorage_StoreBlockFailures_Call{Call: _e.mock.On("StoreBlockFailures", failures)}
-}
-
-func (_c *MockIStagingStorage_StoreBlockFailures_Call) Run(run func(failures []common.BlockFailure)) *MockIStagingStorage_StoreBlockFailures_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]common.BlockFailure))
-	})
-	return _c
-}
-
-func (_c *MockIStagingStorage_StoreBlockFailures_Call) Return(_a0 error) *MockIStagingStorage_StoreBlockFailures_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockIStagingStorage_StoreBlockFailures_Call) RunAndReturn(run func([]common.BlockFailure) error) *MockIStagingStorage_StoreBlockFailures_Call {
 	_c.Call.Return(run)
 	return _c
 }

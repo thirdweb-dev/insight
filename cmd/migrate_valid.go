@@ -202,7 +202,6 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 		}
 
 		blockNumbers := generateBlockNumbersForRange(currentBlock, batchEndBlock)
-		log.Info().Msgf("Worker %d: Processing blocks %s to %s", workerID, blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
 
 		// Fetch valid blocks from source
 		fetchStartTime := time.Now()
@@ -214,7 +213,6 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 			time.Sleep(3 * time.Second)
 			continue
 		}
-		log.Debug().Dur("duration", fetchDuration).Int("blocks_fetched", len(validBlocksForRange)).Msgf("Worker %d: Fetched valid blocks from source", workerID)
 
 		// Build map of fetched blocks
 		mapBuildStartTime := time.Now()
@@ -231,10 +229,11 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 			}
 		}
 		mapBuildDuration := time.Since(mapBuildStartTime)
-		log.Debug().Dur("duration", mapBuildDuration).Int("missing_blocks", len(missingBlocks)).Msgf("Worker %d: Identified missing blocks", workerID)
 
 		// Fetch missing blocks from RPC
 		if len(missingBlocks) > 0 {
+			log.Debug().Dur("duration", mapBuildDuration).Int("missing_blocks", len(missingBlocks)).Msgf("Worker %d: Identified missing blocks", workerID)
+
 			rpcFetchStartTime := time.Now()
 			validMissingBlocks := migrator.GetValidBlocksFromRPC(missingBlocks)
 			rpcFetchDuration := time.Since(rpcFetchStartTime)
@@ -249,13 +248,10 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 		}
 
 		// Prepare blocks for insertion
-		prepStartTime := time.Now()
 		blocksToInsert := make([]common.BlockData, 0, len(blocksToInsertMap))
 		for _, blockData := range blocksToInsertMap {
 			blocksToInsert = append(blocksToInsert, blockData)
 		}
-		prepDuration := time.Since(prepStartTime)
-		log.Debug().Dur("duration", prepDuration).Int("blocks_to_insert", len(blocksToInsert)).Msgf("Worker %d: Prepared blocks for insertion", workerID)
 
 		// Insert blocks to destination
 		insertStartTime := time.Now()
@@ -273,7 +269,9 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 			Dur("fetch_duration", fetchDuration).
 			Dur("insert_duration", insertDuration).
 			Int("blocks_processed", len(blocksToInsert)).
-			Msgf("Worker %d: Batch processed successfully", workerID)
+			Str("start_block_number", blockNumbers[0].String()).
+			Str("end_block_number", blockNumbers[len(blockNumbers)-1].String()).
+			Msgf("Worker %d: Batch processed successfully for %s - %s", workerID, blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
 
 		currentBlock = new(big.Int).Add(batchEndBlock, big.NewInt(1))
 	}
@@ -315,7 +313,7 @@ func NewMigrator() *Migrator {
 		log.Fatal().Msg("RPC does not support block receipts, but transactions were indexed with receipts")
 	}
 
-	validator := orchestrator.NewValidator(rpcClient, sourceConnector)
+	validator := orchestrator.NewValidator(rpcClient, sourceConnector, worker.NewWorker(rpcClient))
 
 	destinationConnector, err := storage.NewMainConnector(&config.Cfg.Migrator.Destination, &sourceConnector.OrchestratorStorage)
 	if err != nil {
@@ -441,8 +439,7 @@ func (m *Migrator) FetchBlocksFromRPC(blockNumbers []*big.Int) ([]common.BlockDa
 	blockData := m.worker.Run(context.Background(), blockNumbers)
 	for _, block := range blockData {
 		if block.Error != nil {
-			log.Warn().Err(block.Error).Msgf("Failed to fetch block %s from RPC", block.BlockNumber.String())
-			continue
+			return nil, block.Error
 		}
 		allBlockData = append(allBlockData, block.Data)
 	}
