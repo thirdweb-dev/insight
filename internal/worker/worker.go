@@ -26,6 +26,10 @@ const (
 	SourceTypeStaging SourceType = "staging"
 )
 
+const (
+	DEFAULT_RPC_CHUNK_SIZE = 25
+)
+
 // String returns the string representation of the source type
 func (s SourceType) String() string {
 	return string(s)
@@ -41,9 +45,13 @@ type Worker struct {
 }
 
 func NewWorker(rpc rpc.IRPCClient) *Worker {
+	chunk := rpc.GetBlocksPerRequest().Blocks
+	if chunk <= 0 {
+		chunk = DEFAULT_RPC_CHUNK_SIZE
+	}
 	return &Worker{
 		rpc:          rpc,
-		rpcChunkSize: rpc.GetBlocksPerRequest().Blocks,
+		rpcChunkSize: chunk,
 		rpcSemaphore: make(chan struct{}, 20),
 	}
 }
@@ -395,7 +403,7 @@ func (w *Worker) Run(ctx context.Context, blockNumbers []*big.Int) []rpc.GetFull
 	}
 
 	if !success {
-		sourceType := SourceTypeRPC
+		sourceType = SourceTypeRPC
 		results, errors = w.processBatchWithRetry(ctx, blockNumbers, sourceType, w.fetchFromRPC)
 		success = len(results) > 0 && len(errors) == 0
 	}

@@ -206,7 +206,11 @@ func (bc *BadgerConnector) Close() error {
 		bc.gcTicker.Stop()
 		close(bc.stopGC)
 	}
-	close(bc.stopRangeUpdate)
+	select {
+	case <-bc.stopRangeUpdate:
+	default:
+		close(bc.stopRangeUpdate)
+	}
 	return bc.db.Close()
 }
 

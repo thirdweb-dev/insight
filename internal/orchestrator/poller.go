@@ -230,9 +230,9 @@ func (p *Poller) Request(ctx context.Context, blockNumbers []*big.Int) []common.
 		return nil
 	}
 
-	p.lastPolledBlockMutex.Lock()
+	p.lastRequestedBlockMutex.Lock()
 	p.lastRequestedBlock = new(big.Int).Set(highestBlockNumber)
-	p.lastPolledBlockMutex.Unlock()
+	p.lastRequestedBlockMutex.Unlock()
 	return blockData
 }
 
@@ -292,13 +292,13 @@ func (p *Poller) reachedPollLimit(blockNumber *big.Int) bool {
 }
 
 func (p *Poller) getNextBlockRange(ctx context.Context) ([]*big.Int, error) {
-	p.blockRangeMutex.Lock()
-	defer p.blockRangeMutex.Unlock()
-
 	latestBlock, err := p.rpc.GetLatestBlockNumber(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	p.blockRangeMutex.Lock()
+	defer p.blockRangeMutex.Unlock()
 
 	p.lastPendingFetchBlockMutex.Lock()
 	lastPendingFetchBlock := new(big.Int).Set(p.lastPendingFetchBlock)
@@ -323,15 +323,15 @@ func (p *Poller) getNextBlockRange(ctx context.Context) ([]*big.Int, error) {
 		return nil, nil
 	}
 
+	p.lastPendingFetchBlockMutex.Lock()
+	p.lastPendingFetchBlock = new(big.Int).Set(endBlock)
+	p.lastPendingFetchBlockMutex.Unlock()
+
 	log.Debug().
 		Str("last_pending_block", lastPendingFetchBlock.String()).
 		Str("last_polled_block", lastPolledBlock.String()).
 		Str("last_requested_block", lastRequestedBlock.String()).
 		Msgf("GetNextBlockRange for poller workers")
-
-	p.lastPendingFetchBlockMutex.Lock()
-	p.lastPendingFetchBlock = new(big.Int).Set(endBlock)
-	p.lastPendingFetchBlockMutex.Unlock()
 
 	return p.createBlockNumbersForRange(startBlock, endBlock), nil
 }
