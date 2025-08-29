@@ -312,15 +312,8 @@ func (p *Poller) getNextBlockRange(ctx context.Context) ([]*big.Int, error) {
 	lastRequestedBlock := new(big.Int).Set(p.lastRequestedBlock)
 	p.lastRequestedBlockMutex.RUnlock()
 
-	log.Debug().
-		Str("last_pending_block", lastPendingFetchBlock.String()).
-		Str("last_polled_block", lastPolledBlock.String()).
-		Str("last_requested_block", lastRequestedBlock.String()).
-		Msgf("GetNextBlockRange for poller workers")
-
 	startBlock := new(big.Int).Add(lastPendingFetchBlock, big.NewInt(1))
 	if startBlock.Cmp(latestBlock) > 0 {
-		log.Debug().Msgf("Start block %s is greater than latest block %s, skipping", startBlock, latestBlock)
 		return nil, ErrNoNewBlocks
 	}
 
@@ -329,6 +322,12 @@ func (p *Poller) getNextBlockRange(ctx context.Context) ([]*big.Int, error) {
 		log.Debug().Msgf("Invalid range: start block %s is greater than end block %s, skipping", startBlock, endBlock)
 		return nil, nil
 	}
+
+	log.Debug().
+		Str("last_pending_block", lastPendingFetchBlock.String()).
+		Str("last_polled_block", lastPolledBlock.String()).
+		Str("last_requested_block", lastRequestedBlock.String()).
+		Msgf("GetNextBlockRange for poller workers")
 
 	p.lastPendingFetchBlockMutex.Lock()
 	p.lastPendingFetchBlock = new(big.Int).Set(endBlock)
