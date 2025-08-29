@@ -198,27 +198,6 @@ func TestFindReorgEndIndex(t *testing.T) {
 	}
 }
 
-func TestNewReorgHandlerWithForceFromBlock(t *testing.T) {
-	defer func() { config.Cfg = config.Config{} }()
-	mockRPC := mocks.NewMockIRPCClient(t)
-	mockMainStorage := mocks.NewMockIMainStorage(t)
-	mockOrchestratorStorage := mocks.NewMockIOrchestratorStorage(t)
-
-	mockStorage := storage.IStorage{
-		MainStorage:         mockMainStorage,
-		OrchestratorStorage: mockOrchestratorStorage,
-	}
-	config.Cfg.ReorgHandler.BlocksPerScan = 50
-	config.Cfg.ReorgHandler.FromBlock = 2000
-	config.Cfg.ReorgHandler.ForceFromBlock = true
-
-	mockRPC.EXPECT().GetChainID().Return(big.NewInt(1))
-
-	handler := NewReorgHandler(mockRPC, mockStorage)
-
-	assert.Equal(t, big.NewInt(2000), handler.lastCheckedBlock)
-}
-
 func TestFindFirstReorgedBlockNumber(t *testing.T) {
 	mockRPC := mocks.NewMockIRPCClient(t)
 	mockMainStorage := mocks.NewMockIMainStorage(t)

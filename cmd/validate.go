@@ -9,6 +9,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/orchestrator"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 var (
@@ -58,7 +59,7 @@ func RunValidate(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("Failed to initialize storage")
 	}
 
-	validator := orchestrator.NewValidator(rpcClient, s)
+	validator := orchestrator.NewValidator(rpcClient, s, worker.NewWorker(rpcClient))
 
 	_, invalidBlocks, err := validator.ValidateBlockRange(startBlock, endBlock)
 	if err != nil {

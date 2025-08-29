@@ -16,7 +16,6 @@ func setupTestConfig() {
 		config.Cfg = config.Config{
 			Poller: config.PollerConfig{
 				FromBlock:       0,
-				ForceFromBlock:  false,
 				UntilBlock:      0,
 				BlocksPerPoll:   0,
 				Interval:        0,
@@ -24,43 +23,6 @@ func setupTestConfig() {
 			},
 		}
 	}
-}
-
-func TestNewPoller_ForceFromBlockEnabled(t *testing.T) {
-	// Test case: should use configured start block if forceFromBlock is true
-	setupTestConfig()
-
-	mockRPC := &mocks.MockIRPCClient{}
-	mockStagingStorage := &mocks.MockIStagingStorage{}
-	mockMainStorage := &mocks.MockIMainStorage{}
-	mockOrchestratorStorage := &mocks.MockIOrchestratorStorage{}
-	mockStorage := storage.IStorage{
-		MainStorage:         mockMainStorage,
-		OrchestratorStorage: mockOrchestratorStorage,
-		StagingStorage:      mockStagingStorage,
-	}
-
-	// Setup mocks - GetChainID is not called when ForceFromBlock is true
-
-	// Save original config and restore after test
-	originalConfig := config.Cfg.Poller
-	defer func() { config.Cfg.Poller = originalConfig }()
-
-	// Configure test settings
-	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: true,
-		UntilBlock:     2000,
-	}
-
-	// Create poller
-	poller := NewPoller(mockRPC, mockStorage)
-
-	// Verify that lastPolledBlock is set to (fromBlock - 1) when ForceFromBlock is true
-	expectedBlock := big.NewInt(999) // fromBlock - 1
-	assert.Equal(t, expectedBlock, poller.lastPolledBlock)
-	assert.Equal(t, big.NewInt(1000), poller.pollFromBlock)
-	assert.Equal(t, big.NewInt(2000), poller.pollUntilBlock)
 }
 
 func TestNewPoller_StagingBlockHigherThanConfiguredStart(t *testing.T) {
@@ -93,9 +55,8 @@ func TestNewPoller_StagingBlockHigherThanConfiguredStart(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -141,9 +102,8 @@ func TestNewPoller_MainStorageBlockHigherThanConfiguredStart(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -189,9 +149,8 @@ func TestNewPoller_MainStorageBlockHigherThanStagingBlock(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -238,9 +197,8 @@ func TestNewPoller_ConfiguredStartBlockHighest(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -287,9 +245,8 @@ func TestNewPoller_StagingStorageError(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -335,9 +292,8 @@ func TestNewPoller_MainStorageError(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -384,9 +340,8 @@ func TestNewPoller_StagingBlockZero(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -432,9 +387,8 @@ func TestNewPoller_StagingBlockNegative(t *testing.T) {
 
 	// Configure test settings
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      1000,
-		ForceFromBlock: false,
-		UntilBlock:     2000,
+		FromBlock:  1000,
+		UntilBlock: 2000,
 	}
 
 	// Create poller
@@ -478,9 +432,8 @@ func TestNewPoller_DefaultConfigValues(t *testing.T) {
 
 	// Configure test settings with zero values
 	config.Cfg.Poller = config.PollerConfig{
-		FromBlock:      0,
-		ForceFromBlock: false,
-		UntilBlock:     0,
+		FromBlock:  0,
+		UntilBlock: 0,
 	}
 
 	// Create poller

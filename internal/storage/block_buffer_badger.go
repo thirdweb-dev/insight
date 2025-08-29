@@ -150,11 +150,6 @@ func (b *BadgerBlockBuffer) Add(blocks []common.BlockData) bool {
 		}
 	}
 
-	log.Debug().
-		Int("block_count", len(blocks)).
-		Int("total_blocks", b.blockCount).
-		Msg("Added blocks to badger buffer")
-
 	// Check if flush is needed
 	return b.shouldFlushLocked()
 }

@@ -53,10 +53,6 @@ func NewReorgHandler(rpc rpc.IRPCClient, storage storage.IStorage) *ReorgHandler
 
 func getInitialCheckedBlockNumber(storage storage.IStorage, chainId *big.Int) *big.Int {
 	configuredBn := big.NewInt(int64(config.Cfg.ReorgHandler.FromBlock))
-	if config.Cfg.ReorgHandler.ForceFromBlock {
-		log.Debug().Msgf("Force from block reorg check flag set, using configured: %s", configuredBn)
-		return configuredBn
-	}
 	storedBn, err := storage.OrchestratorStorage.GetLastReorgCheckedBlockNumber(chainId)
 	if err != nil {
 		log.Debug().Err(err).Msgf("Error getting last reorg checked block number, using configured: %s", configuredBn)

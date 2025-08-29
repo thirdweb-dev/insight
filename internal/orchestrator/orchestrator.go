@@ -10,18 +10,19 @@ import (
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
+	"github.com/thirdweb-dev/indexer/internal/source"
 	"github.com/thirdweb-dev/indexer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 type Orchestrator struct {
-	rpc                     rpc.IRPCClient
-	storage                 storage.IStorage
-	pollerEnabled           bool
-	failureRecovererEnabled bool
-	committerEnabled        bool
-	reorgHandlerEnabled     bool
-	cancel                  context.CancelFunc
-	wg                      sync.WaitGroup
+	rpc                 rpc.IRPCClient
+	storage             storage.IStorage
+	worker              *worker.Worker
+	poller              *Poller
+	reorgHandlerEnabled bool
+	cancel              context.CancelFunc
+	wg                  sync.WaitGroup
 }
 
 func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
@@ -31,12 +32,9 @@ func NewOrchestrator(rpc rpc.IRPCClient) (*Orchestrator, error) {
 	}
 
 	return &Orchestrator{
-		rpc:                     rpc,
-		storage:                 storage,
-		pollerEnabled:           config.Cfg.Poller.Enabled,
-		failureRecovererEnabled: config.Cfg.FailureRecoverer.Enabled,
-		committerEnabled:        config.Cfg.Committer.Enabled,
-		reorgHandlerEnabled:     config.Cfg.ReorgHandler.Enabled,
+		rpc:                 rpc,
+		storage:             storage,
+		reorgHandlerEnabled: config.Cfg.ReorgHandler.Enabled,
 	}, nil
 }
 
@@ -56,53 +54,31 @@ func (o *Orchestrator) Start() {
 	// Create the work mode monitor first
 	workModeMonitor := NewWorkModeMonitor(o.rpc, o.storage)
 
-	if o.pollerEnabled {
-		o.wg.Add(1)
-		go func() {
-			defer o.wg.Done()
-			pollerWorkModeChan := make(chan WorkMode, 1)
-			workModeMonitor.RegisterChannel(pollerWorkModeChan)
-			defer workModeMonitor.UnregisterChannel(pollerWorkModeChan)
+	o.initializeWorkerAndPoller()
 
-			poller := NewPoller(o.rpc, o.storage,
-				WithPollerWorkModeChan(pollerWorkModeChan),
-				WithPollerS3Source(config.Cfg.Poller.S3),
-			)
-			poller.Start(ctx)
+	o.wg.Add(1)
+	go func() {
+		defer o.wg.Done()
 
-			log.Info().Msg("Poller completed")
-			// If the poller is terminated, cancel the orchestrator
-			o.cancel()
-		}()
-	}
+		o.poller.Start(ctx)
 
-	if o.failureRecovererEnabled {
-		o.wg.Add(1)
-		go func() {
-			defer o.wg.Done()
-			failureRecoverer := NewFailureRecoverer(o.rpc, o.storage)
-			failureRecoverer.Start(ctx)
+		// If the poller is terminated, cancel the orchestrator
+		log.Info().Msg("Poller completed")
+		o.cancel()
+	}()
 
-			log.Info().Msg("Failure recoverer completed")
-		}()
-	}
+	o.wg.Add(1)
+	go func() {
+		defer o.wg.Done()
 
-	if o.committerEnabled {
-		o.wg.Add(1)
-		go func() {
-			defer o.wg.Done()
-			committerWorkModeChan := make(chan WorkMode, 1)
-			workModeMonitor.RegisterChannel(committerWorkModeChan)
-			defer workModeMonitor.UnregisterChannel(committerWorkModeChan)
-			validator := NewValidator(o.rpc, o.storage)
-			committer := NewCommitter(o.rpc, o.storage, WithCommitterWorkModeChan(committerWorkModeChan), WithValidator(validator))
-			committer.Start(ctx)
+		validator := NewValidator(o.rpc, o.storage, o.worker)
+		committer := NewCommitter(o.rpc, o.storage, o.poller, WithValidator(validator))
+		committer.Start(ctx)
 
-			// If the committer is terminated, cancel the orchestrator
-			log.Info().Msg("Committer completed")
-			o.cancel()
-		}()
-	}
+		// If the committer is terminated, cancel the orchestrator
+		log.Info().Msg("Committer completed")
+		o.cancel()
+	}()
 
 	if o.reorgHandlerEnabled {
 		o.wg.Add(1)
@@ -141,4 +117,28 @@ func (o *Orchestrator) Start() {
 	}
 
 	log.Info().Msg("Orchestrator shutdown complete")
+}
+
+func (o *Orchestrator) initializeWorkerAndPoller() {
+	var s3, staging source.ISource
+	var err error
+
+	chainId := o.rpc.GetChainID()
+	if config.Cfg.Poller.S3.Bucket != "" && config.Cfg.Poller.S3.Region != "" {
+		s3, err = source.NewS3Source(chainId, config.Cfg.Poller.S3)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error creating S3 source for worker")
+			return
+		}
+	}
+
+	if o.storage.StagingStorage != nil {
+		if staging, err = source.NewStagingSource(chainId, o.storage.StagingStorage); err != nil {
+			log.Fatal().Err(err).Msg("Error creating Staging source for worker")
+			return
+		}
+	}
+
+	o.worker = worker.NewWorkerWithSources(o.rpc, s3, staging)
+	o.poller = NewPoller(o.rpc, o.storage, WithPollerWorker(o.worker))
 }

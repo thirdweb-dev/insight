@@ -88,7 +88,7 @@ type ParquetBlockData struct {
 	Traces         []byte `parquet:"traces_json"`
 }
 
-func NewS3Source(cfg *config.S3SourceConfig, chainId *big.Int) (*S3Source, error) {
+func NewS3Source(chainId *big.Int, cfg *config.S3SourceConfig) (*S3Source, error) {
 	// Apply defaults
 	if cfg.MetadataTTL == 0 {
 		cfg.MetadataTTL = 10 * time.Minute
@@ -183,24 +183,13 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 		return s.makeErrorResults(blockNumbers, err)
 	}
 
-	// Sort block numbers for efficient file access
-	sortedBlocks := make([]*big.Int, len(blockNumbers))
-	copy(sortedBlocks, blockNumbers)
-	sort.Slice(sortedBlocks, func(i, j int) bool {
-		return sortedBlocks[i].Cmp(sortedBlocks[j]) < 0
-	})
-
 	// Group blocks by files that contain them
-	fileGroups := s.groupBlocksByFiles(sortedBlocks)
+	fileGroups := s.groupBlocksByFiles(blockNumbers)
 
 	// Mark files as being actively used
 	s.activeUseMu.Lock()
 	for fileKey := range fileGroups {
 		s.activeUse[fileKey]++
-		log.Trace().
-			Str("file", fileKey).
-			Int("new_count", s.activeUse[fileKey]).
-			Msg("Incrementing file reference count")
 	}
 	s.activeUseMu.Unlock()
 
@@ -209,10 +198,6 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 		s.activeUseMu.Lock()
 		for fileKey := range fileGroups {
 			s.activeUse[fileKey]--
-			log.Trace().
-				Str("file", fileKey).
-				Int("new_count", s.activeUse[fileKey]).
-				Msg("Decrementing file reference count")
 			if s.activeUse[fileKey] <= 0 {
 				delete(s.activeUse, fileKey)
 			}
@@ -241,7 +226,6 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 	for fileKey, blocks := range fileGroups {
 		localPath := s.getCacheFilePath(fileKey)
 
-		// Double-check file still exists (defensive programming)
 		if !s.isFileCached(localPath) {
 			log.Error().Str("file", fileKey).Str("path", localPath).Msg("File disappeared after ensureFilesAvailable")
 			// Try to re-download the file synchronously as a last resort

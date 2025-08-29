@@ -32,19 +32,10 @@ type Committer struct {
 	lastPublishedBlock atomic.Uint64
 	publisher          *publisher.Publisher
 	poller             *Poller
-	workMode           WorkMode
-	workModeMutex      sync.RWMutex
-	workModeChan       chan WorkMode
 	validator          *Validator
 }
 
 type CommitterOption func(*Committer)
-
-func WithCommitterWorkModeChan(ch chan WorkMode) CommitterOption {
-	return func(c *Committer) {
-		c.workModeChan = ch
-	}
-}
 
 func WithValidator(validator *Validator) CommitterOption {
 	return func(c *Committer) {
@@ -52,7 +43,7 @@ func WithValidator(validator *Validator) CommitterOption {
 	}
 }
 
-func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...CommitterOption) *Committer {
+func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, opts ...CommitterOption) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
@@ -81,8 +72,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, opts ...Committe
 		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
-		poller:            NewBoundlessPoller(rpc, storage),
-		workMode:          "",
+		poller:            poller,
 	}
 	cfb := commitFromBlock.Uint64()
 	committer.lastCommittedBlock.Store(cfb)
@@ -191,8 +181,6 @@ func (c *Committer) Start(ctx context.Context) {
 		}()).
 		Msg("Publisher initialized")
 
-	c.cleanupProcessedStagingBlocks()
-
 	if config.Cfg.Publisher.Mode == "parallel" {
 		var wg sync.WaitGroup
 		publishInterval := interval / 2
@@ -204,20 +192,19 @@ func (c *Committer) Start(ctx context.Context) {
 			defer wg.Done()
 			c.runPublishLoop(ctx, publishInterval)
 		}()
+
 		// allow the publisher to start before the committer
 		time.Sleep(publishInterval)
 		go func() {
 			defer wg.Done()
 			c.runCommitLoop(ctx, interval)
 		}()
+
 		<-ctx.Done()
 		wg.Wait()
-		log.Info().Msg("Committer shutting down")
-		c.publisher.Close()
-		return
+	} else {
+		c.runCommitLoop(ctx, interval)
 	}
-
-	c.runCommitLoop(ctx, interval)
 
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
@@ -228,25 +215,8 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 		select {
 		case <-ctx.Done():
 			return
-		case workMode := <-c.workModeChan:
-			if workMode != "" {
-				c.workModeMutex.Lock()
-				oldMode := c.workMode
-				if workMode != oldMode {
-					log.Info().Msgf("Committer work mode changing from %s to %s", oldMode, workMode)
-					c.workMode = workMode
-				}
-				c.workModeMutex.Unlock()
-			}
 		default:
 			time.Sleep(interval)
-			c.workModeMutex.RLock()
-			currentMode := c.workMode
-			c.workModeMutex.RUnlock()
-			if currentMode == "" {
-				log.Debug().Msg("Committer work mode not set, skipping commit")
-				continue
-			}
 			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitUntilBlock.Uint64() {
 				// Completing the commit loop if we've committed more than commit until block
 				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
@@ -264,6 +234,7 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			if err := c.commit(ctx, blockDataToCommit); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
+			go c.cleanupProcessedStagingBlocks()
 		}
 	}
 }
@@ -275,16 +246,10 @@ func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) 
 			return
 		default:
 			time.Sleep(interval)
-			c.workModeMutex.RLock()
-			currentMode := c.workMode
-			c.workModeMutex.RUnlock()
-			if currentMode == "" {
-				log.Debug().Msg("Committer work mode not set, skipping publish")
-				continue
-			}
 			if err := c.publish(ctx); err != nil {
 				log.Error().Err(err).Msg("Error publishing blocks")
 			}
+			go c.cleanupProcessedStagingBlocks()
 		}
 	}
 }
@@ -407,52 +372,27 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 		return new(big.Int).Set(c.commitUntilBlock), nil
 	}
 
-	c.workModeMutex.RLock()
-	currentMode := c.workMode
-	c.workModeMutex.RUnlock()
-
-	if currentMode == WorkModeBackfill {
-		return untilBlock, nil
-	} else {
-		// get latest block from RPC and if that's less than until block, return that
-		latestBlock, err := c.rpc.GetLatestBlockNumber(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("error getting latest block from RPC: %v", err)
-		}
-		if latestBlock.Cmp(untilBlock) < 0 {
-			log.Debug().Msgf("Committing until latest block: %s", latestBlock.String())
-			return latestBlock, nil
-		}
-		return untilBlock, nil
+	// get latest block from RPC and if that's less than until block, return that
+	latestBlock, err := c.rpc.GetLatestBlockNumber(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting latest block from RPC: %v", err)
 	}
+
+	if latestBlock.Cmp(untilBlock) < 0 {
+		log.Debug().Msgf("Committing until latest block: %s", latestBlock.String())
+		return latestBlock, nil
+	}
+
+	return untilBlock, nil
 }
 
 func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
-	c.workModeMutex.RLock()
-	currentMode := c.workMode
-	c.workModeMutex.RUnlock()
-	if currentMode == WorkModeBackfill {
-		startTime := time.Now()
-		blocksData, err := c.storage.StagingStorage.GetStagingData(storage.QueryFilter{BlockNumbers: blockNumbers, ChainId: c.rpc.GetChainID()})
-		log.Debug().Str("metric", "get_staging_data_duration").Msgf("StagingStorage.GetStagingData duration: %f", time.Since(startTime).Seconds())
-		metrics.GetStagingDataDuration.Observe(time.Since(startTime).Seconds())
-
-		if err != nil {
-			return nil, fmt.Errorf("error fetching blocks to commit: %v", err)
-		}
-		if len(blocksData) == 0 {
-			log.Warn().Msgf("Committer didn't find the following range in staging: %v - %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64())
-			c.handleMissingStagingData(ctx, blockNumbers)
-			return nil, nil
-		}
-		return blocksData, nil
-	} else {
-		blocksData, err := c.poller.PollWithoutSaving(ctx, blockNumbers)
-		if err != nil {
-			return nil, fmt.Errorf("poller error: %v", err)
-		}
-		return blocksData, nil
+	blocksData := c.poller.Request(ctx, blockNumbers)
+	if len(blocksData) == 0 {
+		log.Warn().Msgf("Committer didn't find the following range: %v - %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64())
+		return nil, nil
 	}
+	return blocksData, nil
 }
 
 func (c *Committer) getSequentialBlockData(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
@@ -485,8 +425,9 @@ func (c *Committer) getSequentialBlockData(ctx context.Context, blockNumbers []*
 		return blocksData[i].Block.Number.Cmp(blocksData[j].Block.Number) < 0
 	})
 
-	if blocksData[0].Block.Number.Cmp(blockNumbers[0]) != 0 {
-		return nil, c.handleGap(ctx, blockNumbers[0], blocksData[0].Block)
+	hasGap := blocksData[0].Block.Number.Cmp(blockNumbers[0]) != 0
+	if hasGap {
+		return nil, fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", blocksData[0].Block.Number.String(), blockNumbers[0].String())
 	}
 
 	var sequentialBlockData []common.BlockData
@@ -555,7 +496,6 @@ func (c *Committer) publish(ctx context.Context) error {
 		return err
 	}
 	c.lastPublishedBlock.Store(highest.Uint64())
-	go c.cleanupProcessedStagingBlocks()
 	return nil
 }
 
@@ -585,68 +525,14 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 				return
 			}
 			c.lastPublishedBlock.Store(highest)
-			c.cleanupProcessedStagingBlocks()
 		}()
 	}
 
 	c.lastCommittedBlock.Store(highestBlock.Number.Uint64())
-	go c.cleanupProcessedStagingBlocks()
 
 	// Update metrics for successful commits
 	metrics.SuccessfulCommits.Add(float64(len(blockData)))
 	metrics.LastCommittedBlock.Set(float64(highestBlock.Number.Int64()))
 	metrics.CommitterLagInSeconds.Set(float64(time.Since(highestBlock.Timestamp).Seconds()))
 	return nil
-}
-
-func (c *Committer) handleGap(ctx context.Context, expectedStartBlockNumber *big.Int, actualFirstBlock common.Block) error {
-	// increment the gap counter in prometheus
-	metrics.GapCounter.Inc()
-	// record the first missed block number in prometheus
-	metrics.MissedBlockNumbers.Set(float64(expectedStartBlockNumber.Int64()))
-
-	c.workModeMutex.RLock()
-	currentMode := c.workMode
-	c.workModeMutex.RUnlock()
-	if currentMode == WorkModeLive {
-		log.Debug().Msgf("Skipping gap handling in live mode. Expected block %s, actual first block %s", expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
-		return nil
-	}
-
-	missingBlockCount := new(big.Int).Sub(actualFirstBlock.Number, expectedStartBlockNumber).Int64()
-	log.Debug().Msgf("Detected %d missing blocks between blocks %s and %s", missingBlockCount, expectedStartBlockNumber.String(), actualFirstBlock.Number.String())
-	if missingBlockCount > c.poller.blocksPerPoll {
-		log.Debug().Msgf("Limiting polling missing blocks to %d blocks due to config", c.poller.blocksPerPoll)
-		missingBlockCount = c.poller.blocksPerPoll
-	}
-	missingBlockNumbers := make([]*big.Int, missingBlockCount)
-	for i := int64(0); i < missingBlockCount; i++ {
-		missingBlockNumber := new(big.Int).Add(expectedStartBlockNumber, big.NewInt(i))
-		missingBlockNumbers[i] = missingBlockNumber
-	}
-
-	log.Debug().Msgf("Polling %d blocks while handling gap: %v", len(missingBlockNumbers), missingBlockNumbers)
-	c.poller.Poll(ctx, missingBlockNumbers)
-	return fmt.Errorf("first block number (%s) in commit batch does not match expected (%s)", actualFirstBlock.Number.String(), expectedStartBlockNumber.String())
-}
-
-func (c *Committer) handleMissingStagingData(ctx context.Context, blocksToCommit []*big.Int) {
-	// Checks if there are any blocks in staging after the current range end
-	lastStagedBlockNumber, err := c.storage.StagingStorage.GetLastStagedBlockNumber(c.rpc.GetChainID(), blocksToCommit[len(blocksToCommit)-1], big.NewInt(0))
-	if err != nil {
-		log.Error().Err(err).Msg("Error checking staged data for missing range")
-		return
-	}
-	if lastStagedBlockNumber == nil || lastStagedBlockNumber.Sign() <= 0 {
-		log.Debug().Msgf("Committer is caught up with staging. No need to poll for missing blocks.")
-		return
-	}
-	log.Debug().Msgf("Detected missing blocks in staging data starting from %s.", blocksToCommit[0].String())
-
-	blocksToPoll := blocksToCommit
-	if len(blocksToCommit) > int(c.poller.blocksPerPoll) {
-		blocksToPoll = blocksToCommit[:int(c.poller.blocksPerPoll)]
-	}
-	c.poller.Poll(ctx, blocksToPoll)
-	log.Debug().Msgf("Polled %d blocks due to committer detecting them as missing. Range: %s - %s", len(blocksToPoll), blocksToPoll[0].String(), blocksToPoll[len(blocksToPoll)-1].String())
 }

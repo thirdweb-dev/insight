@@ -137,296 +137,6 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	return conn, nil
 }
 
-func (c *ClickHouseConnector) insertBlocks(blocks []common.Block, opt InsertOptions) error {
-	if len(blocks) == 0 {
-		return nil
-	}
-	tableName := c.getTableName(blocks[0].ChainId, "blocks")
-	columns := []string{
-		"chain_id", "block_number", "block_timestamp", "hash", "parent_hash", "sha3_uncles", "nonce",
-		"mix_hash", "miner", "state_root", "transactions_root", "receipts_root", "size", "logs_bloom",
-		"extra_data", "difficulty", "total_difficulty", "transaction_count", "gas_limit", "gas_used",
-		"withdrawals_root", "base_fee_per_gas", "sign",
-	}
-	if opt.AsDeleted {
-		columns = append(columns, "insert_timestamp")
-	}
-	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(blocks); i += c.cfg.MaxRowsPerInsert {
-		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(blocks) {
-			end = len(blocks)
-		}
-
-		batch, err := c.conn.PrepareBatch(context.Background(), query)
-		if err != nil {
-			return err
-		}
-		defer batch.Close()
-
-		for _, block := range blocks[i:end] {
-			args := []interface{}{
-				block.ChainId,
-				block.Number,
-				block.Timestamp,
-				block.Hash,
-				block.ParentHash,
-				block.Sha3Uncles,
-				block.Nonce,
-				block.MixHash,
-				block.Miner,
-				block.StateRoot,
-				block.TransactionsRoot,
-				block.ReceiptsRoot,
-				block.Size,
-				block.LogsBloom,
-				block.ExtraData,
-				block.Difficulty,
-				block.TotalDifficulty,
-				block.TransactionCount,
-				block.GasLimit,
-				block.GasUsed,
-				block.WithdrawalsRoot,
-				block.BaseFeePerGas,
-				func() int8 {
-					if block.Sign == -1 || opt.AsDeleted {
-						return -1
-					}
-					return 1
-				}(),
-			}
-			if opt.AsDeleted {
-				args = append(args, block.InsertTimestamp)
-			}
-			if err := batch.Append(args...); err != nil {
-				return err
-			}
-		}
-		if err := batch.Send(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *ClickHouseConnector) insertTransactions(txs []common.Transaction, opt InsertOptions) error {
-	if len(txs) == 0 {
-		return nil
-	}
-	tableName := c.getTableName(txs[0].ChainId, "transactions")
-	columns := []string{
-		"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp", "transaction_index", "from_address", "to_address", "value", "gas",
-		"gas_price", "data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas", "max_fee_per_blob_gas", "blob_versioned_hashes", "transaction_type", "r", "s", "v", "access_list",
-		"authorization_list", "contract_address", "gas_used", "cumulative_gas_used", "effective_gas_price", "blob_gas_used", "blob_gas_price", "logs_bloom", "status", "sign",
-	}
-	if opt.AsDeleted {
-		columns = append(columns, "insert_timestamp")
-	}
-	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(txs); i += c.cfg.MaxRowsPerInsert {
-		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(txs) {
-			end = len(txs)
-		}
-
-		batch, err := c.conn.PrepareBatch(context.Background(), query)
-		if err != nil {
-			return err
-		}
-		defer batch.Close()
-
-		for _, tx := range txs[i:end] {
-			args := []interface{}{
-				tx.ChainId,
-				tx.Hash,
-				tx.Nonce,
-				tx.BlockHash,
-				tx.BlockNumber,
-				tx.BlockTimestamp,
-				tx.TransactionIndex,
-				tx.FromAddress,
-				tx.ToAddress,
-				tx.Value,
-				tx.Gas,
-				tx.GasPrice,
-				tx.Data,
-				tx.FunctionSelector,
-				tx.MaxFeePerGas,
-				tx.MaxPriorityFeePerGas,
-				tx.MaxFeePerBlobGas,
-				tx.BlobVersionedHashes,
-				tx.TransactionType,
-				tx.R,
-				tx.S,
-				tx.V,
-				tx.AccessListJson,
-				tx.AuthorizationListJson,
-				tx.ContractAddress,
-				tx.GasUsed,
-				tx.CumulativeGasUsed,
-				tx.EffectiveGasPrice,
-				tx.BlobGasUsed,
-				tx.BlobGasPrice,
-				tx.LogsBloom,
-				tx.Status,
-				func() int8 {
-					if tx.Sign == -1 || opt.AsDeleted {
-						return -1
-					}
-					return 1
-				}(),
-			}
-			if opt.AsDeleted {
-				args = append(args, tx.InsertTimestamp)
-			}
-			if err := batch.Append(args...); err != nil {
-				return err
-			}
-		}
-
-		if err := batch.Send(); err != nil {
-			return err
-		}
-	}
-	metrics.ClickHouseTransactionsInserted.Add(float64(len(txs)))
-	return nil
-}
-
-func (c *ClickHouseConnector) insertLogs(logs []common.Log, opt InsertOptions) error {
-	if len(logs) == 0 {
-		return nil
-	}
-	tableName := c.getTableName(logs[0].ChainId, "logs")
-	columns := []string{
-		"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index",
-		"log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3", "sign",
-	}
-	if opt.AsDeleted {
-		columns = append(columns, "insert_timestamp")
-	}
-	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(logs); i += c.cfg.MaxRowsPerInsert {
-		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(logs) {
-			end = len(logs)
-		}
-
-		batch, err := c.conn.PrepareBatch(context.Background(), query)
-		if err != nil {
-			return err
-		}
-		defer batch.Close()
-
-		for _, log := range logs[i:end] {
-			args := []interface{}{
-				log.ChainId,
-				log.BlockNumber,
-				log.BlockHash,
-				log.BlockTimestamp,
-				log.TransactionHash,
-				log.TransactionIndex,
-				log.LogIndex,
-				log.Address,
-				log.Data,
-				log.Topic0,
-				log.Topic1,
-				log.Topic2,
-				log.Topic3,
-				func() int8 {
-					if log.Sign == -1 || opt.AsDeleted {
-						return -1
-					}
-					return 1
-				}(),
-			}
-			if opt.AsDeleted {
-				args = append(args, log.InsertTimestamp)
-			}
-			if err := batch.Append(args...); err != nil {
-				return err
-			}
-		}
-
-		if err := batch.Send(); err != nil {
-			return err
-		}
-	}
-	metrics.ClickHouseLogsInserted.Add(float64(len(logs)))
-	return nil
-}
-
-func (c *ClickHouseConnector) insertTraces(traces []common.Trace, opt InsertOptions) error {
-	if len(traces) == 0 {
-		return nil
-	}
-	tableName := c.getTableName(traces[0].ChainID, "traces")
-	columns := []string{
-		"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash", "transaction_index",
-		"subtraces", "trace_address", "type", "call_type", "error", "from_address", "to_address", "gas", "gas_used",
-		"input", "output", "value", "author", "reward_type", "refund_address", "sign",
-	}
-	if opt.AsDeleted {
-		columns = append(columns, "insert_timestamp")
-	}
-	query := fmt.Sprintf("INSERT INTO %s.%s (%s)", c.cfg.Database, tableName, strings.Join(columns, ", "))
-	for i := 0; i < len(traces); i += c.cfg.MaxRowsPerInsert {
-		end := i + c.cfg.MaxRowsPerInsert
-		if end > len(traces) {
-			end = len(traces)
-		}
-
-		batch, err := c.conn.PrepareBatch(context.Background(), query)
-		if err != nil {
-			return err
-		}
-		defer batch.Close()
-
-		for _, trace := range traces[i:end] {
-			args := []interface{}{
-				trace.ChainID,
-				trace.BlockNumber,
-				trace.BlockHash,
-				trace.BlockTimestamp,
-				trace.TransactionHash,
-				trace.TransactionIndex,
-				trace.Subtraces,
-				trace.TraceAddress,
-				trace.TraceType,
-				trace.CallType,
-				trace.Error,
-				trace.FromAddress,
-				trace.ToAddress,
-				trace.Gas,
-				trace.GasUsed,
-				trace.Input,
-				trace.Output,
-				trace.Value,
-				trace.Author,
-				trace.RewardType,
-				trace.RefundAddress,
-				func() int8 {
-					if trace.Sign == -1 || opt.AsDeleted {
-						return -1
-					}
-					return 1
-				}(),
-			}
-			if opt.AsDeleted {
-				args = append(args, trace.InsertTimestamp)
-			}
-			if err := batch.Append(args...); err != nil {
-				return err
-			}
-		}
-
-		if err := batch.Send(); err != nil {
-			return err
-		}
-	}
-	metrics.ClickHouseTracesInserted.Add(float64(len(traces)))
-	return nil
-}
-
 func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure) error {
 	query := `
 		INSERT INTO ` + c.cfg.Database + `.block_failures (
@@ -935,28 +645,6 @@ func (c *ClickHouseConnector) getMaxBlockNumberConsistent(chainId *big.Int) (max
 	return maxBlockNumber, nil
 }
 
-func (c *ClickHouseConnector) GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error) {
-	query := fmt.Sprintf("SELECT block_number FROM %s.block_data WHERE is_deleted = 0", c.cfg.Database)
-	if chainId.Sign() > 0 {
-		query += fmt.Sprintf(" AND chain_id = %s", chainId.String())
-	}
-	if rangeStart.Sign() > 0 {
-		query += fmt.Sprintf(" AND block_number >= %s", rangeStart.String())
-	}
-	if rangeEnd.Sign() > 0 {
-		query += fmt.Sprintf(" AND block_number <= %s", rangeEnd.String())
-	}
-	query += " ORDER BY block_number DESC LIMIT 1"
-	err = c.conn.QueryRow(context.Background(), query).Scan(&maxBlockNumber)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return big.NewInt(0), nil
-		}
-		return nil, err
-	}
-	return maxBlockNumber, nil
-}
-
 func scanBlockFailure(rows driver.Rows) (common.BlockFailure, error) {
 	var failure common.BlockFailure
 	var timestamp uint64
@@ -1094,32 +782,6 @@ func (c *ClickHouseConnector) GetStagingData(qf QueryFilter) ([]common.BlockData
 		blockDataList = append(blockDataList, blockData)
 	}
 	return blockDataList, nil
-}
-
-func (c *ClickHouseConnector) DeleteStagingData(data []common.BlockData) error {
-	query := fmt.Sprintf(`
-        INSERT INTO %s.block_data (
-            chain_id, block_number, is_deleted
-        ) VALUES (?, ?, ?)
-    `, c.cfg.Database)
-
-	batch, err := c.conn.PrepareBatch(context.Background(), query)
-	if err != nil {
-		return err
-	}
-	defer batch.Close()
-
-	for _, blockData := range data {
-		err := batch.Append(
-			blockData.Block.ChainId,
-			blockData.Block.Number,
-			1,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return batch.Send()
 }
 
 func (c *ClickHouseConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*big.Int, error) {
@@ -2220,6 +1882,31 @@ func (c *ClickHouseConnector) DeleteStagingDataOlderThan(chainId *big.Int, block
 		GROUP BY chain_id, block_number
 	`, c.cfg.Database, c.cfg.Database)
 	return c.conn.Exec(context.Background(), query, chainId, blockNumber)
+}
+
+// GetStagingDataBlockRange returns the minimum and maximum block numbers stored for a given chain
+func (c *ClickHouseConnector) GetStagingDataBlockRange(chainId *big.Int) (*big.Int, *big.Int, error) {
+	query := fmt.Sprintf(`
+		SELECT MIN(block_number) AS min_block, MAX(block_number) AS max_block
+		FROM %s.block_data FINAL
+		WHERE chain_id = ? AND is_deleted = 0
+	`, c.cfg.Database)
+
+	var minBlock, maxBlock *big.Int
+	err := c.conn.QueryRow(context.Background(), query, chainId).Scan(&minBlock, &maxBlock)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+
+	// If either min or max is nil (no data), return nil for both
+	if minBlock == nil || maxBlock == nil {
+		return nil, nil, nil
+	}
+
+	return minBlock, maxBlock, nil
 }
 
 // Helper function to test query generation

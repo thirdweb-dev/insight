@@ -113,14 +113,9 @@ type IStagingStorage interface {
 	// Staging block data
 	InsertStagingData(data []common.BlockData) error
 	GetStagingData(qf QueryFilter) (data []common.BlockData, err error)
-	GetLastStagedBlockNumber(chainId *big.Int, rangeStart *big.Int, rangeEnd *big.Int) (maxBlockNumber *big.Int, err error)
-	DeleteStagingData(data []common.BlockData) error
-	DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error
+	GetStagingDataBlockRange(chainId *big.Int) (minBlockNumber *big.Int, maxBlockNumber *big.Int, err error)
 
-	// Block failures
-	GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error)
-	StoreBlockFailures(failures []common.BlockFailure) error
-	DeleteBlockFailures(failures []common.BlockFailure) error
+	DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error
 
 	Close() error
 }

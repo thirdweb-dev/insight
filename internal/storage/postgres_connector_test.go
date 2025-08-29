@@ -178,15 +178,6 @@ func TestPostgresConnector_StagingData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, retrievedDataRange, 2)
 
-	// Test GetLastStagedBlockNumber
-	lastBlock, err := conn.GetLastStagedBlockNumber(big.NewInt(1), big.NewInt(90), big.NewInt(110))
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(101), lastBlock)
-
-	// Test DeleteStagingData
-	err = conn.DeleteStagingData(blockData[:1])
-	assert.NoError(t, err)
-
 	retrievedData, err = conn.GetStagingData(qf)
 	assert.NoError(t, err)
 	assert.Len(t, retrievedData, 1)
