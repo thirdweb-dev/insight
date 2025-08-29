@@ -288,7 +288,13 @@ func (p *Poller) stageResults(blockData []common.BlockData) error {
 }
 
 func (p *Poller) reachedPollLimit(blockNumber *big.Int) bool {
-	return blockNumber == nil || (p.pollUntilBlock.Sign() > 0 && blockNumber.Cmp(p.pollUntilBlock) >= 0)
+	if blockNumber == nil {
+		return true
+	}
+	if p.pollUntilBlock == nil || p.pollUntilBlock.Sign() == 0 {
+		return false
+	}
+	return blockNumber.Cmp(p.pollUntilBlock) >= 0
 }
 
 func (p *Poller) getNextBlockRange(ctx context.Context) ([]*big.Int, error) {
