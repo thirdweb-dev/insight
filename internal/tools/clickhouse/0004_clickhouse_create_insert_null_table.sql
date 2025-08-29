@@ -1,6 +1,6 @@
-CREATE TABLE IF NOT EXISTS insert_null_block_data (
+CREATE TABLE default.insert_null_block_data
+(
     chain_id UInt256,
-
     block Tuple(
         block_number UInt256,
         block_timestamp DateTime,
@@ -22,8 +22,7 @@ CREATE TABLE IF NOT EXISTS insert_null_block_data (
         gas_limit UInt256,
         gas_used UInt256,
         withdrawals_root FixedString(66),
-        base_fee_per_gas Nullable(UInt64)
-    ),
+        base_fee_per_gas Nullable(UInt64)),
     transactions Array(Tuple(
         hash FixedString(66),
         nonce UInt64,
@@ -55,8 +54,7 @@ CREATE TABLE IF NOT EXISTS insert_null_block_data (
         blob_gas_used Nullable(UInt64),
         blob_gas_price Nullable(UInt256),
         logs_bloom Nullable(String),
-        status Nullable(UInt64)
-    )),
+        status Nullable(UInt64))),
     logs Array(Tuple(
         block_number UInt256,
         block_hash FixedString(66),
@@ -69,8 +67,7 @@ CREATE TABLE IF NOT EXISTS insert_null_block_data (
         topic_0 String,
         topic_1 String,
         topic_2 String,
-        topic_3 String
-    )),
+        topic_3 String)),
     traces Array(Tuple(
         block_number UInt256,
         block_hash FixedString(66),
@@ -91,9 +88,22 @@ CREATE TABLE IF NOT EXISTS insert_null_block_data (
         value UInt256,
         author Nullable(FixedString(42)),
         reward_type LowCardinality(Nullable(String)),
-        refund_address Nullable(FixedString(42))
-    )),
-
+        refund_address Nullable(FixedString(42)))),
+    token_transfers Array(Tuple(
+        chain_id UInt256,
+        token_type LowCardinality(String),
+        token_address FixedString(42),
+        token_id UInt256,
+        from_address FixedString(42),
+        to_address FixedString(42),
+        block_number UInt256,
+        block_timestamp DateTime,
+        transaction_hash FixedString(66),
+        transaction_index UInt64,
+        amount UInt256,
+        log_index UInt64,
+        batch_index Nullable(UInt16))),
     insert_timestamp DateTime DEFAULT now(),
     is_deleted UInt8 DEFAULT 0
-) ENGINE = Null;
+)
+ENGINE = Null
