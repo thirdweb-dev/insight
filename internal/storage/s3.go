@@ -97,12 +97,11 @@ func NewS3Connector(cfg *config.S3StorageConfig) (*S3Connector, error) {
 		}
 	}
 
-	// Set buffer defaults
 	if cfg.BufferSize == 0 {
-		cfg.BufferSize = 1024 // 1GB default
+		cfg.BufferSize = 512 // 512MB default
 	}
 	if cfg.BufferTimeout == 0 {
-		cfg.BufferTimeout = 300 // 5 minutes default
+		cfg.BufferTimeout = 1 * 60 * 60 // 1 hour in seconds default
 	}
 
 	// Create formatter based on format
