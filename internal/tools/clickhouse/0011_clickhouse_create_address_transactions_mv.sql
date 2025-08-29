@@ -1,4 +1,4 @@
-CREATE MATERIALIZED VIEW address_transactions_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS address_transactions_mv
 TO address_transactions
 AS
 SELECT 
