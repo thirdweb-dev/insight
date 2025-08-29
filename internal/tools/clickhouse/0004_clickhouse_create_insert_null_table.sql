@@ -1,4 +1,4 @@
-CREATE TABLE default.insert_null_block_data
+CREATE TABLE IF NOT EXISTS insert_null_block_data
 (
     chain_id UInt256,
     block Tuple(
@@ -90,7 +90,6 @@ CREATE TABLE default.insert_null_block_data
         reward_type LowCardinality(Nullable(String)),
         refund_address Nullable(FixedString(42)))),
     token_transfers Array(Tuple(
-        chain_id UInt256,
         token_type LowCardinality(String),
         token_address FixedString(42),
         token_id UInt256,
