@@ -41,7 +41,7 @@ type blockRange struct {
 func NewBadgerConnector(cfg *config.BadgerConfig) (*BadgerConnector, error) {
 	path := cfg.Path
 	if path == "" {
-		path = filepath.Join(os.TempDir(), "insight-staging")
+		path = filepath.Join(os.TempDir(), "insight-staging-badger")
 	}
 	opts := badger.DefaultOptions(path)
 

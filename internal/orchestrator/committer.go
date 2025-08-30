@@ -274,7 +274,12 @@ func (c *Committer) cleanupProcessedStagingBlocks() {
 		log.Error().Err(err).Msg("Failed to delete staging data")
 		return
 	}
-	log.Debug().Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingDataOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
+
+	log.Debug().
+		Uint64("committed_block_number", committed).
+		Uint64("published_block_number", published).
+		Str("older_than_block_number", blockNumber.String()).
+		Str("metric", "staging_delete_duration").Msgf("StagingStorage.DeleteStagingDataOlderThan duration: %f", time.Since(stagingDeleteStart).Seconds())
 	metrics.StagingDeleteDuration.Observe(time.Since(stagingDeleteStart).Seconds())
 }
 
@@ -469,7 +474,7 @@ func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]commo
 func (c *Committer) getSequentialBlockDataToPublish(ctx context.Context) ([]common.BlockData, error) {
 	blocksToPublish, err := c.getBlockNumbersToPublish(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
+		return nil, fmt.Errorf("error determining blocks to publish: %v", err)
 	}
 	if len(blocksToPublish) == 0 {
 		return nil, nil
@@ -508,7 +513,8 @@ func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) er
 			highestBlock = block.Block
 		}
 	}
-	log.Debug().Msgf("Committing %d blocks", len(blockNumbers))
+	log.Debug().Msgf("Committing %d blocks from %s to %s", len(blockNumbers), blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
+
 	mainStorageStart := time.Now()
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
 		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
