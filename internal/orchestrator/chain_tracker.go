@@ -9,7 +9,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 )
 
-const DEFAULT_CHAIN_TRACKER_POLL_INTERVAL = 300000 // 5 minutes
+const DEFAULT_CHAIN_TRACKER_POLL_INTERVAL = 60 * 1000 // 1 minutes
 
 type ChainTracker struct {
 	rpc               rpc.IRPCClient

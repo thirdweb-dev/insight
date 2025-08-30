@@ -431,11 +431,8 @@ func (w *Worker) Run(ctx context.Context, blockNumbers []*big.Int) []rpc.GetFull
 		}
 
 		log.Debug().
-			Int("total", len(results)).
-			Str("first_block", blockNumbers[0].String()).
-			Str("last_block", blockNumbers[len(results)-1].String()).
-			Str("first_block_result", results[0].BlockNumber.String()).
-			Str("last_block_result", results[len(results)-1].BlockNumber.String()).
+			Str("first_block", results[0].BlockNumber.String()).
+			Str("last_block", results[len(results)-1].BlockNumber.String()).
 			Int("successful", successful).
 			Int("failed", failed).
 			Str("source", sourceType.String()).
