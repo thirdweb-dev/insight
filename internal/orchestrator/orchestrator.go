@@ -51,9 +51,6 @@ func (o *Orchestrator) Start() {
 		o.cancel()
 	}()
 
-	// Create the work mode monitor first
-	workModeMonitor := NewWorkModeMonitor(o.rpc, o.storage)
-
 	o.initializeWorkerAndPoller()
 
 	o.wg.Add(1)
@@ -90,14 +87,6 @@ func (o *Orchestrator) Start() {
 			log.Info().Msg("Reorg handler completed")
 		}()
 	}
-
-	o.wg.Add(1)
-	go func() {
-		defer o.wg.Done()
-		workModeMonitor.Start(ctx)
-
-		log.Info().Msg("Work mode monitor completed")
-	}()
 
 	// The chain tracker is always running
 	o.wg.Add(1)

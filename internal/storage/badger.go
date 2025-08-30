@@ -25,7 +25,16 @@ type BadgerConnector struct {
 	gcTicker *time.Ticker
 	stopGC   chan struct{}
 
+	// Configuration
+	stagingDataTTL        time.Duration // TTL for staging data entries
+	gcInterval            time.Duration // Interval for running garbage collection
+	cacheRefreshInterval  time.Duration // Interval for refreshing range cache
+	cacheStalenessTimeout time.Duration // Timeout before considering cache entry stale
+
 	// In-memory block range cache
+	// NOTE: Staging data has a TTL. The cache is refreshed periodically
+	// to detect expired entries and update min/max ranges accordingly.
+	// Badger doesn't provide expiry notifications, so we rely on periodic scanning.
 	rangeCache      map[string]*blockRange // chainId -> range
 	rangeCacheMu    sync.RWMutex
 	rangeUpdateChan chan string // channel for triggering background updates
@@ -41,7 +50,7 @@ type blockRange struct {
 func NewBadgerConnector(cfg *config.BadgerConfig) (*BadgerConnector, error) {
 	path := cfg.Path
 	if path == "" {
-		path = filepath.Join(os.TempDir(), "insight-staging")
+		path = filepath.Join(os.TempDir(), "insight-staging-badger")
 	}
 	opts := badger.DefaultOptions(path)
 
@@ -71,15 +80,19 @@ func NewBadgerConnector(cfg *config.BadgerConfig) (*BadgerConnector, error) {
 	}
 
 	bc := &BadgerConnector{
-		db:              db,
-		stopGC:          make(chan struct{}),
-		rangeCache:      make(map[string]*blockRange),
-		rangeUpdateChan: make(chan string, 5),
-		stopRangeUpdate: make(chan struct{}),
+		db:                    db,
+		stopGC:                make(chan struct{}),
+		rangeCache:            make(map[string]*blockRange),
+		rangeUpdateChan:       make(chan string, 5),
+		stopRangeUpdate:       make(chan struct{}),
+		stagingDataTTL:        10 * time.Minute,
+		gcInterval:            60 * time.Second,
+		cacheRefreshInterval:  60 * time.Second,
+		cacheStalenessTimeout: 120 * time.Second,
 	}
 
 	// Start GC routine
-	bc.gcTicker = time.NewTicker(time.Duration(60) * time.Second)
+	bc.gcTicker = time.NewTicker(bc.gcInterval)
 	go bc.runGC()
 
 	// Start range cache update routine
@@ -104,7 +117,7 @@ func (bc *BadgerConnector) runGC() {
 
 // runRangeCacheUpdater runs in the background to validate cache entries
 func (bc *BadgerConnector) runRangeCacheUpdater() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(bc.cacheRefreshInterval)
 	defer ticker.Stop()
 
 	for {
@@ -184,7 +197,7 @@ func (bc *BadgerConnector) refreshStaleRanges() {
 	staleChains := []string{}
 	now := time.Now()
 	for chainId, r := range bc.rangeCache {
-		if now.Sub(r.lastUpdated) > 3*time.Minute {
+		if now.Sub(r.lastUpdated) > bc.cacheStalenessTimeout {
 			staleChains = append(staleChains, chainId)
 		}
 	}
@@ -391,7 +404,9 @@ func (bc *BadgerConnector) InsertStagingData(data []common.BlockData) error {
 				return err
 			}
 
-			if err := txn.Set(key, buf.Bytes()); err != nil {
+			// Set with configured TTL for staging data
+			entry := badger.NewEntry(key, buf.Bytes()).WithTTL(bc.stagingDataTTL)
+			if err := txn.SetEntry(entry); err != nil {
 				return err
 			}
 
