@@ -291,10 +291,13 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 	}()
 
 	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
-	log.Debug().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 	if err != nil {
 		return nil, err
 	}
+	if latestCommittedBlockNumber == nil {
+		latestCommittedBlockNumber = new(big.Int).SetUint64(0)
+	}
+	log.Debug().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 
 	if latestCommittedBlockNumber.Sign() == 0 {
 		// If no blocks have been committed yet, start from the fromBlock specified in the config
