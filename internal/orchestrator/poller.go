@@ -227,7 +227,14 @@ func (p *Poller) stageResults(blockData []common.BlockData) error {
 		log.Error().Err(err).Msgf("error inserting block data into staging")
 		return err
 	}
-	log.Debug().Str("metric", "staging_insert_duration").Msgf("StagingStorage.InsertStagingData duration: %f", time.Since(startTime).Seconds())
+
+	log.Debug().
+		Str("metric", "staging_insert_duration").
+		Str("first_block", blockData[0].Block.Number.String()).
+		Str("last_block", blockData[len(blockData)-1].Block.Number.String()).
+		Msgf("InsertStagingData for %s - %s, duration: %f",
+			blockData[0].Block.Number.String(), blockData[len(blockData)-1].Block.Number.String(),
+			time.Since(startTime).Seconds())
 	metrics.StagingInsertDuration.Observe(time.Since(startTime).Seconds())
 	return nil
 }
@@ -324,7 +331,7 @@ func (p *Poller) triggerLookahead(currentEndBlock *big.Int, batchSize int64) {
 		// Queue for processing
 		select {
 		case p.tasks <- blockNumbers:
-			log.Debug().Msgf("Queued lookahead batch %s-%s", startBlock.String(), endBlock.String())
+			log.Debug().Msgf("Queued lookahead batch %s - %s", startBlock.String(), endBlock.String())
 		default:
 			// Queue is full, stop queueing
 			return

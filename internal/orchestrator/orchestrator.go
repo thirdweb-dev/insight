@@ -68,8 +68,7 @@ func (o *Orchestrator) Start() {
 	go func() {
 		defer o.wg.Done()
 
-		validator := NewValidator(o.rpc, o.storage, o.worker)
-		committer := NewCommitter(o.rpc, o.storage, o.poller, WithValidator(validator))
+		committer := NewCommitter(o.rpc, o.storage, o.poller)
 		committer.Start(ctx)
 
 		// If the committer is terminated, cancel the orchestrator

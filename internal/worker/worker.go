@@ -293,6 +293,8 @@ func (w *Worker) processBatchWithRetry(ctx context.Context, blocks []*big.Int, s
 		Int("total_blocks", len(blocks)).
 		Int("chunks", len(chunks)).
 		Int("chunk_size", chunkSize).
+		Str("first_block", blocks[0].String()).
+		Str("last_block", blocks[len(blocks)-1].String()).
 		Msg("Processing blocks")
 
 	var allResults []rpc.GetFullBlockResult

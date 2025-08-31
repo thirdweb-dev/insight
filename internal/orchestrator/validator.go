@@ -197,3 +197,38 @@ func (v *Validator) convertResultsToBlockData(results []rpc.GetFullBlockResult) 
 	}
 	return blockData
 }
+
+func (v *Validator) EnsureValidBlocks(ctx context.Context, blocks []common.BlockData) ([]common.BlockData, error) {
+	validBlocks, invalidBlocks, err := v.ValidateBlocks(blocks)
+	if err != nil {
+		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// If all blocks are valid, return them
+	if len(invalidBlocks) == 0 {
+		return validBlocks, nil
+	}
+
+	// Extract block numbers from invalid blocks
+	invalidBlockNumbers := make([]*big.Int, 0, len(invalidBlocks))
+	for _, block := range invalidBlocks {
+		invalidBlockNumbers = append(invalidBlockNumbers, block.Block.Number)
+	}
+
+	log.Debug().Msgf("Re-fetching %d invalid blocks for validation", len(invalidBlockNumbers))
+
+	// Re-fetch invalid blocks using worker
+	polledBlocksRun := v.worker.Run(ctx, invalidBlockNumbers)
+	refetchedBlocks := v.convertResultsToBlockData(polledBlocksRun)
+
+	// Recursively validate the re-fetched blocks
+	revalidatedBlocks, err := v.EnsureValidBlocks(ctx, refetchedBlocks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure valid blocks after re-fetch: %w", err)
+	}
+
+	// Combine the originally valid blocks with the newly validated blocks
+	allValidBlocks := append(validBlocks, revalidatedBlocks...)
+	
+	return allValidBlocks, nil
+}

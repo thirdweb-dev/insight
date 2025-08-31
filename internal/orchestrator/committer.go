@@ -16,6 +16,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/publisher"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 2000
@@ -36,12 +37,6 @@ type Committer struct {
 }
 
 type CommitterOption func(*Committer)
-
-func WithValidator(validator *Validator) CommitterOption {
-	return func(c *Committer) {
-		c.validator = validator
-	}
-}
 
 func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, opts ...CommitterOption) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
@@ -69,6 +64,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
 		poller:            poller,
+		validator:         NewValidator(rpc, storage, worker.NewWorker(rpc)), // validator uses worker without sources
 	}
 	cfb := commitFromBlock.Uint64()
 	committer.lastCommittedBlock.Store(cfb)
@@ -401,6 +397,7 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
 	blocksData := c.poller.Request(ctx, blockNumbers)
 	if len(blocksData) == 0 {
+		// TODO: should wait a little bit, as it may take time to load
 		log.Warn().Msgf("Committer didn't find the following range: %v - %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64())
 		return nil, nil
 	}
@@ -412,20 +409,14 @@ func (c *Committer) getSequentialBlockData(ctx context.Context, blockNumbers []*
 	if err != nil {
 		return nil, err
 	}
+
 	if len(blocksData) == 0 {
 		return nil, nil
 	}
 
-	if c.validator != nil {
-		validBlocks, invalidBlocks, err := c.validator.ValidateBlocks(blocksData)
-		if err != nil {
-			return nil, err
-		}
-		if len(invalidBlocks) > 0 {
-			log.Warn().Msgf("Found %d invalid blocks in commit batch, continuing with %d valid blocks", len(invalidBlocks), len(validBlocks))
-			// continue with valid blocks only
-			blocksData = validBlocks
-		}
+	blocksData, err = c.validator.EnsureValidBlocks(ctx, blocksData)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(blocksData) == 0 {
