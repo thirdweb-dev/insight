@@ -18,11 +18,6 @@ type LogConfig struct {
 
 type PollerConfig struct {
 	Enabled         bool            `mapstructure:"enabled"`
-	Interval        int             `mapstructure:"interval"`
-	BlocksPerPoll   int             `mapstructure:"blocksPerPoll"`
-	FromBlock       int             `mapstructure:"fromBlock"`
-	ForceFromBlock  bool            `mapstructure:"forceFromBlock"`
-	UntilBlock      int             `mapstructure:"untilBlock"`
 	ParallelPollers int             `mapstructure:"parallelPollers"`
 	S3              *S3SourceConfig `mapstructure:"s3"`
 }

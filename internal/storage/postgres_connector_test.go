@@ -3,73 +3,12 @@ package storage
 import (
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 )
-
-func TestPostgresConnector_BlockFailures(t *testing.T) {
-	// Skip if no Postgres is available
-	t.Skip("Skipping Postgres tests - requires running Postgres instance")
-
-	cfg := &config.PostgresConfig{
-		Host:         "localhost",
-		Port:         5432,
-		Username:     "test",
-		Password:     "test",
-		Database:     "test_orchestrator",
-		SSLMode:      "disable",
-		MaxOpenConns: 10,
-		MaxIdleConns: 5,
-	}
-
-	conn, err := NewPostgresConnector(cfg)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	// Test StoreBlockFailures
-	failures := []common.BlockFailure{
-		{
-			ChainId:       big.NewInt(1),
-			BlockNumber:   big.NewInt(12345),
-			FailureTime:   time.Now(),
-			FailureReason: "test error",
-			FailureCount:  1,
-		},
-		{
-			ChainId:       big.NewInt(1),
-			BlockNumber:   big.NewInt(12346),
-			FailureTime:   time.Now(),
-			FailureReason: "another test error",
-			FailureCount:  2,
-		},
-	}
-
-	err = conn.StoreBlockFailures(failures)
-	assert.NoError(t, err)
-
-	// Test GetBlockFailures
-	qf := QueryFilter{
-		ChainId: big.NewInt(1),
-		Limit:   10,
-	}
-
-	retrievedFailures, err := conn.GetBlockFailures(qf)
-	assert.NoError(t, err)
-	assert.Len(t, retrievedFailures, 2)
-
-	// Test DeleteBlockFailures
-	err = conn.DeleteBlockFailures(failures[:1])
-	assert.NoError(t, err)
-
-	retrievedFailures, err = conn.GetBlockFailures(qf)
-	assert.NoError(t, err)
-	assert.Len(t, retrievedFailures, 1)
-	assert.Equal(t, big.NewInt(12346), retrievedFailures[0].BlockNumber)
-}
 
 func TestPostgresConnector_Cursors(t *testing.T) {
 	// Skip if no Postgres is available

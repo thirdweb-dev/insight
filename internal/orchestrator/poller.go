@@ -61,7 +61,9 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOptio
 		parallelPollers = DEFAULT_PARALLEL_POLLERS
 	}
 
-	lookaheadBatches := DEFAULT_LOOKAHEAD_BATCHES
+	// Set the lookahead -> number of pollers + 2
+	// effectively setting the minimum look ahead = 3 batches
+	lookaheadBatches := parallelPollers + 2
 
 	poller := &Poller{
 		chainId:          rpc.GetChainID(),

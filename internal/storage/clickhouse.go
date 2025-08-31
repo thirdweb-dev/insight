@@ -645,60 +645,6 @@ func (c *ClickHouseConnector) getMaxBlockNumberConsistent(chainId *big.Int) (max
 	return maxBlockNumber, nil
 }
 
-func scanBlockFailure(rows driver.Rows) (common.BlockFailure, error) {
-	var failure common.BlockFailure
-	var timestamp uint64
-	var count uint16
-	err := rows.Scan(
-		&failure.ChainId,
-		&failure.BlockNumber,
-		&timestamp,
-		&count,
-		&failure.FailureReason,
-	)
-	if err != nil {
-		return common.BlockFailure{}, fmt.Errorf("error scanning block failure: %w", err)
-	}
-	failure.FailureTime = time.Unix(int64(timestamp), 0)
-	failure.FailureCount = int(count)
-	return failure, nil
-}
-
-func (c *ClickHouseConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
-	columns := "chain_id, block_number, last_error_timestamp, count, reason"
-	result, err := executeQuery[common.BlockFailure](c, "block_failures", columns, qf, scanBlockFailure)
-	if err != nil {
-		return nil, err
-	}
-	return result.Data, nil
-}
-
-func (c *ClickHouseConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
-	query := fmt.Sprintf(`
-        INSERT INTO %s.block_failures (
-            chain_id, block_number, is_deleted
-        ) VALUES (?, ?, ?)
-    `, c.cfg.Database)
-
-	batch, err := c.conn.PrepareBatch(context.Background(), query)
-	if err != nil {
-		return err
-	}
-	defer batch.Close()
-
-	for _, failure := range failures {
-		err := batch.Append(
-			failure.ChainId,
-			failure.BlockNumber,
-			1,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return batch.Send()
-}
 
 func getLimitClause(limit int) string {
 	if limit == 0 {

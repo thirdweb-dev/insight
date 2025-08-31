@@ -55,12 +55,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 
 	commitUntilBlock := config.Cfg.Committer.UntilBlock
 	if commitUntilBlock == 0 {
-		// default to match the poller.untilBlock
-		if config.Cfg.Poller.UntilBlock != 0 {
-			commitUntilBlock = config.Cfg.Poller.UntilBlock
-		} else {
-			commitUntilBlock = -1
-		}
+		commitUntilBlock = -1
 	}
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
