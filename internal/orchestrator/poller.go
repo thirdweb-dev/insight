@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	DEFAULT_PARALLEL_POLLERS  = 5
-	DEFAULT_LOOKAHEAD_BATCHES = 5
+	DEFAULT_PARALLEL_POLLERS = 5
 )
 
 type Poller struct {
