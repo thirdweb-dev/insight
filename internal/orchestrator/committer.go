@@ -26,7 +26,7 @@ type Committer struct {
 	blocksPerCommit    int
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
-	commitUntilBlock   *big.Int
+	commitToBlock      *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock atomic.Uint64
 	lastPublishedBlock atomic.Uint64
@@ -48,14 +48,15 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
 	}
+
 	blocksPerCommit := config.Cfg.Committer.BlocksPerCommit
 	if blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
-	commitUntilBlock := config.Cfg.Committer.UntilBlock
-	if commitUntilBlock == 0 {
-		commitUntilBlock = -1
+	commitToBlock := config.Cfg.Committer.ToBlock
+	if commitToBlock == 0 {
+		commitToBlock = -1
 	}
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
@@ -64,7 +65,7 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		commitFromBlock:   commitFromBlock,
-		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
+		commitToBlock:     big.NewInt(int64(commitToBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
 		poller:            poller,
@@ -212,9 +213,9 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			return
 		default:
 			time.Sleep(interval)
-			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitUntilBlock.Uint64() {
-				// Completing the commit loop if we've committed more than commit until block
-				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
+			if c.commitToBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitToBlock.Uint64() {
+				// Completing the commit loop if we've committed more than commit to block
+				log.Info().Msgf("Committer reached configured toBlock %s, the last commit block is %d, stopping commits", c.commitToBlock.String(), c.lastCommittedBlock.Load())
 				return
 			}
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
@@ -379,8 +380,8 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
 
 	// If a commit until block is set, then set a limit on the commit until block
-	if c.commitUntilBlock.Sign() > 0 && untilBlock.Cmp(c.commitUntilBlock) > 0 {
-		return new(big.Int).Set(c.commitUntilBlock), nil
+	if c.commitToBlock.Sign() > 0 && untilBlock.Cmp(c.commitToBlock) > 0 {
+		return new(big.Int).Set(c.commitToBlock), nil
 	}
 
 	// get latest block from RPC and if that's less than until block, return that

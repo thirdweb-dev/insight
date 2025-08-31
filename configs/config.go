@@ -27,7 +27,7 @@ type CommitterConfig struct {
 	Interval        int  `mapstructure:"interval"`
 	BlocksPerCommit int  `mapstructure:"blocksPerCommit"`
 	FromBlock       int  `mapstructure:"fromBlock"`
-	UntilBlock      int  `mapstructure:"untilBlock"`
+	ToBlock         int  `mapstructure:"toBlock"`
 }
 
 type ReorgHandlerConfig struct {
