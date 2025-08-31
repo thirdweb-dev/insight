@@ -147,6 +147,7 @@ func init() {
 	rootCmd.PersistentFlags().String("storage-main-type", "auto", "Storage type for main (auto, clickhouse, postgres, kafka, badger, s3)")
 	rootCmd.PersistentFlags().String("storage-orchestrator-type", "auto", "Storage type for orchestrator (auto, clickhouse, postgres, badger)")
 	rootCmd.PersistentFlags().String("storage-staging-badger-path", "", "BadgerDB path for staging storage")
+	rootCmd.PersistentFlags().String("storage-orchestrator-badger-path", "", "BadgerDB path for orchestrator storage")
 	rootCmd.PersistentFlags().String("storage-orchestrator-pebble-path", "", "PebbleDB path for orchestrator storage")
 	rootCmd.PersistentFlags().String("storage-staging-pebble-path", "", "PebbleDB path for staging storage")
 	rootCmd.PersistentFlags().String("storage-main-s3-bucket", "", "S3 bucket for main storage")
