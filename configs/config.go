@@ -61,6 +61,7 @@ type StorageOrchestratorConfig struct {
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 	Redis      *RedisConfig      `mapstructure:"redis"`
 	Badger     *BadgerConfig     `mapstructure:"badger"`
+	Pebble     *PebbleConfig     `mapstructure:"pebble"`
 }
 
 type StorageStagingConfig struct {
@@ -68,6 +69,7 @@ type StorageStagingConfig struct {
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 	Badger     *BadgerConfig     `mapstructure:"badger"`
+	Pebble     *PebbleConfig     `mapstructure:"pebble"`
 }
 
 type StorageMainConfig struct {
@@ -75,11 +77,14 @@ type StorageMainConfig struct {
 	Clickhouse *ClickhouseConfig `mapstructure:"clickhouse"`
 	Postgres   *PostgresConfig   `mapstructure:"postgres"`
 	Kafka      *KafkaConfig      `mapstructure:"kafka"`
-	Badger     *BadgerConfig     `mapstructure:"badger"`
 	S3         *S3StorageConfig  `mapstructure:"s3"`
 }
 
 type BadgerConfig struct {
+	Path string `mapstructure:"path"`
+}
+
+type PebbleConfig struct {
 	Path string `mapstructure:"path"`
 }
 
@@ -97,8 +102,8 @@ type S3StorageConfig struct {
 	Format   string         `mapstructure:"format"`
 	Parquet  *ParquetConfig `mapstructure:"parquet"`
 	// Buffering configuration
-	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush (default 512 MB)
-	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush (default 300 = 5 min)
+	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush
+	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush
 	MaxBlocksPerFile int   `mapstructure:"maxBlocksPerFile"`     // Max blocks per parquet file (0 = no limit, only size/timeout triggers)
 }
 
