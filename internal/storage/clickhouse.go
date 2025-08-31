@@ -137,33 +137,6 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 	return conn, nil
 }
 
-func (c *ClickHouseConnector) StoreBlockFailures(failures []common.BlockFailure) error {
-	query := `
-		INSERT INTO ` + c.cfg.Database + `.block_failures (
-			chain_id, block_number, last_error_timestamp, count, reason
-		)
-	`
-	batch, err := c.conn.PrepareBatch(context.Background(), query)
-	if err != nil {
-		return err
-	}
-	defer batch.Close()
-
-	for _, failure := range failures {
-		err := batch.Append(
-			failure.ChainId,
-			failure.BlockNumber,
-			uint64(failure.FailureTime.Unix()),
-			failure.FailureCount,
-			failure.FailureReason,
-		)
-		if err != nil {
-			return err
-		}
-	}
-	return batch.Send()
-}
-
 func (c *ClickHouseConnector) GetBlocks(qf QueryFilter, fields ...string) (QueryResult[common.Block], error) {
 	if len(fields) == 0 {
 		fields = c.getChainSpecificFields(qf.ChainId, "blocks", defaultBlockFields)
@@ -644,7 +617,6 @@ func (c *ClickHouseConnector) getMaxBlockNumberConsistent(chainId *big.Int) (max
 	}
 	return maxBlockNumber, nil
 }
-
 
 func getLimitClause(limit int) string {
 	if limit == 0 {

@@ -229,7 +229,7 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			if err := c.commit(ctx, blockDataToCommit); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
-			go c.cleanupProcessedStagingBlocks()
+			go c.cleanupProcessedStagingBlocks(ctx)
 		}
 	}
 }
@@ -244,12 +244,12 @@ func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) 
 			if err := c.publish(ctx); err != nil {
 				log.Error().Err(err).Msg("Error publishing blocks")
 			}
-			go c.cleanupProcessedStagingBlocks()
+			go c.cleanupProcessedStagingBlocks(ctx)
 		}
 	}
 }
 
-func (c *Committer) cleanupProcessedStagingBlocks() {
+func (c *Committer) cleanupProcessedStagingBlocks(ctx context.Context) {
 	committed := c.lastCommittedBlock.Load()
 	published := c.lastPublishedBlock.Load()
 	if published == 0 || committed == 0 {
@@ -265,6 +265,14 @@ func (c *Committer) cleanupProcessedStagingBlocks() {
 	chainID := c.rpc.GetChainID()
 	blockNumber := new(big.Int).SetUint64(limit)
 	stagingDeleteStart := time.Now()
+
+	// Check if context is cancelled before deleting
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	if err := c.storage.StagingStorage.DeleteStagingDataOlderThan(chainID, blockNumber); err != nil {
 		log.Error().Err(err).Msg("Failed to delete staging data")
 		return

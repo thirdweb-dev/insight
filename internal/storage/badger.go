@@ -236,11 +236,6 @@ func blockKeyRange(chainId *big.Int) []byte {
 	return []byte(fmt.Sprintf("blockdata:%s:", chainId.String()))
 }
 
-func blockFailureKey(chainId *big.Int, blockNumber *big.Int) []byte {
-	return []byte(fmt.Sprintf("blockfailure:%s:%s", chainId.String(), blockNumber.String()))
-}
-
-
 func lastReorgKey(chainId *big.Int) []byte {
 	return []byte(fmt.Sprintf("reorg:%s", chainId.String()))
 }
@@ -251,28 +246,6 @@ func lastPublishedKey(chainId *big.Int) []byte {
 
 func lastCommittedKey(chainId *big.Int) []byte {
 	return []byte(fmt.Sprintf("commit:%s", chainId.String()))
-}
-
-// IOrchestratorStorage implementation
-func (bc *BadgerConnector) StoreBlockFailures(failures []common.BlockFailure) error {
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	return bc.db.Update(func(txn *badger.Txn) error {
-		for _, failure := range failures {
-			key := blockFailureKey(failure.ChainId, failure.BlockNumber)
-
-			var buf bytes.Buffer
-			if err := gob.NewEncoder(&buf).Encode(failure); err != nil {
-				return err
-			}
-
-			if err := txn.Set(key, buf.Bytes()); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 func (bc *BadgerConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {

@@ -19,10 +19,10 @@ import (
 )
 
 type PebbleConnector struct {
-	db       *pebble.DB
-	mu       sync.RWMutex
-	gcTicker *time.Ticker
-	stopGC   chan struct{}
+	db        *pebble.DB
+	gcTicker  *time.Ticker
+	stopGC    chan struct{}
+	closeOnce sync.Once // Ensure Close() is only executed once
 
 	// Configuration
 	stagingDataTTL        time.Duration // TTL for staging data entries
@@ -302,16 +302,20 @@ func (pc *PebbleConnector) refreshStaleRanges() {
 }
 
 func (pc *PebbleConnector) Close() error {
-	if pc.gcTicker != nil {
-		pc.gcTicker.Stop()
-		close(pc.stopGC)
-	}
-	select {
-	case <-pc.stopRangeUpdate:
-	default:
-		close(pc.stopRangeUpdate)
-	}
-	return pc.db.Close()
+	var closeErr error
+	pc.closeOnce.Do(func() {
+		if pc.gcTicker != nil {
+			pc.gcTicker.Stop()
+			close(pc.stopGC)
+		}
+		select {
+		case <-pc.stopRangeUpdate:
+		default:
+			close(pc.stopRangeUpdate)
+		}
+		closeErr = pc.db.Close()
+	})
+	return closeErr
 }
 
 // Key construction helpers for Pebble
@@ -322,11 +326,6 @@ func pebbleBlockKey(chainId *big.Int, blockNumber *big.Int) []byte {
 func pebbleBlockKeyRange(chainId *big.Int) []byte {
 	return fmt.Appendf(nil, "blockdata:%s:", chainId.String())
 }
-
-func pebbleBlockFailureKey(chainId *big.Int, blockNumber *big.Int) []byte {
-	return fmt.Appendf(nil, "blockfailure:%s:%s", chainId.String(), blockNumber.String())
-}
-
 
 func pebbleLastReorgKey(chainId *big.Int) []byte {
 	return fmt.Appendf(nil, "reorg:%s", chainId.String())
@@ -340,34 +339,7 @@ func pebbleLastCommittedKey(chainId *big.Int) []byte {
 	return fmt.Appendf(nil, "commit:%s", chainId.String())
 }
 
-// IOrchestratorStorage implementation
-func (pc *PebbleConnector) StoreBlockFailures(failures []common.BlockFailure) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
-	batch := pc.db.NewBatch()
-	defer batch.Close()
-
-	for _, failure := range failures {
-		key := pebbleBlockFailureKey(failure.ChainId, failure.BlockNumber)
-
-		var buf bytes.Buffer
-		if err := gob.NewEncoder(&buf).Encode(failure); err != nil {
-			return err
-		}
-
-		if err := batch.Set(key, buf.Bytes(), nil); err != nil {
-			return err
-		}
-	}
-
-	return batch.Commit(pebble.Sync)
-}
-
 func (pc *PebbleConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {
-	pc.mu.RLock()
-	defer pc.mu.RUnlock()
-
 	val, closer, err := pc.db.Get(pebbleLastReorgKey(chainId))
 	if err == pebble.ErrNotFound {
 		return big.NewInt(0), nil
@@ -382,17 +354,11 @@ func (pc *PebbleConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*bi
 }
 
 func (pc *PebbleConnector) SetLastReorgCheckedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
 	return pc.db.Set(pebbleLastReorgKey(chainId), blockNumber.Bytes(), pebble.Sync)
 }
 
 // IStagingStorage implementation
 func (pc *PebbleConnector) InsertStagingData(data []common.BlockData) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
 	// Track min/max blocks per chain for cache update
 	chainRanges := make(map[string]struct {
 		min *big.Int
@@ -486,9 +452,6 @@ func (pc *PebbleConnector) InsertStagingData(data []common.BlockData) error {
 }
 
 func (pc *PebbleConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, error) {
-	pc.mu.RLock()
-	defer pc.mu.RUnlock()
-
 	var results []common.BlockData
 
 	if len(qf.BlockNumbers) > 0 {
@@ -574,9 +537,6 @@ func (pc *PebbleConnector) GetStagingData(qf QueryFilter) ([]common.BlockData, e
 }
 
 func (pc *PebbleConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*big.Int, error) {
-	pc.mu.RLock()
-	defer pc.mu.RUnlock()
-
 	val, closer, err := pc.db.Get(pebbleLastPublishedKey(chainId))
 	if err == pebble.ErrNotFound {
 		return big.NewInt(0), nil
@@ -591,16 +551,10 @@ func (pc *PebbleConnector) GetLastPublishedBlockNumber(chainId *big.Int) (*big.I
 }
 
 func (pc *PebbleConnector) SetLastPublishedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
 	return pc.db.Set(pebbleLastPublishedKey(chainId), blockNumber.Bytes(), pebble.Sync)
 }
 
 func (pc *PebbleConnector) GetLastCommittedBlockNumber(chainId *big.Int) (*big.Int, error) {
-	pc.mu.RLock()
-	defer pc.mu.RUnlock()
-
 	val, closer, err := pc.db.Get(pebbleLastCommittedKey(chainId))
 	if err == pebble.ErrNotFound {
 		return big.NewInt(0), nil
@@ -615,16 +569,10 @@ func (pc *PebbleConnector) GetLastCommittedBlockNumber(chainId *big.Int) (*big.I
 }
 
 func (pc *PebbleConnector) SetLastCommittedBlockNumber(chainId *big.Int, blockNumber *big.Int) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
 	return pc.db.Set(pebbleLastCommittedKey(chainId), blockNumber.Bytes(), pebble.Sync)
 }
 
 func (pc *PebbleConnector) DeleteStagingDataOlderThan(chainId *big.Int, blockNumber *big.Int) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
 	prefix := pebbleBlockKeyRange(chainId)
 	var deletedSome bool
 
