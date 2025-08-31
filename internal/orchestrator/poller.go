@@ -88,7 +88,7 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOptio
 }
 
 var ErrNoNewBlocks = fmt.Errorf("no new blocks to poll")
-var ErrBlocksProcessed = fmt.Errorf("blocks are being processed")
+var ErrBlocksProcessing = fmt.Errorf("blocks are being processed")
 
 func (p *Poller) Start(ctx context.Context) {
 	log.Debug().Msgf("Poller running with %d workers", p.parallelPollers)
@@ -120,7 +120,7 @@ func (p *Poller) poll(ctx context.Context, blockNumbers []*big.Int) ([]common.Bl
 	p.processingRangesMutex.RUnlock()
 
 	if isProcessing {
-		return nil, ErrBlocksProcessed
+		return nil, ErrBlocksProcessing
 	}
 
 	p.markRangeAsProcessing(rangeKey)
@@ -137,10 +137,12 @@ func (p *Poller) poll(ctx context.Context, blockNumbers []*big.Int) ([]common.Bl
 	}
 
 	p.lastPolledBlockMutex.Lock()
-	p.lastPolledBlock = new(big.Int).Set(highestBlockNumber)
+	if highestBlockNumber.Cmp(p.lastPolledBlock) > 0 {
+		p.lastPolledBlock = new(big.Int).Set(highestBlockNumber)
+	}
+	endBlockNumberFloat, _ := p.lastPolledBlock.Float64()
 	p.lastPolledBlockMutex.Unlock()
 
-	endBlockNumberFloat, _ := highestBlockNumber.Float64()
 	metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
 	return blockData, nil
 }
@@ -169,7 +171,7 @@ func (p *Poller) Request(ctx context.Context, blockNumbers []*big.Int) []common.
 	// Process and cache the requested range
 	blockData, err := p.poll(ctx, blockNumbers)
 	if err != nil {
-		if err != ErrBlocksProcessed && err != ErrNoNewBlocks {
+		if err != ErrBlocksProcessing && err != ErrNoNewBlocks {
 			log.Error().Err(err).Msgf("Error polling requested blocks: %s - %s", blockNumbers[0].String(), endBlock.String())
 		}
 		return nil
@@ -276,7 +278,7 @@ func (p *Poller) processBatch(blockNumbers []*big.Int) {
 
 	_, err := p.poll(p.ctx, blockNumbers)
 	if err != nil {
-		if err != ErrBlocksProcessed && err != ErrNoNewBlocks {
+		if err != ErrBlocksProcessing && err != ErrNoNewBlocks {
 			if len(blockNumbers) > 0 {
 				startBlock, endBlock := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
 				log.Debug().Err(err).Msgf("Failed to poll blocks %s-%s", startBlock.String(), endBlock.String())
@@ -352,12 +354,4 @@ func (p *Poller) unmarkRangeAsProcessing(rangeKey string) {
 	p.processingRangesMutex.Lock()
 	delete(p.processingRanges, rangeKey)
 	p.processingRangesMutex.Unlock()
-}
-
-func (p *Poller) updateLastPolledBlock(blockNumber *big.Int) {
-	p.lastPolledBlockMutex.Lock()
-	if blockNumber.Cmp(p.lastPolledBlock) > 0 {
-		p.lastPolledBlock = new(big.Int).Set(blockNumber)
-	}
-	p.lastPolledBlockMutex.Unlock()
 }

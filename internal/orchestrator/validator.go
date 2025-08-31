@@ -229,6 +229,6 @@ func (v *Validator) EnsureValidBlocks(ctx context.Context, blocks []common.Block
 
 	// Combine the originally valid blocks with the newly validated blocks
 	allValidBlocks := append(validBlocks, revalidatedBlocks...)
-	
+
 	return allValidBlocks, nil
 }
