@@ -136,6 +136,7 @@ func (p *Poller) Start(ctx context.Context) {
 					// Do not poll if not in backfill mode
 					p.workModeMutex.RLock()
 					if p.currentWorkMode != WorkModeBackfill {
+						log.Debug().Msgf("Not in backfill mode, skipping poll")
 						p.workModeMutex.RUnlock()
 						continue
 					}
@@ -146,10 +147,12 @@ func (p *Poller) Start(ctx context.Context) {
 					blockRangeMutex.Unlock()
 
 					if pollCtx.Err() != nil {
+						log.Debug().Err(pollCtx.Err()).Msgf("Poll context cancelled, skipping poll")
 						return
 					}
 
 					if err != nil {
+						log.Debug().Err(err).Msgf("Error getting block range to poll, skipping poll")
 						if err != ErrNoNewBlocks {
 							log.Error().Err(err).Msg("Failed to get block range to poll")
 						}
@@ -205,9 +208,13 @@ func (p *Poller) Start(ctx context.Context) {
 }
 
 func (p *Poller) Poll(ctx context.Context, blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
+	log.Debug().Msgf("Polling %d blocks: %v", len(blockNumbers), blockNumbers)
 	blockData, failedResults := p.PollWithoutSaving(ctx, blockNumbers)
 	if len(blockData) > 0 || len(failedResults) > 0 {
+		log.Debug().Msgf("Staging %d blocks: %v", len(blockData), blockData)
 		p.StageResults(blockData, failedResults)
+	} else {
+		log.Debug().Msgf("No blocks to stage")
 	}
 
 	var highestBlockNumber *big.Int
@@ -219,30 +226,36 @@ func (p *Poller) Poll(ctx context.Context, blockNumbers []*big.Int) (lastPolledB
 			}
 		}
 	}
+	log.Debug().Msgf("Highest block number: %s", highestBlockNumber)
 	return highestBlockNumber
 }
 
 func (p *Poller) PollWithoutSaving(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, []rpc.GetFullBlockResult) {
+	log.Debug().Msgf("Polling %d blocks: %v", len(blockNumbers), blockNumbers)
 	if len(blockNumbers) < 1 {
 		log.Debug().Msg("No blocks to poll, skipping")
 		return nil, nil
 	}
 	endBlock := blockNumbers[len(blockNumbers)-1]
+	log.Debug().Msgf("End block: %s", endBlock)
 	if endBlock != nil {
 		p.lastPolledBlock = endBlock
 	}
 	log.Debug().Msgf("Polling %d blocks starting from %s to %s", len(blockNumbers), blockNumbers[0], endBlock)
+	log.Debug().Msgf("Last polled block: %s", p.lastPolledBlock)
 
 	endBlockNumberFloat, _ := endBlock.Float64()
 	metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
 
 	worker := worker.NewWorker(p.rpc)
 	results := worker.Run(ctx, blockNumbers)
+	log.Debug().Msgf("Results: %v", results)
 	blockData, failedResults := p.convertPollResultsToBlockData(results)
 	return blockData, failedResults
 }
 
 func (p *Poller) convertPollResultsToBlockData(results []rpc.GetFullBlockResult) ([]common.BlockData, []rpc.GetFullBlockResult) {
+	log.Debug().Msgf("Converting %d results", len(results))
 	var successfulResults []rpc.GetFullBlockResult
 	var failedResults []rpc.GetFullBlockResult
 
