@@ -208,10 +208,10 @@ func (p *Poller) Start(ctx context.Context) {
 }
 
 func (p *Poller) Poll(ctx context.Context, blockNumbers []*big.Int) (lastPolledBlock *big.Int) {
-	log.Debug().Msgf("Polling %d blocks: %v", len(blockNumbers), blockNumbers)
+	log.Debug().Msgf("Polling %d blocks", len(blockNumbers))
 	blockData, failedResults := p.PollWithoutSaving(ctx, blockNumbers)
 	if len(blockData) > 0 || len(failedResults) > 0 {
-		log.Debug().Msgf("Staging %d blocks: %v", len(blockData), blockData)
+		log.Debug().Msgf("Staging %d blocks", len(blockData))
 		p.StageResults(blockData, failedResults)
 	} else {
 		log.Debug().Msgf("No blocks to stage")
@@ -231,7 +231,7 @@ func (p *Poller) Poll(ctx context.Context, blockNumbers []*big.Int) (lastPolledB
 }
 
 func (p *Poller) PollWithoutSaving(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, []rpc.GetFullBlockResult) {
-	log.Debug().Msgf("Polling %d blocks: %v", len(blockNumbers), blockNumbers)
+	log.Debug().Msgf("Polling %d blocks", len(blockNumbers))
 	if len(blockNumbers) < 1 {
 		log.Debug().Msg("No blocks to poll, skipping")
 		return nil, nil
@@ -249,7 +249,7 @@ func (p *Poller) PollWithoutSaving(ctx context.Context, blockNumbers []*big.Int)
 
 	worker := worker.NewWorker(p.rpc)
 	results := worker.Run(ctx, blockNumbers)
-	log.Debug().Msgf("Results: %v", results)
+	log.Debug().Msgf("Worker returned %d results", len(results))
 	blockData, failedResults := p.convertPollResultsToBlockData(results)
 	return blockData, failedResults
 }
