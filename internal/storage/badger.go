@@ -70,7 +70,7 @@ func NewBadgerConnector(cfg *config.BadgerConfig) (*BadgerConnector, error) {
 	opts.BlockCacheSize = 128 * 1024 * 1024 // 128MB block cache
 	opts.SyncWrites = false
 	opts.DetectConflicts = false
-	opts.Compression = options.Snappy // Use Snappy for better compression ratio
+	opts.Compression = options.ZSTD
 
 	opts.Logger = nil // Disable badger's internal logging
 
