@@ -54,23 +54,23 @@ func NewBadgerConnector(cfg *config.BadgerConfig) (*BadgerConnector, error) {
 	}
 	opts := badger.DefaultOptions(path)
 
-	opts.ValueLogFileSize = 1024 * 1024 * 1024 // 1GB
-	opts.BaseTableSize = 128 * 1024 * 1024     // 128MB
-	opts.BaseLevelSize = 128 * 1024 * 1024     // 128MB
-	opts.LevelSizeMultiplier = 10              // Aggressive growth
-	opts.NumMemtables = 10                     // ~1.28GB
-	opts.MemTableSize = opts.BaseTableSize     // 128MB per memtable
-	opts.NumLevelZeroTables = 10
-	opts.NumLevelZeroTablesStall = 30
-	opts.SyncWrites = false                 // Faster but less durable
-	opts.DetectConflicts = false            // No need for ACID in staging
-	opts.NumCompactors = 4                  // More compactors for parallel compaction
+	opts.ValueLogFileSize = 1 * 1024 * 1024 * 1024 // 1GB
+	opts.BaseTableSize = 128 * 1024 * 1024         // 128MB
+	opts.BaseLevelSize = 128 * 1024 * 1024         // 128MB
+	opts.LevelSizeMultiplier = 2
+	opts.NumMemtables = 4                  // 512MB
+	opts.MemTableSize = opts.BaseTableSize // 128MB per memtable
+	opts.NumLevelZeroTables = 8
+	opts.NumLevelZeroTablesStall = 24
+	opts.NumCompactors = 2                  // More compactors for parallel compaction
 	opts.CompactL0OnClose = true            // Compact L0 tables on close
 	opts.ValueLogMaxEntries = 1000000       // More entries per value log
 	opts.ValueThreshold = 1024              // Store values > 1024 bytes in value log
-	opts.IndexCacheSize = 512 * 1024 * 1024 // 512MB index cache
-	opts.BlockCacheSize = 256 * 1024 * 1024 // 256MB block cache
-	opts.Compression = options.Snappy
+	opts.IndexCacheSize = 128 * 1024 * 1024 // 128MB index cache
+	opts.BlockCacheSize = 128 * 1024 * 1024 // 128MB block cache
+	opts.SyncWrites = false
+	opts.DetectConflicts = false
+	opts.Compression = options.ZSTD
 
 	opts.Logger = nil // Disable badger's internal logging
 
@@ -236,14 +236,6 @@ func blockKeyRange(chainId *big.Int) []byte {
 	return []byte(fmt.Sprintf("blockdata:%s:", chainId.String()))
 }
 
-func blockFailureKey(chainId *big.Int, blockNumber *big.Int) []byte {
-	return []byte(fmt.Sprintf("blockfailure:%s:%s", chainId.String(), blockNumber.String()))
-}
-
-func blockFailureKeyRange(chainId *big.Int) []byte {
-	return []byte(fmt.Sprintf("blockfailure:%s:", chainId.String()))
-}
-
 func lastReorgKey(chainId *big.Int) []byte {
 	return []byte(fmt.Sprintf("reorg:%s", chainId.String()))
 }
@@ -254,98 +246,6 @@ func lastPublishedKey(chainId *big.Int) []byte {
 
 func lastCommittedKey(chainId *big.Int) []byte {
 	return []byte(fmt.Sprintf("commit:%s", chainId.String()))
-}
-
-// IOrchestratorStorage implementation
-func (bc *BadgerConnector) GetBlockFailures(qf QueryFilter) ([]common.BlockFailure, error) {
-	bc.mu.RLock()
-	defer bc.mu.RUnlock()
-
-	var failures []common.BlockFailure
-	prefix := blockFailureKeyRange(qf.ChainId)
-
-	err := bc.db.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.Prefix = []byte(prefix)
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var failure common.BlockFailure
-				if err := gob.NewDecoder(bytes.NewReader(val)).Decode(&failure); err != nil {
-					return err
-				}
-
-				// Apply filters
-				if qf.StartBlock != nil && failure.BlockNumber.Cmp(qf.StartBlock) < 0 {
-					return nil
-				}
-				if qf.EndBlock != nil && failure.BlockNumber.Cmp(qf.EndBlock) > 0 {
-					return nil
-				}
-
-				failures = append(failures, failure)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-
-			if qf.Limit > 0 && len(failures) >= qf.Limit {
-				break
-			}
-		}
-		return nil
-	})
-
-	return failures, err
-}
-
-func (bc *BadgerConnector) StoreBlockFailures(failures []common.BlockFailure) error {
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	return bc.db.Update(func(txn *badger.Txn) error {
-		for _, failure := range failures {
-			key := blockFailureKey(failure.ChainId, failure.BlockNumber)
-
-			var buf bytes.Buffer
-			if err := gob.NewEncoder(&buf).Encode(failure); err != nil {
-				return err
-			}
-
-			if err := txn.Set(key, buf.Bytes()); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-func (bc *BadgerConnector) DeleteBlockFailures(failures []common.BlockFailure) error {
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	return bc.db.Update(func(txn *badger.Txn) error {
-		for _, failure := range failures {
-			// Delete all failure entries for this block
-			prefix := blockFailureKey(failure.ChainId, failure.BlockNumber)
-
-			opts := badger.DefaultIteratorOptions
-			opts.Prefix = []byte(prefix)
-			it := txn.NewIterator(opts)
-			defer it.Close()
-
-			for it.Rewind(); it.Valid(); it.Next() {
-				if err := txn.Delete(it.Item().Key()); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	})
 }
 
 func (bc *BadgerConnector) GetLastReorgCheckedBlockNumber(chainId *big.Int) (*big.Int, error) {

@@ -16,6 +16,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/publisher"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
 const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 2000
@@ -26,7 +27,7 @@ type Committer struct {
 	blocksPerCommit    int
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
-	commitUntilBlock   *big.Int
+	commitToBlock      *big.Int
 	rpc                rpc.IRPCClient
 	lastCommittedBlock atomic.Uint64
 	lastPublishedBlock atomic.Uint64
@@ -37,30 +38,20 @@ type Committer struct {
 
 type CommitterOption func(*Committer)
 
-func WithValidator(validator *Validator) CommitterOption {
-	return func(c *Committer) {
-		c.validator = validator
-	}
-}
-
 func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, opts ...CommitterOption) *Committer {
 	triggerInterval := config.Cfg.Committer.Interval
 	if triggerInterval == 0 {
 		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
 	}
+
 	blocksPerCommit := config.Cfg.Committer.BlocksPerCommit
 	if blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
 	}
 
-	commitUntilBlock := config.Cfg.Committer.UntilBlock
-	if commitUntilBlock == 0 {
-		// default to match the poller.untilBlock
-		if config.Cfg.Poller.UntilBlock != 0 {
-			commitUntilBlock = config.Cfg.Poller.UntilBlock
-		} else {
-			commitUntilBlock = -1
-		}
+	commitToBlock := config.Cfg.Committer.ToBlock
+	if commitToBlock == 0 {
+		commitToBlock = -1
 	}
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
@@ -69,10 +60,11 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		commitFromBlock:   commitFromBlock,
-		commitUntilBlock:  big.NewInt(int64(commitUntilBlock)),
+		commitToBlock:     big.NewInt(int64(commitToBlock)),
 		rpc:               rpc,
 		publisher:         publisher.GetInstance(),
 		poller:            poller,
+		validator:         NewValidator(rpc, storage, worker.NewWorker(rpc)), // validator uses worker without sources
 	}
 	cfb := commitFromBlock.Uint64()
 	committer.lastCommittedBlock.Store(cfb)
@@ -217,9 +209,9 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			return
 		default:
 			time.Sleep(interval)
-			if c.commitUntilBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitUntilBlock.Uint64() {
-				// Completing the commit loop if we've committed more than commit until block
-				log.Info().Msgf("Committer reached configured untilBlock %s, the last commit block is %d, stopping commits", c.commitUntilBlock.String(), c.lastCommittedBlock.Load())
+			if c.commitToBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitToBlock.Uint64() {
+				// Completing the commit loop if we've committed more than commit to block
+				log.Info().Msgf("Committer reached configured toBlock %s, the last commit block is %d, stopping commits", c.commitToBlock.String(), c.lastCommittedBlock.Load())
 				return
 			}
 			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
@@ -234,7 +226,7 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 			if err := c.commit(ctx, blockDataToCommit); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
-			go c.cleanupProcessedStagingBlocks()
+			go c.cleanupProcessedStagingBlocks(ctx)
 		}
 	}
 }
@@ -249,12 +241,12 @@ func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) 
 			if err := c.publish(ctx); err != nil {
 				log.Error().Err(err).Msg("Error publishing blocks")
 			}
-			go c.cleanupProcessedStagingBlocks()
+			go c.cleanupProcessedStagingBlocks(ctx)
 		}
 	}
 }
 
-func (c *Committer) cleanupProcessedStagingBlocks() {
+func (c *Committer) cleanupProcessedStagingBlocks(ctx context.Context) {
 	committed := c.lastCommittedBlock.Load()
 	published := c.lastPublishedBlock.Load()
 	if published == 0 || committed == 0 {
@@ -270,6 +262,14 @@ func (c *Committer) cleanupProcessedStagingBlocks() {
 	chainID := c.rpc.GetChainID()
 	blockNumber := new(big.Int).SetUint64(limit)
 	stagingDeleteStart := time.Now()
+
+	// Check if context is cancelled before deleting
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	if err := c.storage.StagingStorage.DeleteStagingDataOlderThan(chainID, blockNumber); err != nil {
 		log.Error().Err(err).Msg("Failed to delete staging data")
 		return
@@ -376,8 +376,8 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
 
 	// If a commit until block is set, then set a limit on the commit until block
-	if c.commitUntilBlock.Sign() > 0 && untilBlock.Cmp(c.commitUntilBlock) > 0 {
-		return new(big.Int).Set(c.commitUntilBlock), nil
+	if c.commitToBlock.Sign() > 0 && untilBlock.Cmp(c.commitToBlock) > 0 {
+		return new(big.Int).Set(c.commitToBlock), nil
 	}
 
 	// get latest block from RPC and if that's less than until block, return that
@@ -397,6 +397,7 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
 	blocksData := c.poller.Request(ctx, blockNumbers)
 	if len(blocksData) == 0 {
+		// TODO: should wait a little bit, as it may take time to load
 		log.Warn().Msgf("Committer didn't find the following range: %v - %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64())
 		return nil, nil
 	}
@@ -408,20 +409,14 @@ func (c *Committer) getSequentialBlockData(ctx context.Context, blockNumbers []*
 	if err != nil {
 		return nil, err
 	}
+
 	if len(blocksData) == 0 {
 		return nil, nil
 	}
 
-	if c.validator != nil {
-		validBlocks, invalidBlocks, err := c.validator.ValidateBlocks(blocksData)
-		if err != nil {
-			return nil, err
-		}
-		if len(invalidBlocks) > 0 {
-			log.Warn().Msgf("Found %d invalid blocks in commit batch, continuing with %d valid blocks", len(invalidBlocks), len(validBlocks))
-			// continue with valid blocks only
-			blocksData = validBlocks
-		}
+	blocksData, err = c.validator.EnsureValidBlocks(ctx, blocksData)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(blocksData) == 0 {

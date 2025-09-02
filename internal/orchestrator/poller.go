@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	DEFAULT_PARALLEL_POLLERS  = 5
-	DEFAULT_LOOKAHEAD_BATCHES = 5
+	DEFAULT_PARALLEL_POLLERS = 5
 )
 
 type Poller struct {
@@ -30,8 +29,10 @@ type Poller struct {
 	lastPolledBlockMutex  sync.RWMutex
 	parallelPollers       int
 	lookaheadBatches      int
-	processingRanges      map[string]bool // Track ranges being processed
+	processingRanges      map[string][]chan struct{} // Track ranges with notification channels
 	processingRangesMutex sync.RWMutex
+	queuedRanges          map[string]bool // Track ranges queued but not yet processing
+	queuedRangesMutex     sync.RWMutex
 	tasks                 chan []*big.Int
 	wg                    sync.WaitGroup
 	ctx                   context.Context
@@ -61,7 +62,9 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOptio
 		parallelPollers = DEFAULT_PARALLEL_POLLERS
 	}
 
-	lookaheadBatches := DEFAULT_LOOKAHEAD_BATCHES
+	// Set the lookahead -> number of pollers + 2
+	// effectively setting the minimum look ahead = 3 batches
+	lookaheadBatches := parallelPollers + 2
 
 	poller := &Poller{
 		chainId:          rpc.GetChainID(),
@@ -69,7 +72,8 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOptio
 		storage:          storage,
 		parallelPollers:  parallelPollers,
 		lookaheadBatches: lookaheadBatches,
-		processingRanges: make(map[string]bool),
+		processingRanges: make(map[string][]chan struct{}),
+		queuedRanges:     make(map[string]bool),
 		tasks:            make(chan []*big.Int, parallelPollers+lookaheadBatches),
 	}
 
@@ -87,7 +91,7 @@ func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOptio
 }
 
 var ErrNoNewBlocks = fmt.Errorf("no new blocks to poll")
-var ErrBlocksProcessed = fmt.Errorf("blocks are being processed")
+var ErrBlocksProcessing = fmt.Errorf("blocks are being processed")
 
 func (p *Poller) Start(ctx context.Context) {
 	log.Debug().Msgf("Poller running with %d workers", p.parallelPollers)
@@ -113,13 +117,12 @@ func (p *Poller) poll(ctx context.Context, blockNumbers []*big.Int) ([]common.Bl
 	startBlock, endBlock := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
 	rangeKey := p.getRangeKey(startBlock, endBlock)
 
-	// Check if already processing
-	p.processingRangesMutex.RLock()
-	isProcessing := p.processingRanges[rangeKey]
-	p.processingRangesMutex.RUnlock()
+	// Transition from queued to processing
+	p.unmarkRangeAsQueued(rangeKey)
 
-	if isProcessing {
-		return nil, ErrBlocksProcessed
+	// Check if already processing
+	if p.isRangeProcessing(rangeKey) {
+		return nil, ErrBlocksProcessing
 	}
 
 	p.markRangeAsProcessing(rangeKey)
@@ -136,10 +139,12 @@ func (p *Poller) poll(ctx context.Context, blockNumbers []*big.Int) ([]common.Bl
 	}
 
 	p.lastPolledBlockMutex.Lock()
-	p.lastPolledBlock = new(big.Int).Set(highestBlockNumber)
+	if highestBlockNumber.Cmp(p.lastPolledBlock) > 0 {
+		p.lastPolledBlock = new(big.Int).Set(highestBlockNumber)
+	}
+	endBlockNumberFloat, _ := p.lastPolledBlock.Float64()
 	p.lastPolledBlockMutex.Unlock()
 
-	endBlockNumberFloat, _ := highestBlockNumber.Float64()
 	metrics.PollerLastTriggeredBlock.Set(endBlockNumberFloat)
 	return blockData, nil
 }
@@ -149,7 +154,8 @@ func (p *Poller) Request(ctx context.Context, blockNumbers []*big.Int) []common.
 		return nil
 	}
 
-	endBlock := blockNumbers[len(blockNumbers)-1]
+	startBlock, endBlock := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
+	rangeKey := p.getRangeKey(startBlock, endBlock)
 
 	p.lastPolledBlockMutex.RLock()
 	lastPolledBlock := new(big.Int).Set(p.lastPolledBlock)
@@ -157,25 +163,47 @@ func (p *Poller) Request(ctx context.Context, blockNumbers []*big.Int) []common.
 
 	// If requested blocks are already cached (polled), fetch from staging
 	if endBlock.Cmp(lastPolledBlock) <= 0 {
-		// Data should be in staging, fetch it
 		blockData, _ := p.pollBlockData(ctx, blockNumbers)
 		if len(blockData) > 0 {
 			go p.triggerLookahead(endBlock, int64(len(blockNumbers)))
-			return blockData
 		}
+		return blockData
+	}
+
+	// Check if this range is currently being processed
+	if p.isRangeProcessing(rangeKey) {
+		log.Debug().Msgf("Range %s is being processed, waiting for completion", rangeKey)
+		p.waitForRange(rangeKey)
+		// After waiting (or timeout), try to fetch from staging
+		blockData, _ := p.pollBlockData(ctx, blockNumbers)
+		if len(blockData) > 0 {
+			go p.triggerLookahead(endBlock, int64(len(blockNumbers)))
+		}
+		return blockData
 	}
 
 	// Process and cache the requested range
 	blockData, err := p.poll(ctx, blockNumbers)
 	if err != nil {
-		if err != ErrBlocksProcessed && err != ErrNoNewBlocks {
-			log.Error().Err(err).Msgf("Error polling requested blocks: %s - %s", blockNumbers[0].String(), endBlock.String())
+		if err == ErrBlocksProcessing {
+			// Another goroutine started processing this range, wait for it
+			log.Debug().Msgf("Range %s started processing by another goroutine, waiting", rangeKey)
+			p.waitForRange(rangeKey)
+			blockData, _ = p.pollBlockData(ctx, blockNumbers)
+		} else if err == ErrNoNewBlocks {
+			// This is expected, let it fails silently
+			return nil
+		} else {
+			log.Error().Err(err).Msgf("Error polling requested blocks: %s - %s", startBlock.String(), endBlock.String())
+			return nil
 		}
-		return nil
 	}
 
-	// Trigger lookahead caching asynchronously with the same batch size as the request
-	go p.triggerLookahead(endBlock, int64(len(blockNumbers)))
+	// Trigger lookahead if we have data
+	if len(blockData) > 0 {
+		go p.triggerLookahead(endBlock, int64(len(blockNumbers)))
+	}
+
 	return blockData
 }
 
@@ -197,6 +225,7 @@ func (p *Poller) pollBlockData(ctx context.Context, blockNumbers []*big.Int) ([]
 			}
 		}
 	}
+
 	return blockData, highestBlockNumber
 }
 
@@ -221,11 +250,20 @@ func (p *Poller) stageResults(blockData []common.BlockData) error {
 	startTime := time.Now()
 
 	metrics.PolledBatchSize.Set(float64(len(blockData)))
+
 	if err := p.storage.StagingStorage.InsertStagingData(blockData); err != nil {
 		log.Error().Err(err).Msgf("error inserting block data into staging")
 		return err
 	}
-	log.Debug().Str("metric", "staging_insert_duration").Msgf("StagingStorage.InsertStagingData duration: %f", time.Since(startTime).Seconds())
+
+	log.Debug().
+		Str("metric", "staging_insert_duration").
+		Str("first_block", blockData[0].Block.Number.String()).
+		Str("last_block", blockData[len(blockData)-1].Block.Number.String()).
+		Msgf("InsertStagingData for %s - %s, duration: %f",
+			blockData[0].Block.Number.String(), blockData[len(blockData)-1].Block.Number.String(),
+			time.Since(startTime).Seconds())
+
 	metrics.StagingInsertDuration.Observe(time.Since(startTime).Seconds())
 	return nil
 }
@@ -268,10 +306,10 @@ func (p *Poller) processBatch(blockNumbers []*big.Int) {
 
 	_, err := p.poll(p.ctx, blockNumbers)
 	if err != nil {
-		if err != ErrBlocksProcessed && err != ErrNoNewBlocks {
+		if err != ErrBlocksProcessing && err != ErrNoNewBlocks {
 			if len(blockNumbers) > 0 {
 				startBlock, endBlock := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
-				log.Debug().Err(err).Msgf("Failed to poll blocks %s-%s", startBlock.String(), endBlock.String())
+				log.Debug().Err(err).Msgf("Failed to poll blocks %s - %s", startBlock.String(), endBlock.String())
 			}
 		}
 		return
@@ -284,13 +322,9 @@ func (p *Poller) triggerLookahead(currentEndBlock *big.Int, batchSize int64) {
 		startBlock := new(big.Int).Add(currentEndBlock, big.NewInt(int64(i)*batchSize+1))
 		endBlock := new(big.Int).Add(startBlock, big.NewInt(batchSize-1))
 
-		// Check if this range is already cached or being processed
+		// Check if this range is already cached, queued, or being processed
 		rangeKey := p.getRangeKey(startBlock, endBlock)
-		p.processingRangesMutex.RLock()
-		isProcessing := p.processingRanges[rangeKey]
-		p.processingRangesMutex.RUnlock()
-
-		if isProcessing {
+		if p.isRangeProcessing(rangeKey) || p.isRangeQueued(rangeKey) {
 			continue
 		}
 
@@ -319,12 +353,16 @@ func (p *Poller) triggerLookahead(currentEndBlock *big.Int, batchSize int64) {
 
 		blockNumbers := p.createBlockNumbersForRange(startBlock, endBlock)
 
+		// Mark as queued before sending to channel
+		p.markRangeAsQueued(rangeKey)
+
 		// Queue for processing
 		select {
 		case p.tasks <- blockNumbers:
-			log.Debug().Msgf("Queued lookahead batch %s-%s", startBlock.String(), endBlock.String())
+			log.Debug().Msgf("Queued lookahead batch %s - %s", startBlock.String(), endBlock.String())
 		default:
-			// Queue is full, stop queueing
+			// Queue is full, unmark and stop queueing
+			p.unmarkRangeAsQueued(rangeKey)
 			return
 		}
 	}
@@ -334,22 +372,91 @@ func (p *Poller) getRangeKey(startBlock, endBlock *big.Int) string {
 	return fmt.Sprintf("%s-%s", startBlock.String(), endBlock.String())
 }
 
-func (p *Poller) markRangeAsProcessing(rangeKey string) {
+// isRangeProcessing checks if a range is currently being processed
+func (p *Poller) isRangeProcessing(rangeKey string) bool {
+	p.processingRangesMutex.RLock()
+	defer p.processingRangesMutex.RUnlock()
+	return len(p.processingRanges[rangeKey]) > 0
+}
+
+// isRangeQueued checks if a range is queued for processing
+func (p *Poller) isRangeQueued(rangeKey string) bool {
+	p.queuedRangesMutex.RLock()
+	defer p.queuedRangesMutex.RUnlock()
+	return p.queuedRanges[rangeKey]
+}
+
+// markRangeAsQueued marks a range as queued for processing
+func (p *Poller) markRangeAsQueued(rangeKey string) {
+	p.queuedRangesMutex.Lock()
+	defer p.queuedRangesMutex.Unlock()
+	p.queuedRanges[rangeKey] = true
+}
+
+// unmarkRangeAsQueued removes a range from the queued set
+func (p *Poller) unmarkRangeAsQueued(rangeKey string) {
+	p.queuedRangesMutex.Lock()
+	defer p.queuedRangesMutex.Unlock()
+	delete(p.queuedRanges, rangeKey)
+}
+
+func (p *Poller) markRangeAsProcessing(rangeKey string) chan struct{} {
 	p.processingRangesMutex.Lock()
-	p.processingRanges[rangeKey] = true
-	p.processingRangesMutex.Unlock()
+	defer p.processingRangesMutex.Unlock()
+
+	// Create a notification channel for this range
+	notifyChan := make(chan struct{})
+
+	// Initialize the slice if it doesn't exist
+	if p.processingRanges[rangeKey] == nil {
+		p.processingRanges[rangeKey] = []chan struct{}{}
+	}
+
+	// Store the notification channel
+	p.processingRanges[rangeKey] = append(p.processingRanges[rangeKey], notifyChan)
+
+	return notifyChan
 }
 
 func (p *Poller) unmarkRangeAsProcessing(rangeKey string) {
 	p.processingRangesMutex.Lock()
+	defer p.processingRangesMutex.Unlock()
+
+	// Get all waiting channels for this range
+	waitingChans := p.processingRanges[rangeKey]
+
+	// Notify all waiting goroutines
+	log.Debug().Msgf("Notifying %d waiters for Range %s processing completed", len(waitingChans), rangeKey)
+	for _, ch := range waitingChans {
+		close(ch)
+	}
+
+	// Remove the range from processing
 	delete(p.processingRanges, rangeKey)
-	p.processingRangesMutex.Unlock()
 }
 
-func (p *Poller) updateLastPolledBlock(blockNumber *big.Int) {
-	p.lastPolledBlockMutex.Lock()
-	if blockNumber.Cmp(p.lastPolledBlock) > 0 {
-		p.lastPolledBlock = new(big.Int).Set(blockNumber)
+// waitForRange waits for a range to finish processing
+func (p *Poller) waitForRange(rangeKey string) bool {
+	p.processingRangesMutex.Lock()
+
+	// Check if range is being processed
+	waitingChans, isProcessing := p.processingRanges[rangeKey]
+	if !isProcessing || len(waitingChans) == 0 {
+		p.processingRangesMutex.Unlock()
+		return false // Not processing
 	}
-	p.lastPolledBlockMutex.Unlock()
+
+	// Create a channel to wait on
+	waitChan := make(chan struct{})
+	p.processingRanges[rangeKey] = append(p.processingRanges[rangeKey], waitChan)
+	p.processingRangesMutex.Unlock()
+
+	// Wait for the range to complete or context cancellation
+	select {
+	case <-waitChan:
+		log.Debug().Msgf("Got notification for range %s processing completed", rangeKey)
+		return true // Range completed
+	case <-p.ctx.Done():
+		return false // Context cancelled
+	}
 }

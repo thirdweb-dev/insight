@@ -40,7 +40,7 @@ type ChainMetadata struct {
 // NewBadgerBlockBuffer creates a new Badger-backed block buffer with ephemeral storage
 func NewBadgerBlockBuffer(maxSizeMB int64, maxBlocks int) (*BadgerBlockBuffer, error) {
 	// Create temporary directory for ephemeral storage
-	tempDir, err := os.MkdirTemp("", "blockbuffer-*")
+	tempDir, err := os.MkdirTemp("", "blockbuffer-badger-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
@@ -65,7 +65,7 @@ func NewBadgerBlockBuffer(maxSizeMB int64, maxBlocks int) (*BadgerBlockBuffer, e
 	opts.ValueThreshold = 1024              // Store values > 512 bytes in value log
 	opts.IndexCacheSize = 128 * 1024 * 1024 // 128MB index cache
 	opts.BlockCacheSize = 64 * 1024 * 1024  // 64MB block cache
-	opts.Compression = options.Snappy
+	opts.Compression = options.ZSTD
 	opts.Logger = nil // Disable badger's internal logging
 
 	// Ephemeral-specific settings

@@ -206,6 +206,11 @@ func NewOrchestratorConnector(cfg *config.StorageOrchestratorConfig) (IOrchestra
 				return nil, fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
 			}
 			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		case "pebble__experimental":
+			if cfg.Pebble == nil {
+				return nil, fmt.Errorf("pebble storage type specified but pebble config is nil")
+			}
+			conn, err = NewPebbleConnector(cfg.Pebble)
 		case "badger":
 			if cfg.Badger == nil {
 				return nil, fmt.Errorf("badger storage type specified but badger config is nil")
@@ -264,6 +269,11 @@ func NewStagingConnector(cfg *config.StorageStagingConfig) (IStagingStorage, err
 				return nil, fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
 			}
 			conn, err = NewClickHouseConnector(cfg.Clickhouse)
+		case "pebble__experimental":
+			if cfg.Pebble == nil {
+				return nil, fmt.Errorf("pebble storage type specified but pebble config is nil")
+			}
+			conn, err = NewPebbleConnector(cfg.Pebble)
 		case "badger":
 			if cfg.Badger == nil {
 				return nil, fmt.Errorf("badger storage type specified but badger config is nil")
@@ -333,11 +343,6 @@ func NewMainConnector(cfg *config.StorageMainConfig, orchestratorStorage *IOrche
 				return nil, fmt.Errorf("clickhouse storage type specified but clickhouse config is nil")
 			}
 			conn, err = NewClickHouseConnector(cfg.Clickhouse)
-		case "badger":
-			if cfg.Badger == nil {
-				return nil, fmt.Errorf("badger storage type specified but badger config is nil")
-			}
-			conn, err = NewBadgerConnector(cfg.Badger)
 		default:
 			return nil, fmt.Errorf("unknown storage type: %s", storageType)
 		}
@@ -354,8 +359,6 @@ func NewMainConnector(cfg *config.StorageMainConfig, orchestratorStorage *IOrche
 			conn, err = NewPostgresConnector(cfg.Postgres)
 		} else if cfg.Clickhouse != nil {
 			conn, err = NewClickHouseConnector(cfg.Clickhouse)
-		} else if cfg.Badger != nil {
-			conn, err = NewBadgerConnector(cfg.Badger)
 		} else {
 			return nil, fmt.Errorf("no storage driver configured")
 		}
