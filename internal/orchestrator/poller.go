@@ -203,7 +203,6 @@ func (p *Poller) Request(ctx context.Context, blockNumbers []*big.Int) []common.
 	if len(blockData) > 0 {
 		go p.triggerLookahead(endBlock, int64(len(blockNumbers)))
 	}
-
 	return blockData
 }
 
@@ -309,7 +308,7 @@ func (p *Poller) processBatch(blockNumbers []*big.Int) {
 		if err != ErrBlocksProcessing && err != ErrNoNewBlocks {
 			if len(blockNumbers) > 0 {
 				startBlock, endBlock := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
-				log.Debug().Err(err).Msgf("Failed to poll blocks %s - %s", startBlock.String(), endBlock.String())
+				log.Error().Err(err).Msgf("Failed to poll blocks %s - %s", startBlock.String(), endBlock.String())
 			}
 		}
 		return
@@ -435,7 +434,7 @@ func (p *Poller) unmarkRangeAsProcessing(rangeKey string) {
 	delete(p.processingRanges, rangeKey)
 }
 
-// waitForRange waits for a range to finish processing
+// waitForRange waits for a range to finish processing with a timeout
 func (p *Poller) waitForRange(rangeKey string) bool {
 	p.processingRangesMutex.Lock()
 
@@ -451,12 +450,52 @@ func (p *Poller) waitForRange(rangeKey string) bool {
 	p.processingRanges[rangeKey] = append(p.processingRanges[rangeKey], waitChan)
 	p.processingRangesMutex.Unlock()
 
-	// Wait for the range to complete or context cancellation
+	// Wait for the range to complete, timeout, or context cancellation
 	select {
 	case <-waitChan:
 		log.Debug().Msgf("Got notification for range %s processing completed", rangeKey)
 		return true // Range completed
 	case <-p.ctx.Done():
 		return false // Context cancelled
+	}
+}
+
+// GetProcessingRanges returns a list of ranges currently being processed (for diagnostics)
+func (p *Poller) GetProcessingRanges() []string {
+	p.processingRangesMutex.RLock()
+	defer p.processingRangesMutex.RUnlock()
+
+	ranges := make([]string, 0, len(p.processingRanges))
+	for rangeKey, waiters := range p.processingRanges {
+		ranges = append(ranges, fmt.Sprintf("%s (waiters: %d)", rangeKey, len(waiters)))
+	}
+	return ranges
+}
+
+// GetQueuedRanges returns a list of ranges currently queued for processing (for diagnostics)
+func (p *Poller) GetQueuedRanges() []string {
+	p.queuedRangesMutex.RLock()
+	defer p.queuedRangesMutex.RUnlock()
+
+	ranges := make([]string, 0, len(p.queuedRanges))
+	for rangeKey := range p.queuedRanges {
+		ranges = append(ranges, rangeKey)
+	}
+	return ranges
+}
+
+// GetPollerStatus returns diagnostic information about the poller's current state
+func (p *Poller) GetPollerStatus() map[string]interface{} {
+	p.lastPolledBlockMutex.RLock()
+	lastPolled := p.lastPolledBlock.String()
+	p.lastPolledBlockMutex.RUnlock()
+
+	return map[string]interface{}{
+		"last_polled_block": lastPolled,
+		"processing_ranges": p.GetProcessingRanges(),
+		"queued_ranges":     p.GetQueuedRanges(),
+		"task_queue_size":   len(p.tasks),
+		"task_queue_cap":    cap(p.tasks),
+		"parallel_pollers":  p.parallelPollers,
 	}
 }

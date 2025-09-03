@@ -24,7 +24,6 @@ type PollerConfig struct {
 
 type CommitterConfig struct {
 	Enabled         bool `mapstructure:"enabled"`
-	Interval        int  `mapstructure:"interval"`
 	BlocksPerCommit int  `mapstructure:"blocksPerCommit"`
 	FromBlock       int  `mapstructure:"fromBlock"`
 	ToBlock         int  `mapstructure:"toBlock"`
@@ -36,12 +35,6 @@ type ReorgHandlerConfig struct {
 	BlocksPerScan  int  `mapstructure:"blocksPerScan"`
 	FromBlock      int  `mapstructure:"fromBlock"`
 	ForceFromBlock bool `mapstructure:"forceFromBlock"`
-}
-
-type FailureRecovererConfig struct {
-	Enabled      bool `mapstructure:"enabled"`
-	Interval     int  `mapstructure:"interval"`
-	BlocksPerRun int  `mapstructure:"blocksPerRun"`
 }
 
 type StorageConfig struct {
@@ -254,11 +247,6 @@ type S3SourceConfig struct {
 	MaxConcurrentDownloads int           `mapstructure:"maxConcurrentDownloads"`
 }
 
-type WorkModeConfig struct {
-	CheckIntervalMinutes int   `mapstructure:"checkIntervalMinutes"`
-	LiveModeThreshold    int64 `mapstructure:"liveModeThreshold"`
-}
-
 type ValidationConfig struct {
 	Mode string `mapstructure:"mode"` // "disabled", "minimal", "strict"
 }
@@ -272,18 +260,16 @@ type MigratorConfig struct {
 }
 
 type Config struct {
-	RPC              RPCConfig              `mapstructure:"rpc"`
-	Log              LogConfig              `mapstructure:"log"`
-	Poller           PollerConfig           `mapstructure:"poller"`
-	Committer        CommitterConfig        `mapstructure:"committer"`
-	FailureRecoverer FailureRecovererConfig `mapstructure:"failureRecoverer"`
-	ReorgHandler     ReorgHandlerConfig     `mapstructure:"reorgHandler"`
-	Storage          StorageConfig          `mapstructure:"storage"`
-	API              APIConfig              `mapstructure:"api"`
-	Publisher        PublisherConfig        `mapstructure:"publisher"`
-	WorkMode         WorkModeConfig         `mapstructure:"workMode"`
-	Validation       ValidationConfig       `mapstructure:"validation"`
-	Migrator         MigratorConfig         `mapstructure:"migrator"`
+	RPC          RPCConfig          `mapstructure:"rpc"`
+	Log          LogConfig          `mapstructure:"log"`
+	Poller       PollerConfig       `mapstructure:"poller"`
+	Committer    CommitterConfig    `mapstructure:"committer"`
+	ReorgHandler ReorgHandlerConfig `mapstructure:"reorgHandler"`
+	Storage      StorageConfig      `mapstructure:"storage"`
+	API          APIConfig          `mapstructure:"api"`
+	Publisher    PublisherConfig    `mapstructure:"publisher"`
+	Validation   ValidationConfig   `mapstructure:"validation"`
+	Migrator     MigratorConfig     `mapstructure:"migrator"`
 }
 
 var Cfg Config

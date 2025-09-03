@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 	"github.com/thirdweb-dev/indexer/internal/storage"
@@ -33,14 +32,8 @@ type WorkModeMonitor struct {
 }
 
 func NewWorkModeMonitor(rpc rpc.IRPCClient, storage storage.IStorage) *WorkModeMonitor {
-	checkInterval := config.Cfg.WorkMode.CheckIntervalMinutes
-	if checkInterval < 1 {
-		checkInterval = DEFAULT_WORK_MODE_CHECK_INTERVAL
-	}
-	liveModeThreshold := config.Cfg.WorkMode.LiveModeThreshold
-	if liveModeThreshold < 1 {
-		liveModeThreshold = DEFAULT_LIVE_MODE_THRESHOLD
-	}
+	checkInterval := DEFAULT_WORK_MODE_CHECK_INTERVAL
+	liveModeThreshold := DEFAULT_LIVE_MODE_THRESHOLD
 	log.Info().Msgf("Work mode monitor initialized with check interval %d and live mode threshold %d", checkInterval, liveModeThreshold)
 	return &WorkModeMonitor{
 		rpc:               rpc,
@@ -48,7 +41,7 @@ func NewWorkModeMonitor(rpc rpc.IRPCClient, storage storage.IStorage) *WorkModeM
 		workModeChannels:  make(map[chan WorkMode]struct{}),
 		currentMode:       "",
 		checkInterval:     time.Duration(checkInterval) * time.Minute,
-		liveModeThreshold: big.NewInt(liveModeThreshold),
+		liveModeThreshold: big.NewInt(int64(liveModeThreshold)),
 	}
 }
 
