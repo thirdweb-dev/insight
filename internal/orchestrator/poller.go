@@ -464,7 +464,7 @@ func (p *Poller) waitForRange(rangeKey string) bool {
 func (p *Poller) GetProcessingRanges() []string {
 	p.processingRangesMutex.RLock()
 	defer p.processingRangesMutex.RUnlock()
-	
+
 	ranges := make([]string, 0, len(p.processingRanges))
 	for rangeKey, waiters := range p.processingRanges {
 		ranges = append(ranges, fmt.Sprintf("%s (waiters: %d)", rangeKey, len(waiters)))
@@ -476,7 +476,7 @@ func (p *Poller) GetProcessingRanges() []string {
 func (p *Poller) GetQueuedRanges() []string {
 	p.queuedRangesMutex.RLock()
 	defer p.queuedRangesMutex.RUnlock()
-	
+
 	ranges := make([]string, 0, len(p.queuedRanges))
 	for rangeKey := range p.queuedRanges {
 		ranges = append(ranges, rangeKey)
@@ -489,7 +489,7 @@ func (p *Poller) GetPollerStatus() map[string]interface{} {
 	p.lastPolledBlockMutex.RLock()
 	lastPolled := p.lastPolledBlock.String()
 	p.lastPolledBlockMutex.RUnlock()
-	
+
 	return map[string]interface{}{
 		"last_polled_block": lastPolled,
 		"processing_ranges": p.GetProcessingRanges(),

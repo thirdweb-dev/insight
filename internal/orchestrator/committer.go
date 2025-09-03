@@ -49,14 +49,14 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
-		blocksPerCommit:   blocksPerCommit,
-		storage:           storage,
-		commitFromBlock:   commitFromBlock,
-		commitToBlock:     big.NewInt(int64(commitToBlock)),
-		rpc:               rpc,
-		publisher:         publisher.GetInstance(),
-		poller:            poller,
-		validator:         NewValidator(rpc, storage, worker.NewWorker(rpc)), // validator uses worker without sources
+		blocksPerCommit: blocksPerCommit,
+		storage:         storage,
+		commitFromBlock: commitFromBlock,
+		commitToBlock:   big.NewInt(int64(commitToBlock)),
+		rpc:             rpc,
+		publisher:       publisher.GetInstance(),
+		poller:          poller,
+		validator:       NewValidator(rpc, storage, worker.NewWorker(rpc)), // validator uses worker without sources
 	}
 	cfb := commitFromBlock.Uint64()
 	committer.lastCommittedBlock.Store(cfb)
