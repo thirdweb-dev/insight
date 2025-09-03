@@ -295,7 +295,7 @@ func (w *Worker) processBatchWithRetry(ctx context.Context, blocks []*big.Int, s
 		Int("chunk_size", chunkSize).
 		Str("first_block", blocks[0].String()).
 		Str("last_block", blocks[len(blocks)-1].String()).
-		Msg("Processing blocks")
+		Msgf("Processing blocks for range %s - %s", blocks[0].String(), blocks[len(blocks)-1].String())
 
 	var allResults []rpc.GetFullBlockResult
 	var allFailures []rpc.GetFullBlockResult
@@ -410,36 +410,28 @@ func (w *Worker) Run(ctx context.Context, blockNumbers []*big.Int) []rpc.GetFull
 		success = len(results) > 0 && len(errors) == 0
 	}
 
-	if !success {
-		for _, errResult := range errors {
-			log.Error().Err(errResult.Error).Msgf("Error fetching block %s", errResult.BlockNumber.String())
-		}
+	if len(errors) > 0 {
+		first, last := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
+		firstError, lastError := errors[0], errors[len(errors)-1]
+		log.Error().Msgf("Error fetching block for range: %s - %s. Error: %s - %s (%d)", first.String(), last.String(), firstError.BlockNumber.String(), lastError.BlockNumber.String(), len(errors))
+		return nil
+	}
+
+	if !success || len(results) == 0 {
+		first, last := blockNumbers[0], blockNumbers[len(blockNumbers)-1]
+		log.Error().Msgf("No blocks fetched for range: %s - %s", first.String(), last.String())
+		return nil
 	}
 
 	// Update metrics and log summary
-	if len(results) > 0 {
-		lastBlockNumberFloat, _ := results[len(results)-1].BlockNumber.Float64()
-		metrics.LastFetchedBlock.Set(lastBlockNumberFloat)
+	lastBlockNumberFloat, _ := results[len(results)-1].BlockNumber.Float64()
+	metrics.LastFetchedBlock.Set(lastBlockNumberFloat)
 
-		// Count successes and failures
-		successful := 0
-		failed := 0
-		for _, r := range results {
-			if r.Error == nil {
-				successful++
-			} else {
-				failed++
-			}
-		}
-
-		log.Debug().
-			Str("first_block", results[0].BlockNumber.String()).
-			Str("last_block", results[len(results)-1].BlockNumber.String()).
-			Int("successful", successful).
-			Int("failed", failed).
-			Str("source", sourceType.String()).
-			Msg("Block fetching complete")
-	}
+	log.Debug().
+		Str("source", sourceType.String()).
+		Str("first_block", results[0].BlockNumber.String()).
+		Str("last_block", results[len(results)-1].BlockNumber.String()).
+		Msgf("Block fetching complete for range %s - %s", results[0].BlockNumber.String(), results[len(results)-1].BlockNumber.String())
 
 	return results
 }

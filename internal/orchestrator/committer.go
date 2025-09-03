@@ -19,11 +19,9 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/worker"
 )
 
-const DEFAULT_COMMITTER_TRIGGER_INTERVAL = 2000
 const DEFAULT_BLOCKS_PER_COMMIT = 1000
 
 type Committer struct {
-	triggerIntervalMs  int
 	blocksPerCommit    int
 	storage            storage.IStorage
 	commitFromBlock    *big.Int
@@ -39,11 +37,6 @@ type Committer struct {
 type CommitterOption func(*Committer)
 
 func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, opts ...CommitterOption) *Committer {
-	triggerInterval := config.Cfg.Committer.Interval
-	if triggerInterval == 0 {
-		triggerInterval = DEFAULT_COMMITTER_TRIGGER_INTERVAL
-	}
-
 	blocksPerCommit := config.Cfg.Committer.BlocksPerCommit
 	if blocksPerCommit == 0 {
 		blocksPerCommit = DEFAULT_BLOCKS_PER_COMMIT
@@ -56,7 +49,6 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 
 	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
-		triggerIntervalMs: triggerInterval,
 		blocksPerCommit:   blocksPerCommit,
 		storage:           storage,
 		commitFromBlock:   commitFromBlock,
@@ -78,8 +70,6 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 }
 
 func (c *Committer) Start(ctx context.Context) {
-	interval := time.Duration(c.triggerIntervalMs) * time.Millisecond
-
 	log.Debug().Msgf("Committer running")
 	chainID := c.rpc.GetChainID()
 
@@ -175,40 +165,35 @@ func (c *Committer) Start(ctx context.Context) {
 
 	if config.Cfg.Publisher.Mode == "parallel" {
 		var wg sync.WaitGroup
-		publishInterval := interval / 2
-		if publishInterval <= 0 {
-			publishInterval = interval
-		}
 		wg.Add(2)
+
 		go func() {
 			defer wg.Done()
-			c.runPublishLoop(ctx, publishInterval)
+			c.runPublishLoop(ctx)
 		}()
 
-		// allow the publisher to start before the committer
-		time.Sleep(publishInterval)
 		go func() {
 			defer wg.Done()
-			c.runCommitLoop(ctx, interval)
+			c.runCommitLoop(ctx)
 		}()
 
 		<-ctx.Done()
+
 		wg.Wait()
 	} else {
-		c.runCommitLoop(ctx, interval)
+		c.runCommitLoop(ctx)
 	}
 
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
 }
 
-func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
+func (c *Committer) runCommitLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			time.Sleep(interval)
 			if c.commitToBlock.Sign() > 0 && c.lastCommittedBlock.Load() >= c.commitToBlock.Uint64() {
 				// Completing the commit loop if we've committed more than commit to block
 				log.Info().Msgf("Committer reached configured toBlock %s, the last commit block is %d, stopping commits", c.commitToBlock.String(), c.lastCommittedBlock.Load())
@@ -231,13 +216,17 @@ func (c *Committer) runCommitLoop(ctx context.Context, interval time.Duration) {
 	}
 }
 
-func (c *Committer) runPublishLoop(ctx context.Context, interval time.Duration) {
+func (c *Committer) runPublishLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			time.Sleep(interval)
+			if c.commitToBlock.Sign() > 0 && c.lastPublishedBlock.Load() >= c.commitToBlock.Uint64() {
+				// Completing the publish loop if we've published more than commit to block
+				log.Info().Msgf("Committer reached configured toBlock %s, the last publish block is %d, stopping publishes", c.commitToBlock.String(), c.lastPublishedBlock.Load())
+				return
+			}
 			if err := c.publish(ctx); err != nil {
 				log.Error().Err(err).Msg("Error publishing blocks")
 			}
@@ -397,8 +386,8 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
 	blocksData := c.poller.Request(ctx, blockNumbers)
 	if len(blocksData) == 0 {
-		// TODO: should wait a little bit, as it may take time to load
-		log.Warn().Msgf("Committer didn't find the following range: %v - %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64())
+		log.Warn().Msgf("Committer didn't find the following range: %v - %v. %v", blockNumbers[0].Int64(), blockNumbers[len(blockNumbers)-1].Int64(), c.poller.GetPollerStatus())
+		time.Sleep(500 * time.Millisecond) // TODO: wait for block time
 		return nil, nil
 	}
 	return blocksData, nil
