@@ -127,6 +127,9 @@ func connectDB(cfg *config.ClickhouseConfig) (clickhouse.Conn, error) {
 			if cfg.AsyncInsert {
 				settings["async_insert"] = "1"
 				settings["wait_for_async_insert"] = "1"
+				settings["async_insert_busy_timeout_ms"] = "3000"    // 3 seconds
+				settings["async_insert_max_data_size"] = "104857600" // 100MB
+				settings["async_insert_max_query_number"] = "100000" // 100k
 			}
 			return settings
 		}(),
