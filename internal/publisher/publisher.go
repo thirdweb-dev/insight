@@ -271,6 +271,16 @@ func (p *Publisher) createBlockMessage(block common.Block, status string) (*kgo.
 		Topic: p.getTopicName("blocks"),
 		Key:   []byte(fmt.Sprintf("block-%s-%s-%s", status, block.ChainId.String(), block.Hash)),
 		Value: msgJson,
+		Headers: []kgo.RecordHeader{
+			{
+				Key:   "chain_id",
+				Value: []byte(block.ChainId.String()),
+			},
+			{
+				Key:   "block_number",
+				Value: []byte(block.Number.String()),
+			},
+		},
 	}, nil
 }
 
