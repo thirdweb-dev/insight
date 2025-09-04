@@ -72,26 +72,22 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 func (c *Committer) Start(ctx context.Context) {
 	log.Debug().Msgf("Committer running")
 
-	if config.Cfg.Publisher.Mode == "parallel" {
-		var wg sync.WaitGroup
-		wg.Add(2)
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-		go func() {
-			defer wg.Done()
-			c.runPublishLoop(ctx)
-		}()
+	go func() {
+		defer wg.Done()
+		c.runPublishLoop(ctx)
+	}()
 
-		go func() {
-			defer wg.Done()
-			c.runCommitLoop(ctx)
-		}()
-
-		<-ctx.Done()
-
-		wg.Wait()
-	} else {
+	go func() {
+		defer wg.Done()
 		c.runCommitLoop(ctx)
-	}
+	}()
+
+	<-ctx.Done()
+
+	wg.Wait()
 
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
@@ -112,6 +108,7 @@ func (c *Committer) initCommittedAndPublishedBlockNumbers() error {
 	}
 	c.lastCommittedBlock.Store(latestCommittedBlockNumber.Uint64())
 
+	// Initialize published block number
 	lastPublished, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
 	if err != nil {
 		return err
@@ -145,16 +142,7 @@ func (c *Committer) runCommitLoop(ctx context.Context) {
 				log.Info().Msgf("Committer reached configured toBlock %s, the last commit block is %d, stopping commits", c.commitToBlock.String(), c.lastCommittedBlock.Load())
 				return
 			}
-			blockDataToCommit, err := c.getSequentialBlockDataToCommit(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting block data to commit")
-				continue
-			}
-			if len(blockDataToCommit) == 0 {
-				log.Debug().Msg("No block data to commit")
-				continue
-			}
-			if err := c.commit(ctx, blockDataToCommit); err != nil {
+			if err := c.commit(ctx); err != nil {
 				log.Error().Err(err).Msg("Error committing blocks")
 			}
 			go c.cleanupProcessedStagingBlocks(ctx)
@@ -362,30 +350,16 @@ func (c *Committer) getSequentialBlockData(ctx context.Context, blockNumbers []*
 	return sequentialBlockData, nil
 }
 
-func (c *Committer) getSequentialBlockDataToCommit(ctx context.Context) ([]common.BlockData, error) {
-	blocksToCommit, err := c.getBlockNumbersToCommit(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error determining blocks to commit: %v", err)
-	}
-	if len(blocksToCommit) == 0 {
-		return nil, nil
-	}
-	return c.getSequentialBlockData(ctx, blocksToCommit)
-}
-
-func (c *Committer) getSequentialBlockDataToPublish(ctx context.Context) ([]common.BlockData, error) {
-	blocksToPublish, err := c.getBlockNumbersToPublish(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error determining blocks to publish: %v", err)
-	}
-	if len(blocksToPublish) == 0 {
-		return nil, nil
-	}
-	return c.getSequentialBlockData(ctx, blocksToPublish)
-}
-
 func (c *Committer) publish(ctx context.Context) error {
-	blockData, err := c.getSequentialBlockDataToPublish(ctx)
+	blockNumbersToPublish, err := c.getBlockNumbersToPublish(ctx)
+	if err != nil {
+		return fmt.Errorf("error determining blocks to publish: %v", err)
+	}
+	if len(blockNumbersToPublish) == 0 {
+		return nil
+	}
+
+	blockData, err := c.getSequentialBlockData(ctx, blockNumbersToPublish)
 	if err != nil {
 		return err
 	}
@@ -394,47 +368,50 @@ func (c *Committer) publish(ctx context.Context) error {
 	}
 
 	if err := c.publisher.PublishBlockData(blockData); err != nil {
+		log.Error().Err(err).Msgf("Failed to publish blocks: %v", blockNumbersToPublish)
 		return err
 	}
 
 	chainID := c.rpc.GetChainID()
 	highest := blockData[len(blockData)-1].Block.Number
 	if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, highest); err != nil {
+		log.Error().Err(err).Msgf("Failed to update last published block number to %s", highest.String())
 		return err
 	}
+
 	c.lastPublishedBlock.Store(highest.Uint64())
 	return nil
 }
 
-func (c *Committer) commit(ctx context.Context, blockData []common.BlockData) error {
-	blockNumbers := make([]*big.Int, len(blockData))
-	highestBlock := blockData[0].Block
-	for i, block := range blockData {
-		blockNumbers[i] = block.Block.Number
-		if block.Block.Number.Cmp(highestBlock.Number) > 0 {
-			highestBlock = block.Block
-		}
+func (c *Committer) commit(ctx context.Context) error {
+	blockNumbersToCommit, err := c.getBlockNumbersToCommit(ctx)
+	if err != nil {
+		return fmt.Errorf("error determining blocks to commit: %v", err)
 	}
-	log.Debug().Msgf("Committing %d blocks from %s to %s", len(blockNumbers), blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
+	if len(blockNumbersToCommit) == 0 {
+		return nil
+	}
+
+	blockData, err := c.getSequentialBlockData(ctx, blockNumbersToCommit)
+	if err != nil {
+		log.Error().Err(err).Msg("Error getting block data to commit")
+		return err
+	}
+	if len(blockData) == 0 {
+		return nil
+	}
+
+	highestBlock := blockData[len(blockData)-1].Block
+
+	log.Debug().Msgf("Committing %d blocks from %s to %s", len(blockData), blockData[0].Block.Number.String(), highestBlock.Number.String())
 
 	mainStorageStart := time.Now()
 	if err := c.storage.MainStorage.InsertBlockData(blockData); err != nil {
-		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbers)
+		log.Error().Err(err).Msgf("Failed to commit blocks: %v", blockNumbersToCommit)
 		return fmt.Errorf("error saving data to main storage: %v", err)
 	}
 	log.Debug().Str("metric", "main_storage_insert_duration").Msgf("MainStorage.InsertBlockData duration: %f", time.Since(mainStorageStart).Seconds())
 	metrics.MainStorageInsertDuration.Observe(time.Since(mainStorageStart).Seconds())
-
-	if config.Cfg.Publisher.Mode == "default" {
-		highest := highestBlock.Number.Uint64()
-		go func() {
-			if err := c.publisher.PublishBlockData(blockData); err != nil {
-				log.Error().Err(err).Msg("Failed to publish block data to kafka")
-				return
-			}
-			c.lastPublishedBlock.Store(highest)
-		}()
-	}
 
 	c.lastCommittedBlock.Store(highestBlock.Number.Uint64())
 

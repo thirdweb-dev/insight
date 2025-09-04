@@ -227,7 +227,6 @@ type EventPublisherConfig struct {
 
 type PublisherConfig struct {
 	Enabled      bool                       `mapstructure:"enabled"`
-	Mode         string                     `mapstructure:"mode"`
 	Brokers      string                     `mapstructure:"brokers"`
 	Username     string                     `mapstructure:"username"`
 	Password     string                     `mapstructure:"password"`
