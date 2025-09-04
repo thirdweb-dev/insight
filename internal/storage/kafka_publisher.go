@@ -161,11 +161,21 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 		return fmt.Errorf("failed to begin transaction: %v", err)
 	}
 
+	// Track if any produce errors occur
+	var produceErrors []error
+	var produceErrorsMu sync.Mutex
+	var wg sync.WaitGroup
+
 	// Produce all messages in the transaction
 	for _, msg := range messages {
+		wg.Add(1)
 		p.client.Produce(ctx, msg, func(r *kgo.Record, err error) {
+			defer wg.Done()
 			if err != nil {
 				log.Error().Err(err).Any("headers", r.Headers).Msg(">>>>>>>>>>>>>>>>>>>>>>>BLOCK WATCH:: KAFKA PUBLISHER::publishMessages::err")
+				produceErrorsMu.Lock()
+				produceErrors = append(produceErrors, err)
+				produceErrorsMu.Unlock()
 			}
 		})
 	}
@@ -174,6 +184,18 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 	if err := p.client.Flush(ctx); err != nil {
 		p.client.EndTransaction(ctx, kgo.TryAbort)
 		return fmt.Errorf("failed to flush messages: %v", err)
+	}
+
+	// Wait for all callbacks to complete
+	wg.Wait()
+
+	// Check if any produce errors occurred
+	hasErrors := len(produceErrors) > 0
+
+	if hasErrors {
+		// Abort the transaction if any produce errors occurred
+		p.client.EndTransaction(ctx, kgo.TryAbort)
+		return fmt.Errorf("transaction aborted due to produce errors: %v", produceErrors)
 	}
 
 	// Commit the transaction
