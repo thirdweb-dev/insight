@@ -69,7 +69,7 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 		kgo.TransactionalID(fmt.Sprintf("insight-producer-%s", chainID)),
 		kgo.MaxBufferedBytes(2 * 1024 * 1024 * 1024), // 2GB
 		kgo.MaxBufferedRecords(1_000_000),
-		kgo.ProducerBatchMaxBytes(10 * 1024 * 1024), // 100MB
+		kgo.ProducerBatchMaxBytes(100 * 1024 * 1024), // 100MB
 		kgo.RecordPartitioner(kgo.ManualPartitioner()),
 		kgo.ProduceRequestTimeout(30 * time.Second),
 		kgo.MetadataMaxAge(60 * time.Second),
@@ -172,7 +172,7 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 		p.client.Produce(ctx, msg, func(r *kgo.Record, err error) {
 			defer wg.Done()
 			if err != nil {
-				log.Error().Err(err).Any("headers", r.Headers).Msg(">>>>>>>>>>>>>>>>>>>>>>>BLOCK WATCH:: KAFKA PUBLISHER::publishMessages::err")
+				log.Error().Err(err).Any("headers", r.Headers).Msg("KAFKA PUBLISHER::publishMessages::err")
 				produceErrorsMu.Lock()
 				produceErrors = append(produceErrors, err)
 				produceErrorsMu.Unlock()
