@@ -47,23 +47,23 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 		commitToBlock = -1
 	}
 
-	commitFromBlock := big.NewInt(int64(config.Cfg.Committer.FromBlock))
 	committer := &Committer{
 		blocksPerCommit: blocksPerCommit,
 		storage:         storage,
-		commitFromBlock: commitFromBlock,
+		commitFromBlock: big.NewInt(int64(config.Cfg.Committer.FromBlock)),
 		commitToBlock:   big.NewInt(int64(commitToBlock)),
 		rpc:             rpc,
 		publisher:       publisher.GetInstance(),
 		poller:          poller,
 		validator:       NewValidator(rpc, storage, worker.NewWorker(rpc)), // validator uses worker without sources
 	}
-	cfb := commitFromBlock.Uint64()
-	committer.lastCommittedBlock.Store(cfb)
-	committer.lastPublishedBlock.Store(cfb)
 
 	for _, opt := range opts {
 		opt(committer)
+	}
+
+	if err := committer.initCommittedAndPublishedBlockNumbers(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize committer block numbers")
 	}
 
 	return committer
@@ -71,97 +71,6 @@ func NewCommitter(rpc rpc.IRPCClient, storage storage.IStorage, poller *Poller, 
 
 func (c *Committer) Start(ctx context.Context) {
 	log.Debug().Msgf("Committer running")
-	chainID := c.rpc.GetChainID()
-
-	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(chainID)
-	if err != nil {
-		// It's okay to fail silently here; this value is only used for staging cleanup and
-		// the worker loop will eventually correct the state and delete as needed.
-		log.Error().Msgf("Error getting latest committed block number: %v", err)
-	} else if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
-		c.lastCommittedBlock.Store(latestCommittedBlockNumber.Uint64())
-	}
-
-	// Initialize publisher position - always use max(lastPublished, lastCommitted) to prevent double publishing
-	lastPublished, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(chainID)
-	if err != nil {
-		// It's okay to fail silently here; it's only used for staging cleanup and will be
-		// corrected by the worker loop.
-		log.Error().Err(err).Msg("failed to get last published block number")
-	} else if lastPublished != nil && lastPublished.Sign() > 0 {
-		// Always ensure publisher starts from at least the committed value
-		if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
-			if lastPublished.Cmp(latestCommittedBlockNumber) < 0 {
-				gap := new(big.Int).Sub(latestCommittedBlockNumber, lastPublished)
-				log.Warn().
-					Str("last_published", lastPublished.String()).
-					Str("latest_committed", latestCommittedBlockNumber.String()).
-					Str("gap", gap.String()).
-					Msg("Publisher is behind committed position, seeking forward to committed value")
-
-				c.lastPublishedBlock.Store(latestCommittedBlockNumber.Uint64())
-				if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, latestCommittedBlockNumber); err != nil {
-					log.Error().Err(err).Msg("Failed to update last published block number after seeking forward")
-					// Fall back to the stored value on error
-					c.lastPublishedBlock.Store(lastPublished.Uint64())
-				}
-			} else {
-				c.lastPublishedBlock.Store(lastPublished.Uint64())
-			}
-		} else {
-			c.lastPublishedBlock.Store(lastPublished.Uint64())
-		}
-	} else {
-		c.lastPublishedBlock.Store(c.lastCommittedBlock.Load())
-	}
-
-	// Determine the correct publish position - always take the maximum to avoid going backwards
-	var targetPublishBlock *big.Int
-
-	if lastPublished == nil || lastPublished.Sign() == 0 {
-		// No previous publish position
-		if latestCommittedBlockNumber != nil && latestCommittedBlockNumber.Sign() > 0 {
-			// Start from committed position
-			targetPublishBlock = latestCommittedBlockNumber
-		} else if c.commitFromBlock.Sign() > 0 {
-			// Start from configured position minus 1 (since we publish from next block)
-			targetPublishBlock = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
-		} else {
-			// Start from 0
-			targetPublishBlock = big.NewInt(0)
-		}
-
-		log.Info().
-			Str("target_publish_block", targetPublishBlock.String()).
-			Msg("No previous publish position, initializing publisher cursor")
-	} else {
-		// We have a previous position
-		targetPublishBlock = lastPublished
-	}
-
-	// Only update storage if we're changing the position
-	if lastPublished == nil || targetPublishBlock.Cmp(lastPublished) != 0 {
-		if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(chainID, targetPublishBlock); err != nil {
-			log.Error().Err(err).Msg("Failed to update published block number in storage")
-			// If we can't update storage, use what was there originally to avoid issues
-			if lastPublished != nil {
-				targetPublishBlock = lastPublished
-			}
-		}
-	}
-
-	// Store in memory for quick acess
-	c.lastPublishedBlock.Store(targetPublishBlock.Uint64())
-
-	log.Info().
-		Str("publish_from", targetPublishBlock.String()).
-		Str("committed_at", func() string {
-			if latestCommittedBlockNumber != nil {
-				return latestCommittedBlockNumber.String()
-			}
-			return "0"
-		}()).
-		Msg("Publisher initialized")
 
 	if config.Cfg.Publisher.Mode == "parallel" {
 		var wg sync.WaitGroup
@@ -186,6 +95,43 @@ func (c *Committer) Start(ctx context.Context) {
 
 	log.Info().Msg("Committer shutting down")
 	c.publisher.Close()
+}
+
+func (c *Committer) initCommittedAndPublishedBlockNumbers() error {
+	latestCommittedBlockNumber, err := c.storage.MainStorage.GetMaxBlockNumber(c.rpc.GetChainID())
+	if err != nil {
+		return err
+	}
+
+	if latestCommittedBlockNumber == nil {
+		latestCommittedBlockNumber = new(big.Int).SetUint64(0)
+	}
+
+	if c.commitFromBlock.Sign() > 0 && latestCommittedBlockNumber.Cmp(c.commitFromBlock) < 0 {
+		latestCommittedBlockNumber = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
+	}
+	c.lastCommittedBlock.Store(latestCommittedBlockNumber.Uint64())
+
+	lastPublished, err := c.storage.OrchestratorStorage.GetLastPublishedBlockNumber(c.rpc.GetChainID())
+	if err != nil {
+		return err
+	}
+
+	if lastPublished == nil {
+		lastPublished = new(big.Int).SetUint64(0)
+	}
+
+	// If the last published block is not initialized yet, set it to the last committed block number
+	if lastPublished.Sign() == 0 && c.lastCommittedBlock.Load() > 0 {
+		lastPublished = new(big.Int).SetUint64(c.lastCommittedBlock.Load())
+
+		if err := c.storage.OrchestratorStorage.SetLastPublishedBlockNumber(c.rpc.GetChainID(), lastPublished); err != nil {
+			return err
+		}
+	}
+	c.lastPublishedBlock.Store(lastPublished.Uint64())
+
+	return nil
 }
 
 func (c *Committer) runCommitLoop(ctx context.Context) {
@@ -283,40 +229,17 @@ func (c *Committer) getBlockNumbersToCommit(ctx context.Context) ([]*big.Int, er
 	if err != nil {
 		return nil, err
 	}
-	if latestCommittedBlockNumber == nil {
-		latestCommittedBlockNumber = new(big.Int).SetUint64(0)
-	}
-	log.Debug().Msgf("Committer found this max block number in main storage: %s", latestCommittedBlockNumber.String())
 
-	if latestCommittedBlockNumber.Sign() == 0 {
-		// If no blocks have been committed yet, start from the fromBlock specified in the config
-		latestCommittedBlockNumber = new(big.Int).Sub(c.commitFromBlock, big.NewInt(1))
-	} else {
-		lastCommitted := new(big.Int).SetUint64(c.lastCommittedBlock.Load())
-		if latestCommittedBlockNumber.Cmp(lastCommitted) < 0 {
-			log.Warn().Msgf("Max block in storage (%s) is less than last committed block in memory (%s).", latestCommittedBlockNumber.String(), lastCommitted.String())
-			return []*big.Int{}, nil
-		}
+	if latestCommittedBlockNumber == nil || c.lastCommittedBlock.Load() != latestCommittedBlockNumber.Uint64() {
+		log.Fatal().Msgf("Inconsistent last committed block state between memory (%d) and storage (%v)", c.lastCommittedBlock.Load(), latestCommittedBlockNumber)
+		return nil, fmt.Errorf("last committed block number is not initialized correctly")
 	}
 
-	startBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(1))
-	endBlock, err := c.getBlockToCommitUntil(ctx, latestCommittedBlockNumber)
+	blockNumbers, err := c.getBlockRange(ctx, latestCommittedBlockNumber)
 	if err != nil {
-		return nil, fmt.Errorf("error getting block to commit until: %v", err)
+		return nil, fmt.Errorf("failed to get block range to commit: %v", err)
 	}
 
-	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
-	if blockCount < 0 {
-		return []*big.Int{}, fmt.Errorf("more blocks have been committed than the RPC has available - possible chain reset")
-	}
-	if blockCount == 0 {
-		return []*big.Int{}, nil
-	}
-	blockNumbers := make([]*big.Int, blockCount)
-	for i := int64(0); i < blockCount; i++ {
-		blockNumber := new(big.Int).Add(startBlock, big.NewInt(i))
-		blockNumbers[i] = blockNumber
-	}
 	return blockNumbers, nil
 }
 
@@ -327,46 +250,25 @@ func (c *Committer) getBlockNumbersToPublish(ctx context.Context) ([]*big.Int, e
 		return nil, fmt.Errorf("failed to get last published block number: %v", err)
 	}
 
-	// This should never happen after Start() has run, but handle it defensively
-	if latestPublishedBlockNumber == nil || latestPublishedBlockNumber.Sign() == 0 {
-		// Fall back to in-memory value which was set during Start
-		latestPublishedBlockNumber = new(big.Int).SetUint64(c.lastPublishedBlock.Load())
-		log.Warn().
-			Str("fallback_value", latestPublishedBlockNumber.String()).
-			Msg("Storage returned nil/0 for last published block, using in-memory value")
+	if latestPublishedBlockNumber == nil || c.lastPublishedBlock.Load() != latestPublishedBlockNumber.Uint64() {
+		log.Fatal().Msgf("Inconsistent last published block state between memory (%d) and storage (%v)", c.lastPublishedBlock.Load(), latestPublishedBlockNumber)
+		return nil, fmt.Errorf("last published block number is not initialized correctly")
 	}
 
-	log.Debug().
-		Str("last_published", latestPublishedBlockNumber.String()).
-		Msg("Determining blocks to publish")
-
-	startBlock := new(big.Int).Add(latestPublishedBlockNumber, big.NewInt(1))
-	endBlock, err := c.getBlockToCommitUntil(ctx, latestPublishedBlockNumber)
+	blockNumbers, err := c.getBlockRange(ctx, latestPublishedBlockNumber)
 	if err != nil {
-		return nil, fmt.Errorf("error getting block to commit until: %v", err)
+		return nil, fmt.Errorf("failed to get block range to publish: %v", err)
 	}
 
-	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
-	if blockCount < 0 {
-		return []*big.Int{}, fmt.Errorf("more blocks have been committed than the RPC has available - possible chain reset")
-	}
-	if blockCount == 0 {
-		return []*big.Int{}, nil
-	}
-	blockNumbers := make([]*big.Int, blockCount)
-	for i := int64(0); i < blockCount; i++ {
-		blockNumber := new(big.Int).Add(startBlock, big.NewInt(i))
-		blockNumbers[i] = blockNumber
-	}
 	return blockNumbers, nil
 }
 
-func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBlockNumber *big.Int) (*big.Int, error) {
-	untilBlock := new(big.Int).Add(latestCommittedBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
+func (c *Committer) getBlockRange(ctx context.Context, lastBlockNumber *big.Int) ([]*big.Int, error) {
+	endBlock := new(big.Int).Add(lastBlockNumber, big.NewInt(int64(c.blocksPerCommit)))
 
 	// If a commit until block is set, then set a limit on the commit until block
-	if c.commitToBlock.Sign() > 0 && untilBlock.Cmp(c.commitToBlock) > 0 {
-		return new(big.Int).Set(c.commitToBlock), nil
+	if c.commitToBlock.Sign() > 0 && endBlock.Cmp(c.commitToBlock) > 0 {
+		endBlock = new(big.Int).Set(c.commitToBlock)
 	}
 
 	// get latest block from RPC and if that's less than until block, return that
@@ -375,12 +277,25 @@ func (c *Committer) getBlockToCommitUntil(ctx context.Context, latestCommittedBl
 		return nil, fmt.Errorf("error getting latest block from RPC: %v", err)
 	}
 
-	if latestBlock.Cmp(untilBlock) < 0 {
-		log.Debug().Msgf("Committing until latest block: %s", latestBlock.String())
-		return latestBlock, nil
+	if latestBlock.Cmp(endBlock) < 0 {
+		endBlock = new(big.Int).Set(latestBlock)
 	}
 
-	return untilBlock, nil
+	startBlock := new(big.Int).Add(lastBlockNumber, big.NewInt(1))
+	blockCount := new(big.Int).Sub(endBlock, startBlock).Int64() + 1
+	if blockCount < 0 {
+		return []*big.Int{}, fmt.Errorf("more blocks have been committed than the RPC has available - possible chain reset")
+	}
+	if blockCount == 0 {
+		return []*big.Int{}, nil
+	}
+
+	blockNumbers := make([]*big.Int, blockCount)
+	for i := int64(0); i < blockCount; i++ {
+		blockNumber := new(big.Int).Add(startBlock, big.NewInt(i))
+		blockNumbers[i] = blockNumber
+	}
+	return blockNumbers, nil
 }
 
 func (c *Committer) fetchBlockData(ctx context.Context, blockNumbers []*big.Int) ([]common.BlockData, error) {
