@@ -69,7 +69,7 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 		kgo.TransactionalID(fmt.Sprintf("insight-producer-%s", chainID)),
 		kgo.MaxBufferedBytes(2 * 1024 * 1024 * 1024), // 2GB
 		kgo.MaxBufferedRecords(1_000_000),
-		kgo.ProducerBatchMaxBytes(100 * 1024 * 1024), // 100MB
+		kgo.ProducerBatchMaxBytes(10 * 1024 * 1024), // 100MB
 		kgo.RecordPartitioner(kgo.ManualPartitioner()),
 		kgo.ProduceRequestTimeout(30 * time.Second),
 		kgo.MetadataMaxAge(60 * time.Second),
