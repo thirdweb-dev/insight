@@ -65,7 +65,7 @@ func (p *Publisher) initialize() error {
 		kgo.ProducerBatchCompression(kgo.SnappyCompression()),
 		kgo.ClientID(fmt.Sprintf("insight-indexer-%s", config.Cfg.RPC.ChainID)),
 		kgo.MaxBufferedRecords(1_000_000),
-		kgo.ProducerBatchMaxBytes(16_000_000),
+		kgo.ProducerBatchMaxBytes(100 * 1024 * 1024), // 100MB
 		kgo.RecordPartitioner(kgo.UniformBytesPartitioner(1_000_000, false, false, nil)),
 		kgo.MetadataMaxAge(60 * time.Second),
 		kgo.DialTimeout(10 * time.Second),
