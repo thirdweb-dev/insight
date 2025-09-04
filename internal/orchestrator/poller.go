@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sync"
 	"time"
+	"runtime"
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
@@ -59,7 +60,7 @@ func WithPollerWorker(cfg *worker.Worker) PollerOption {
 func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOption) *Poller {
 	parallelPollers := config.Cfg.Poller.ParallelPollers
 	if parallelPollers == 0 {
-		parallelPollers = DEFAULT_PARALLEL_POLLERS
+		parallelPollers = runtime.NumCPU()
 	}
 
 	// Set the lookahead -> number of pollers + 2

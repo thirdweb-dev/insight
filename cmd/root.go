@@ -49,7 +49,7 @@ func init() {
 	rootCmd.PersistentFlags().Int("rpc-traces-batchDelay", 0, "Milliseconds to wait between batches of traces when fetching from the RPC")
 	rootCmd.PersistentFlags().String("log-level", "", "Log level to use for the application")
 	rootCmd.PersistentFlags().Bool("log-prettify", false, "Whether to prettify the log output")
-	rootCmd.PersistentFlags().Int("poller-parallel-pollers", 5, "Maximum number of parallel pollers")
+	rootCmd.PersistentFlags().Int("poller-parallel-pollers", 0, "Maximum number of parallel pollers")
 	rootCmd.PersistentFlags().String("poller-s3-bucket", "", "S3 bucket for oller archive source")
 	rootCmd.PersistentFlags().String("poller-s3-region", "", "S3 region for poller archive source")
 	rootCmd.PersistentFlags().String("poller-s3-prefix", "", "S3 prefix for poller archive source")
