@@ -152,6 +152,14 @@ func Commit(chainId *big.Int) error {
 	log.Info().Int("filtered_ranges", len(blockRanges)).Msg("Filtered and sorted block ranges")
 
 	// Start downloading files in background
+	// Check if there are any files to process
+	if len(blockRanges) == 0 {
+		log.Info().
+			Str("next_commit_block", new(big.Int).Add(maxBlockNumber, big.NewInt(1)).String()).
+			Msg("No files to process - all blocks are up to date")
+		return nil
+	}
+
 	log.Info().Msg("Starting background file downloads")
 	go downloadFilesInBackground(blockRanges)
 
