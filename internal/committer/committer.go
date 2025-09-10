@@ -85,18 +85,18 @@ func Commit(chainId *big.Int, s3Config *config.S3Config, kafkaConfig *config.Kaf
 		return err
 	}
 
-	// need to make this into goroutine
-	for _, blockRange := range blockRanges {
-		downloadFile(&blockRange)
-	}
+	go downloadFilesInBackground(blockRanges)
 
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
 	for _, blockRange := range blockRanges {
+		// use isDownloaded channel to wait. check blockRange.IsDownloaded == true else wait.
+
 		err := streamParquetFile(chainId, blockRange.LocalPath, nextCommitBlockNumber)
 		if err != nil {
 			log.Panic().Err(err).Msg("Failed to stream parquet file")
 		}
 		// Clean up local file
+		// maybe publish to fileDeleted channel after file is deleted for downloadFilesInBackground to continue
 		if err := os.Remove(blockRange.LocalPath); err != nil {
 			log.Warn().
 				Err(err).
@@ -106,6 +106,15 @@ func Commit(chainId *big.Int, s3Config *config.S3Config, kafkaConfig *config.Kaf
 	}
 
 	return nil
+}
+
+func downloadFilesInBackground(blockRanges []BlockRange) {
+	// dont download all files, if there are too many files, wait for some of them to be deleted. i.e max file could downloaded should be 10.
+	// if there are already 10 files, just wait for file count to decrease and download more.
+	// use fileDeleted channel to wait.
+	for _, blockRange := range blockRanges {
+		downloadFile(&blockRange)
+	}
 }
 
 // Close cleans up resources
@@ -261,6 +270,7 @@ func downloadFile(blockRange *BlockRange) error {
 		Str("s3_key", blockRange.S3Key).
 		Str("local_path", localPath).
 		Msg("Successfully downloaded file from S3")
+		// publish to isDownloaded channel after file is downloaded
 
 	return nil
 }
