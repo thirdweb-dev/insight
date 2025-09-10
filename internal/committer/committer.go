@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -51,17 +52,12 @@ type ParquetBlockData struct {
 var clickhouseConn clickhouse.Conn
 var s3Client *s3.Client
 var kafkaPublisher *storage.KafkaPublisher
-var downloadSemaphore = make(chan struct{}, 3)
 var tempDir = filepath.Join(os.TempDir(), "committer")
 var parquetFilenameRegex = regexp.MustCompile(`blocks_(\d+)_(\d+)\.parquet`)
 var mu sync.RWMutex
-var fileDeleted chan string
-var downloadComplete chan *BlockRange
 
 func Init(chainId *big.Int) {
 	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", chainId.Uint64()))
-	fileDeleted = make(chan string, config.Cfg.StagingS3MaxParallelFileDownload)
-	downloadComplete = make(chan *BlockRange, config.Cfg.StagingS3MaxParallelFileDownload)
 
 	initClickHouse()
 	initS3()
@@ -151,7 +147,6 @@ func Commit(chainId *big.Int) error {
 	}
 	log.Info().Int("filtered_ranges", len(blockRanges)).Msg("Filtered and sorted block ranges")
 
-	// Start downloading files in background
 	// Check if there are any files to process
 	if len(blockRanges) == 0 {
 		log.Info().
@@ -159,9 +154,6 @@ func Commit(chainId *big.Int) error {
 			Msg("No files to process - all blocks are up to date")
 		return nil
 	}
-
-	log.Info().Msg("Starting background file downloads")
-	go downloadFilesInBackground(blockRanges)
 
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
 	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting sequential processing")
@@ -175,41 +167,12 @@ func Commit(chainId *big.Int) error {
 			Str("end_block", blockRange.EndBlock.String()).
 			Msg("Processing file")
 
-		// Wait for this specific file to be downloaded
-		for {
-			mu.RLock()
-			if blockRange.IsDownloaded {
-				mu.RUnlock()
-				log.Debug().Str("file", blockRange.S3Key).Msg("File already downloaded, proceeding")
-				break
-			}
-			mu.RUnlock()
-
-			log.Debug().Str("file", blockRange.S3Key).Msg("Waiting for file download to complete")
-			// Wait for a download to complete
-			downloadedRange := <-downloadComplete
-
-			// Check if this is the file we're waiting for
-			if downloadedRange.StartBlock.Cmp(blockRange.StartBlock) == 0 {
-				log.Debug().Str("file", downloadedRange.S3Key).Msg("Received correct file, updating blockRange")
-				// Update the blockRange with the downloaded file's information
-				mu.Lock()
-				blockRange.LocalPath = downloadedRange.LocalPath
-				blockRange.IsDownloaded = downloadedRange.IsDownloaded
-				blockRange.BlockData = downloadedRange.BlockData
-				// Clear the downloadedRange's BlockData to free memory immediately
-				downloadedRange.BlockData = nil
-				mu.Unlock()
-				break
-			}
-
-			log.Debug().
-				Str("expected_file", blockRange.S3Key).
-				Str("received_file", downloadedRange.S3Key).
-				Msg("Received different file, putting back and waiting")
-			// If not the right file, put it back and continue waiting
-			downloadComplete <- downloadedRange
+		// Download and parse the file synchronously
+		log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
+		if err := downloadFile(&blockRange); err != nil {
+			log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
 		}
+		log.Debug().Str("file", blockRange.S3Key).Msg("File download completed")
 
 		log.Info().
 			Str("file", blockRange.S3Key).
@@ -255,7 +218,7 @@ func Commit(chainId *big.Int) error {
 
 		// Check if we have any blocks to process after filtering
 		if startIndex >= len(blockRange.BlockData) {
-			log.Info().
+			log.Panic().
 				Str("file", blockRange.S3Key).
 				Msg("All blocks already processed, skipping Kafka publish")
 			return nil
@@ -271,16 +234,57 @@ func Commit(chainId *big.Int) error {
 			Str("final_commit_block", nextCommitBlockNumber.String()).
 			Msg("Publishing block range data to Kafka")
 
-		// publish the entire slice to kafka
-		if err := kafkaPublisher.PublishBlockData(blocksToProcess); err != nil {
-			log.Panic().
-				Err(err).
+		// publish blocks in batches to prevent timeouts
+		batchSize := 500 // Publish 500 blocks at a time
+		totalBlocks := len(blocksToProcess)
+		publishStart := time.Now()
+
+		log.Debug().
+			Str("file", blockRange.S3Key).
+			Int("total_blocks", totalBlocks).
+			Int("batch_size", batchSize).
+			Msg("Starting Kafka publish in batches")
+
+		for i := 0; i < totalBlocks; i += batchSize {
+			end := min(i+batchSize, totalBlocks)
+
+			batch := blocksToProcess[i:end]
+			batchStart := time.Now()
+
+			log.Debug().
 				Str("file", blockRange.S3Key).
-				Uint64("start_block", blocksToProcess[0].Block.Number.Uint64()).
-				Uint64("end_block", blocksToProcess[len(blocksToProcess)-1].Block.Number.Uint64()).
-				Int("blocks_count", len(blocksToProcess)).
-				Msg("Failed to publish block data to Kafka")
+				Int("batch", i/batchSize+1).
+				Int("batch_blocks", len(batch)).
+				Uint64("start_block", batch[0].Block.Number.Uint64()).
+				Uint64("end_block", batch[len(batch)-1].Block.Number.Uint64()).
+				Msg("Publishing batch to Kafka")
+
+			if err := kafkaPublisher.PublishBlockData(batch); err != nil {
+				log.Panic().
+					Err(err).
+					Str("file", blockRange.S3Key).
+					Int("batch", i/batchSize+1).
+					Uint64("start_block", batch[0].Block.Number.Uint64()).
+					Uint64("end_block", batch[len(batch)-1].Block.Number.Uint64()).
+					Int("batch_blocks", len(batch)).
+					Msg("Failed to publish batch to Kafka")
+			}
+
+			batchDuration := time.Since(batchStart)
+			log.Debug().
+				Str("file", blockRange.S3Key).
+				Int("batch", i/batchSize+1).
+				Int("batch_blocks", len(batch)).
+				Str("batch_duration", batchDuration.String()).
+				Msg("Completed batch publish")
 		}
+
+		totalDuration := time.Since(publishStart)
+		log.Debug().
+			Str("file", blockRange.S3Key).
+			Int("total_blocks", totalBlocks).
+			Str("total_duration", totalDuration.String()).
+			Msg("Completed all Kafka publishes")
 
 		log.Info().
 			Str("file", blockRange.S3Key).
@@ -301,7 +305,7 @@ func Commit(chainId *big.Int) error {
 			Int("blocks_cleared", blockDataCount).
 			Msg("Cleared block data from memory")
 
-		// Clean up local file and notify download goroutine
+		// Clean up local file
 		if err := os.Remove(blockRange.LocalPath); err != nil {
 			log.Warn().
 				Err(err).
@@ -310,9 +314,6 @@ func Commit(chainId *big.Int) error {
 		} else {
 			log.Debug().Str("file", blockRange.LocalPath).Msg("Cleaned up local file")
 		}
-
-		// Notify that file was deleted
-		fileDeleted <- blockRange.LocalPath
 
 		log.Info().
 			Int("processed", i+1).
@@ -349,44 +350,6 @@ func getMaxBlockNumberFromClickHouse(chainId *big.Int) (*big.Int, error) {
 	}
 
 	return maxBlockNumber, nil
-}
-
-func downloadFilesInBackground(blockRanges []BlockRange) {
-	maxConcurrentFiles := config.Cfg.StagingS3MaxParallelFileDownload
-	log.Info().
-		Int("total_files", len(blockRanges)).
-		Int("max_concurrent", maxConcurrentFiles).
-		Msg("Starting background downloads")
-	downloadedCount := 0
-
-	for i := range blockRanges {
-		// Wait if we've reached the maximum concurrent files
-		if downloadedCount >= maxConcurrentFiles {
-			log.Debug().Int("downloaded_count", downloadedCount).Msg("Reached max concurrent files, waiting for deletion")
-			<-fileDeleted // Wait for a file to be deleted
-			downloadedCount--
-			log.Debug().Int("downloaded_count", downloadedCount).Msg("File deleted, continuing downloads")
-		}
-
-		log.Debug().
-			Int("index", i).
-			Str("file", blockRanges[i].S3Key).
-			Int("downloaded_count", downloadedCount).
-			Msg("Starting download goroutine")
-
-		go func(index int) {
-			log.Debug().Str("file", blockRanges[index].S3Key).Msg("Download goroutine started")
-			err := downloadFile(&blockRanges[index])
-			if err != nil {
-				log.Error().Err(err).Str("file", blockRanges[index].S3Key).Msg("Failed to download file")
-				return
-			}
-			log.Debug().Str("file", blockRanges[index].S3Key).Msg("Download completed, sending to channel")
-			downloadComplete <- &blockRanges[index]
-		}(i)
-
-		downloadedCount++
-	}
 }
 
 // listS3ParquetFiles lists all parquet files in S3 with the chain prefix
@@ -485,12 +448,6 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 // downloadFile downloads a file from S3 and saves it to local storage
 func downloadFile(blockRange *BlockRange) error {
 	log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
-
-	// Acquire semaphore to limit concurrent downloads
-	downloadSemaphore <- struct{}{}
-	defer func() { <-downloadSemaphore }()
-
-	log.Debug().Str("file", blockRange.S3Key).Msg("Acquired download semaphore")
 
 	// Ensure temp directory exists
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
@@ -619,11 +576,6 @@ func parseParquetFile(filePath string) ([]common.BlockData, error) {
 				// Extract block number
 				blockNum := row[0][1].Uint64()
 
-				log.Debug().
-					Str("file", filePath).
-					Uint64("block_number", blockNum).
-					Msg("Processing parquet row")
-
 				// Build ParquetBlockData from row
 				pd := ParquetBlockData{
 					ChainId:        row[0][0].Uint64(),
@@ -684,159 +636,6 @@ func parseParquetFile(filePath string) ([]common.BlockData, error) {
 	}
 
 	return allBlockData, nil
-}
-
-// streamParquetFile streams a parquet file row by row and processes blocks
-func streamParquetFile(filePath string, nextCommitBlockNumber *big.Int) error {
-	log.Debug().
-		Str("file", filePath).
-		Str("next_commit_block", nextCommitBlockNumber.String()).
-		Msg("Opening parquet file for streaming")
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to open parquet file: %w", err)
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to get file stats: %w", err)
-	}
-	log.Debug().
-		Str("file", filePath).
-		Int64("size_bytes", stat.Size()).
-		Msg("File stats retrieved")
-
-	pFile, err := parquet.OpenFile(file, stat.Size())
-	if err != nil {
-		return fmt.Errorf("failed to open parquet file: %w", err)
-	}
-	log.Debug().
-		Str("file", filePath).
-		Int("row_groups", len(pFile.RowGroups())).
-		Msg("Parquet file opened successfully")
-
-	processedBlocks := 0
-	for rgIndex, rg := range pFile.RowGroups() {
-		log.Debug().
-			Str("file", filePath).
-			Int("row_group", rgIndex).
-			Int64("num_rows", rg.NumRows()).
-			Msg("Processing row group")
-
-		// Use row-by-row reading to avoid loading entire row group into memory
-		reader := parquet.NewRowGroupReader(rg)
-		rowGroupBlocks := 0
-
-		for {
-			// Read single row
-			row := make([]parquet.Row, 1)
-			n, err := reader.ReadRows(row)
-
-			// Process the row if we successfully read it, even if EOF occurred
-			if n > 0 {
-				if len(row[0]) < 8 {
-					if err == io.EOF {
-						break // EOF and no valid row, we're done
-					}
-					continue // Not enough columns, try again
-				}
-
-				// Extract block number first to check if we need this row
-				blockNum := row[0][1].Uint64() // block_number is second column
-				blockNumber := big.NewInt(int64(blockNum))
-
-				log.Debug().
-					Str("file", filePath).
-					Uint64("block_number", blockNum).
-					Str("next_commit_block", nextCommitBlockNumber.String()).
-					Msg("Read block from parquet file")
-
-				// Skip if block number is less than next commit block number
-				if blockNumber.Cmp(nextCommitBlockNumber) < 0 {
-					log.Debug().
-						Str("file", filePath).
-						Uint64("block_number", blockNum).
-						Str("next_commit_block", nextCommitBlockNumber.String()).
-						Msg("Skipping block - already processed")
-					if err == io.EOF {
-						break // EOF after processing, we're done
-					}
-					continue
-				}
-
-				// If block number is greater than next commit block number, exit with error
-				if blockNumber.Cmp(nextCommitBlockNumber) > 0 {
-					log.Error().
-						Str("file", filePath).
-						Uint64("block_number", blockNum).
-						Str("next_commit_block", nextCommitBlockNumber.String()).
-						Msg("Found block number greater than expected - missing block in sequence")
-					return fmt.Errorf("block data not found for block number %s in S3", nextCommitBlockNumber.String())
-				}
-
-				log.Debug().
-					Str("file", filePath).
-					Uint64("block_number", blockNum).
-					Str("next_commit_block", nextCommitBlockNumber.String()).
-					Msg("Processing block")
-
-				// Build ParquetBlockData from row
-				pd := ParquetBlockData{
-					ChainId:        row[0][0].Uint64(),
-					BlockNumber:    blockNum,
-					BlockHash:      row[0][2].String(),
-					BlockTimestamp: row[0][3].Int64(),
-					Block:          row[0][4].ByteArray(),
-					Transactions:   row[0][5].ByteArray(),
-					Logs:           row[0][6].ByteArray(),
-					Traces:         row[0][7].ByteArray(),
-				}
-
-				// Parse block data
-				blockData, err := parseBlockData(pd)
-				if err != nil {
-					return fmt.Errorf("failed to parse block data: %w", err)
-				}
-
-				log.Debug().
-					Str("file", filePath).
-					Uint64("block_number", blockNum).
-					Msg("Publishing block data to Kafka")
-
-				kafkaPublisher.PublishBlockData([]common.BlockData{blockData})
-				nextCommitBlockNumber.Add(nextCommitBlockNumber, big.NewInt(1))
-				processedBlocks++
-				rowGroupBlocks++
-			}
-
-			// Handle EOF and other errors
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return fmt.Errorf("failed to read row: %w", err)
-			}
-			if n == 0 {
-				continue // No rows read in this call, try again
-			}
-		}
-
-		log.Debug().
-			Str("file", filePath).
-			Int("row_group", rgIndex).
-			Int("blocks_processed", rowGroupBlocks).
-			Msg("Completed row group")
-	}
-
-	log.Info().
-		Str("file", filePath).
-		Int("total_blocks_processed", processedBlocks).
-		Str("final_commit_block", nextCommitBlockNumber.String()).
-		Msg("Completed parquet file processing")
-
-	return nil
 }
 
 // parseBlockData converts ParquetBlockData to common.BlockData
