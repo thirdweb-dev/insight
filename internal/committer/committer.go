@@ -189,6 +189,8 @@ func Commit(chainId *big.Int) error {
 				blockRange.LocalPath = downloadedRange.LocalPath
 				blockRange.IsDownloaded = downloadedRange.IsDownloaded
 				blockRange.BlockData = downloadedRange.BlockData
+				// Clear the downloadedRange's BlockData to free memory immediately
+				downloadedRange.BlockData = nil
 				mu.Unlock()
 				break
 			}
@@ -274,11 +276,13 @@ func Commit(chainId *big.Int) error {
 
 		// Clear block data from memory to free up space
 		mu.Lock()
+		blockDataCount := len(blockRange.BlockData)
 		blockRange.BlockData = nil
 		mu.Unlock()
 
 		log.Debug().
 			Str("file", blockRange.S3Key).
+			Int("blocks_cleared", blockDataCount).
 			Msg("Cleared block data from memory")
 
 		// Clean up local file and notify download goroutine
