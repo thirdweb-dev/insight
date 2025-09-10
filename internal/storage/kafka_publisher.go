@@ -35,7 +35,7 @@ type PublishableMessagePayload struct {
 }
 
 type PublishableMessageBlockData struct {
-	common.BlockData
+	*common.BlockData
 	ChainId         uint64    `json:"chain_id"`
 	IsDeleted       int8      `json:"is_deleted"`
 	InsertTimestamp time.Time `json:"insert_timestamp"`
@@ -258,7 +258,7 @@ func (p *KafkaPublisher) createBlockDataMessage(block common.BlockData, isDelete
 	timestamp := time.Now()
 
 	data := PublishableMessageBlockData{
-		BlockData:       block,
+		BlockData:       &block,
 		ChainId:         block.Block.ChainId.Uint64(),
 		IsDeleted:       0,
 		InsertTimestamp: timestamp,
