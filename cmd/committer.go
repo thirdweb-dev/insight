@@ -24,6 +24,6 @@ func RunCommitter(cmd *cobra.Command, args []string) {
 	}
 	chainId := rpc.GetChainID()
 
-	committer.Init(chainId)
+	committer.Init(chainId, rpc)
 	committer.Commit(chainId)
 }
