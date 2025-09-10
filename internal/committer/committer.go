@@ -206,7 +206,7 @@ func Commit(chainId *big.Int) error {
 
 		err := streamParquetFile(blockRange.LocalPath, nextCommitBlockNumber)
 		if err != nil {
-			log.Panic().Err(err).Msg("Failed to stream parquet file")
+			log.Panic().Err(err).Str("S3Key", blockRange.S3Key).Msg("Failed to stream parquet file")
 		}
 
 		log.Info().Str("file", blockRange.LocalPath).Msg("Successfully streamed parquet file")
@@ -509,11 +509,14 @@ func streamParquetFile(filePath string, nextCommitBlockNumber *big.Int) error {
 			// Read single row
 			row := make([]parquet.Row, 1)
 			n, err := reader.ReadRows(row)
-			if err == io.EOF || n == 0 {
+			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				return fmt.Errorf("failed to read row: %w", err)
+			}
+			if n == 0 {
+				continue // No rows read in this call, try again
 			}
 
 			if len(row[0]) < 8 {
