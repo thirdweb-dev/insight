@@ -29,12 +29,13 @@ import (
 
 // BlockRange represents a range of blocks in an S3 parquet file
 type BlockRange struct {
-	StartBlock   *big.Int           `json:"start_block"`
-	EndBlock     *big.Int           `json:"end_block"`
-	S3Key        string             `json:"s3_key"`
-	IsDownloaded bool               `json:"is_downloaded"`
-	LocalPath    string             `json:"local_path,omitempty"`
-	BlockData    []common.BlockData `json:"block_data,omitempty"`
+	StartBlock    *big.Int           `json:"start_block"`
+	EndBlock      *big.Int           `json:"end_block"`
+	S3Key         string             `json:"s3_key"`
+	IsDownloaded  bool               `json:"is_downloaded"`
+	IsDownloading bool               `json:"is_downloading"`
+	LocalPath     string             `json:"local_path,omitempty"`
+	BlockData     []common.BlockData `json:"block_data,omitempty"`
 }
 
 // ParquetBlockData represents the block data structure in parquet files
@@ -167,7 +168,20 @@ func Commit(chainId *big.Int) error {
 			Str("end_block", blockRange.EndBlock.String()).
 			Msg("Processing file")
 
-		// Download and parse the file synchronously
+		// Start downloading the next file in background (lookahead)
+		if i+1 < len(blockRanges) {
+			nextBlockRange := &blockRanges[i+1]
+			log.Debug().
+				Str("next_file", nextBlockRange.S3Key).
+				Msg("Starting lookahead download")
+			go func(br *BlockRange) {
+				if err := downloadFile(br); err != nil {
+					log.Error().Err(err).Str("file", br.S3Key).Msg("Failed to download file in background")
+				}
+			}(nextBlockRange)
+		}
+
+		// Download and parse the current file
 		log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
 		if err := downloadFile(&blockRange); err != nil {
 			log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
@@ -448,6 +462,45 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 // downloadFile downloads a file from S3 and saves it to local storage
 func downloadFile(blockRange *BlockRange) error {
 	log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
+
+	// Check if file is already downloaded
+	mu.RLock()
+	if blockRange.IsDownloaded {
+		mu.RUnlock()
+		log.Debug().Str("file", blockRange.S3Key).Msg("File already downloaded, skipping")
+		return nil
+	}
+	mu.RUnlock()
+
+	// Check if file is already being downloaded by another goroutine
+	mu.Lock()
+	if blockRange.IsDownloading {
+		mu.Unlock()
+		log.Debug().Str("file", blockRange.S3Key).Msg("File is already being downloaded, waiting...")
+
+		// Poll every 250ms until download is complete
+		for {
+			time.Sleep(250 * time.Millisecond)
+			mu.RLock()
+			if blockRange.IsDownloaded {
+				mu.RUnlock()
+				log.Debug().Str("file", blockRange.S3Key).Msg("Download completed by another goroutine")
+				return nil
+			}
+			mu.RUnlock()
+		}
+	}
+
+	// Mark as downloading
+	blockRange.IsDownloading = true
+	mu.Unlock()
+
+	// Ensure downloading flag is cleared on error
+	defer func() {
+		mu.Lock()
+		blockRange.IsDownloading = false
+		mu.Unlock()
+	}()
 
 	// Ensure temp directory exists
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
