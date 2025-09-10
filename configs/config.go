@@ -270,6 +270,20 @@ type Config struct {
 	Publisher    PublisherConfig    `mapstructure:"publisher"`
 	Validation   ValidationConfig   `mapstructure:"validation"`
 	Migrator     MigratorConfig     `mapstructure:"migrator"`
+
+	CommitterClickhouseDatabase string `env:"COMMITTER_CLICKHOUSE_DATABASE"`
+	CommitterClickhouseHost     string `env:"COMMITTER_CLICKHOUSE_HOST"`
+	CommitterClickhousePort     int    `env:"COMMITTER_CLICKHOUSE_PORT"`
+	CommitterClickhouseUsername string `env:"COMMITTER_CLICKHOUSE_USERNAME"`
+	CommitterClickhousePassword string `env:"COMMITTER_CLICKHOUSE_PASSWORD"`
+	CommitterKafkaBrokers       string `env:"COMMITTER_KAFKA_BROKERS"`
+	CommitterKafkaUsername      string `env:"COMMITTER_KAFKA_USERNAME"`
+	CommitterKafkaPassword      string `env:"COMMITTER_KAFKA_PASSWORD"`
+
+	StagingS3Bucket          string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
+	StagingS3Region          string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
+	StagingS3AccessKeyID     string `env:"STAGING_S3_ACCESS_KEY_ID"`
+	StagingS3SecretAccessKey string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
 }
 
 var Cfg Config
