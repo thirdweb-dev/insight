@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/caarlos0/env"
+	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
@@ -271,24 +273,36 @@ type Config struct {
 	Validation   ValidationConfig   `mapstructure:"validation"`
 	Migrator     MigratorConfig     `mapstructure:"migrator"`
 
-	CommitterClickhouseDatabase string `env:"COMMITTER_CLICKHOUSE_DATABASE"`
-	CommitterClickhouseHost     string `env:"COMMITTER_CLICKHOUSE_HOST"`
-	CommitterClickhousePort     int    `env:"COMMITTER_CLICKHOUSE_PORT"`
-	CommitterClickhouseUsername string `env:"COMMITTER_CLICKHOUSE_USERNAME"`
-	CommitterClickhousePassword string `env:"COMMITTER_CLICKHOUSE_PASSWORD"`
-	CommitterKafkaBrokers       string `env:"COMMITTER_KAFKA_BROKERS"`
-	CommitterKafkaUsername      string `env:"COMMITTER_KAFKA_USERNAME"`
-	CommitterKafkaPassword      string `env:"COMMITTER_KAFKA_PASSWORD"`
+	CommitterClickhouseDatabase  string `env:"COMMITTER_CLICKHOUSE_DATABASE"`
+	CommitterClickhouseHost      string `env:"COMMITTER_CLICKHOUSE_HOST"`
+	CommitterClickhousePort      int    `env:"COMMITTER_CLICKHOUSE_PORT"`
+	CommitterClickhouseUsername  string `env:"COMMITTER_CLICKHOUSE_USERNAME"`
+	CommitterClickhousePassword  string `env:"COMMITTER_CLICKHOUSE_PASSWORD"`
+	CommitterClickhouseEnableTLS bool   `env:"COMMITTER_CLICKHOUSE_ENABLE_TLS" envDefault:"true"`
+	CommitterKafkaBrokers        string `env:"COMMITTER_KAFKA_BROKERS"`
+	CommitterKafkaUsername       string `env:"COMMITTER_KAFKA_USERNAME"`
+	CommitterKafkaPassword       string `env:"COMMITTER_KAFKA_PASSWORD"`
+	CommitterKafkaEnableTLS      bool   `env:"COMMITTER_KAFKA_ENABLE_TLS" envDefault:"true"`
 
-	StagingS3Bucket          string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
-	StagingS3Region          string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
-	StagingS3AccessKeyID     string `env:"STAGING_S3_ACCESS_KEY_ID"`
-	StagingS3SecretAccessKey string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
+	StagingS3Bucket           string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
+	StagingS3Region           string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
+	StagingS3AccessKeyID      string `env:"STAGING_S3_ACCESS_KEY_ID"`
+	StagingS3SecretAccessKey  string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
+	S3MaxParallelFileDownload int    `env:"S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
 }
 
 var Cfg Config
 
 func LoadConfig(cfgFile string) error {
+	err := godotenv.Load()
+	if err != nil {
+		log.Info().Msg("No .env file found")
+	}
+	err = env.Parse(&Cfg)
+	if err != nil {
+		panic(err)
+	}
+
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 		if err := viper.ReadInConfig(); err != nil {
@@ -315,7 +329,7 @@ func LoadConfig(cfgFile string) error {
 
 	viper.AutomaticEnv()
 
-	err := viper.Unmarshal(&Cfg)
+	err = viper.Unmarshal(&Cfg)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling config: %v", err)
 	}

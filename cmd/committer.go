@@ -18,12 +18,12 @@ var committerCmd = &cobra.Command{
 
 func RunCommitter(cmd *cobra.Command, args []string) {
 	fmt.Println("running committer")
-
 	rpc, err := rpc.Initialize()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize RPC")
 	}
 	chainId := rpc.GetChainID()
 
+	committer.Init(chainId)
 	committer.Commit(chainId)
 }
