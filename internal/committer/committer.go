@@ -190,10 +190,10 @@ func Commit(chainId *big.Int) error {
 	}
 
 	// Close channel to signal processor that all downloads are done
-	log.Info().Msg("All downloads completed, waiting for processing to finish")
+	log.Info().Msg("All downloads completed, waiting for processing to finish from S3")
 	close(downloadComplete)
 	<-processorDone
-	log.Info().Msg("All processing completed successfully")
+	log.Info().Msg("All processing completed successfully from S3")
 
 	log.Info().Msg("Fetching latest blocks")
 	fetchLatest(nextCommitBlockNumber)
