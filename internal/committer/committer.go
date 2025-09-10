@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -64,9 +65,16 @@ var kafkaPublisher, _ = storage.NewKafkaPublisher(&config.KafkaConfig{
 var downloadSemaphore = make(chan struct{}, 3)
 var tempDir = filepath.Join(os.TempDir(), "committer")
 var parquetFilenameRegex = regexp.MustCompile(`blocks_(\d+)_(\d+)\.parquet`)
+var mu sync.RWMutex
 
-// NewCommitter creates a new committer instance
-func Commit(chainId *big.Int, s3Config *config.S3Config, kafkaConfig *config.KafkaConfig) error {
+const max_concurrent_files = 10
+
+var fileDeleted = make(chan string, max_concurrent_files)
+var downloadComplete = make(chan *BlockRange, max_concurrent_files)
+
+// Reads data from s3 and writes to Kafka
+// if block is not found in s3, it will panic
+func Commit(chainId *big.Int) error {
 	maxBlockNumber, err := clickhouseConn.GetMaxBlockNumber(chainId)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get max block number from ClickHouse")
@@ -85,35 +93,78 @@ func Commit(chainId *big.Int, s3Config *config.S3Config, kafkaConfig *config.Kaf
 		return err
 	}
 
+	// Start downloading files in background
 	go downloadFilesInBackground(blockRanges)
 
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
-	for _, blockRange := range blockRanges {
-		// use isDownloaded channel to wait. check blockRange.IsDownloaded == true else wait.
+	for i, blockRange := range blockRanges {
+		// Wait for this specific file to be downloaded
+		for {
+			mu.RLock()
+			if blockRange.IsDownloaded {
+				mu.RUnlock()
+				break
+			}
+			mu.RUnlock()
+
+			// Wait for a download to complete
+			downloadedRange := <-downloadComplete
+
+			// Check if this is the file we're waiting for
+			if downloadedRange.StartBlock.Cmp(blockRange.StartBlock) == 0 {
+				break
+			}
+
+			// If not the right file, put it back and continue waiting
+			downloadComplete <- downloadedRange
+		}
 
 		err := streamParquetFile(chainId, blockRange.LocalPath, nextCommitBlockNumber)
 		if err != nil {
 			log.Panic().Err(err).Msg("Failed to stream parquet file")
 		}
-		// Clean up local file
-		// maybe publish to fileDeleted channel after file is deleted for downloadFilesInBackground to continue
+
+		// Clean up local file and notify download goroutine
 		if err := os.Remove(blockRange.LocalPath); err != nil {
 			log.Warn().
 				Err(err).
 				Str("file", blockRange.LocalPath).
 				Msg("Failed to clean up local file")
 		}
+
+		// Notify that file was deleted
+		fileDeleted <- blockRange.LocalPath
+
+		log.Info().
+			Int("processed", i+1).
+			Int("total", len(blockRanges)).
+			Str("file", blockRange.S3Key).
+			Msg("Completed processing file")
 	}
 
 	return nil
 }
 
 func downloadFilesInBackground(blockRanges []BlockRange) {
-	// dont download all files, if there are too many files, wait for some of them to be deleted. i.e max file could downloaded should be 10.
-	// if there are already 10 files, just wait for file count to decrease and download more.
-	// use fileDeleted channel to wait.
-	for _, blockRange := range blockRanges {
-		downloadFile(&blockRange)
+	downloadedCount := 0
+
+	for i := range blockRanges {
+		// Wait if we've reached the maximum concurrent files
+		if downloadedCount >= max_concurrent_files {
+			<-fileDeleted // Wait for a file to be deleted
+			downloadedCount--
+		}
+
+		go func(index int) {
+			err := downloadFile(&blockRanges[index])
+			if err != nil {
+				log.Error().Err(err).Str("file", blockRanges[index].S3Key).Msg("Failed to download file")
+				return
+			}
+			downloadComplete <- &blockRanges[index]
+		}(i)
+
+		downloadedCount++
 	}
 }
 
@@ -127,11 +178,6 @@ func Close() error {
 	}
 	// Clean up temp directory
 	return os.RemoveAll(tempDir)
-}
-
-// getMaxBlockNumberFromClickHouse gets the maximum block number for the chain from ClickHouse
-func getMaxBlockNumberFromClickHouse(chainId *big.Int) (*big.Int, error) {
-	return clickhouseConn.GetMaxBlockNumber(chainId)
 }
 
 // listS3ParquetFiles lists all parquet files in S3 with the chain prefix
@@ -270,7 +316,6 @@ func downloadFile(blockRange *BlockRange) error {
 		Str("s3_key", blockRange.S3Key).
 		Str("local_path", localPath).
 		Msg("Successfully downloaded file from S3")
-		// publish to isDownloaded channel after file is downloaded
 
 	return nil
 }
@@ -307,23 +352,51 @@ func streamParquetFile(chainId *big.Int, filePath string, nextCommitBlockNumber 
 
 	for _, rg := range pFile.RowGroups() {
 		// Use row-by-row reading to avoid loading entire row group into memory
-		// read the row group row by row and get each row. for each row do the following
-		// if block number is less than next commit block number, continue
-		// if block number is greater than next commit block number, return error
-		// if block number is equal to next commit block number, parse the block data and publish to kafka
-		// increment next commit block number by 1
+		reader := parquet.NewRowGroupReader(rg)
 
-		for _, row := range rg.Rows() {
-			blockNum := row[1].Uint64()
-			if blockNum.Cmp(nextCommitBlockNumber) < 0 {
+		for {
+			// Read single row
+			row := make([]parquet.Row, 1)
+			n, err := reader.ReadRows(row)
+			if err == io.EOF || n == 0 {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("failed to read row: %w", err)
+			}
+
+			if len(row[0]) < 8 {
+				continue // Not enough columns
+			}
+
+			// Extract block number first to check if we need this row
+			blockNum := row[0][1].Uint64() // block_number is second column
+			blockNumber := big.NewInt(int64(blockNum))
+
+			// Skip if block number is less than next commit block number
+			if blockNumber.Cmp(nextCommitBlockNumber) < 0 {
 				continue
 			}
 
-			if blockNum.Cmp(nextCommitBlockNumber) > 0 {
+			// If block number is greater than next commit block number, exit with error
+			if blockNumber.Cmp(nextCommitBlockNumber) > 0 {
 				return fmt.Errorf("block data not found for block number %s in S3", nextCommitBlockNumber.String())
 			}
 
-			blockData, err := parseBlockData(row)
+			// Build ParquetBlockData from row
+			pd := ParquetBlockData{
+				ChainId:        row[0][0].Uint64(),
+				BlockNumber:    blockNum,
+				BlockHash:      row[0][2].String(),
+				BlockTimestamp: row[0][3].Int64(),
+				Block:          row[0][4].ByteArray(),
+				Transactions:   row[0][5].ByteArray(),
+				Logs:           row[0][6].ByteArray(),
+				Traces:         row[0][7].ByteArray(),
+			}
+
+			// Parse block data
+			blockData, err := parseBlockData(pd)
 			if err != nil {
 				return fmt.Errorf("failed to parse block data: %w", err)
 			}
@@ -331,68 +404,6 @@ func streamParquetFile(chainId *big.Int, filePath string, nextCommitBlockNumber 
 			kafkaPublisher.PublishBlockData([]common.BlockData{blockData})
 			nextCommitBlockNumber.Add(nextCommitBlockNumber, big.NewInt(1))
 		}
-	}
-
-	return nil
-}
-
-// readRowGroupStreamingly reads a row group row-by-row to minimize memory usage
-func readRowGroupStreamingly(rg parquet.RowGroup, currentCommitBlock *big.Int, blockData *[]common.BlockData) error {
-	reader := parquet.NewRowGroupReader(rg)
-
-	// Process rows one at a time instead of loading all into memory
-	for {
-		// Read single row
-		row := make([]parquet.Row, 1)
-		n, err := reader.ReadRows(row)
-		if err == io.EOF || n == 0 {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("failed to read row: %w", err)
-		}
-
-		if len(row[0]) < 8 {
-			continue // Not enough columns
-		}
-
-		// Extract block number first to check if we need this row
-		blockNum := row[0][1].Uint64() // block_number is second column
-		blockNumber := big.NewInt(int64(blockNum))
-
-		// Skip if block number is less than next commit block number
-		if blockNumber.Cmp(currentCommitBlock) < 0 {
-			continue
-		}
-
-		// If block number is greater than next commit block number, exit with error
-		if blockNumber.Cmp(currentCommitBlock) > 0 {
-			return fmt.Errorf("block data not found for block number %s in S3", currentCommitBlock.String())
-		}
-
-		// Build ParquetBlockData from row
-		pd := ParquetBlockData{
-			ChainId:        row[0][0].Uint64(),
-			BlockNumber:    blockNum,
-			BlockHash:      row[0][2].String(),
-			BlockTimestamp: row[0][3].Int64(),
-			Block:          row[0][4].ByteArray(),
-			Transactions:   row[0][5].ByteArray(),
-			Logs:           row[0][6].ByteArray(),
-			Traces:         row[0][7].ByteArray(),
-		}
-
-		// Parse block data
-		parsedBlockData, err := parseBlockData(pd)
-		if err != nil {
-			log.Warn().Err(err).Uint64("block", pd.BlockNumber).Msg("Failed to parse block data")
-			continue
-		}
-
-		*blockData = append(*blockData, parsedBlockData)
-
-		// Increment next commit block number by 1
-		currentCommitBlock.Add(currentCommitBlock, big.NewInt(1))
 	}
 
 	return nil
