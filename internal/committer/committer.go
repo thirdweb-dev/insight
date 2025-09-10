@@ -509,6 +509,85 @@ func streamParquetFile(filePath string, nextCommitBlockNumber *big.Int) error {
 			// Read single row
 			row := make([]parquet.Row, 1)
 			n, err := reader.ReadRows(row)
+
+			// Process the row if we successfully read it, even if EOF occurred
+			if n > 0 {
+				if len(row[0]) < 8 {
+					if err == io.EOF {
+						break // EOF and no valid row, we're done
+					}
+					continue // Not enough columns, try again
+				}
+
+				// Extract block number first to check if we need this row
+				blockNum := row[0][1].Uint64() // block_number is second column
+				blockNumber := big.NewInt(int64(blockNum))
+
+				log.Debug().
+					Str("file", filePath).
+					Uint64("block_number", blockNum).
+					Str("next_commit_block", nextCommitBlockNumber.String()).
+					Msg("Read block from parquet file")
+
+				// Skip if block number is less than next commit block number
+				if blockNumber.Cmp(nextCommitBlockNumber) < 0 {
+					log.Debug().
+						Str("file", filePath).
+						Uint64("block_number", blockNum).
+						Str("next_commit_block", nextCommitBlockNumber.String()).
+						Msg("Skipping block - already processed")
+					if err == io.EOF {
+						break // EOF after processing, we're done
+					}
+					continue
+				}
+
+				// If block number is greater than next commit block number, exit with error
+				if blockNumber.Cmp(nextCommitBlockNumber) > 0 {
+					log.Error().
+						Str("file", filePath).
+						Uint64("block_number", blockNum).
+						Str("next_commit_block", nextCommitBlockNumber.String()).
+						Msg("Found block number greater than expected - missing block in sequence")
+					return fmt.Errorf("block data not found for block number %s in S3", nextCommitBlockNumber.String())
+				}
+
+				log.Debug().
+					Str("file", filePath).
+					Uint64("block_number", blockNum).
+					Str("next_commit_block", nextCommitBlockNumber.String()).
+					Msg("Processing block")
+
+				// Build ParquetBlockData from row
+				pd := ParquetBlockData{
+					ChainId:        row[0][0].Uint64(),
+					BlockNumber:    blockNum,
+					BlockHash:      row[0][2].String(),
+					BlockTimestamp: row[0][3].Int64(),
+					Block:          row[0][4].ByteArray(),
+					Transactions:   row[0][5].ByteArray(),
+					Logs:           row[0][6].ByteArray(),
+					Traces:         row[0][7].ByteArray(),
+				}
+
+				// Parse block data
+				blockData, err := parseBlockData(pd)
+				if err != nil {
+					return fmt.Errorf("failed to parse block data: %w", err)
+				}
+
+				log.Debug().
+					Str("file", filePath).
+					Uint64("block_number", blockNum).
+					Msg("Publishing block data to Kafka")
+
+				kafkaPublisher.PublishBlockData([]common.BlockData{blockData})
+				nextCommitBlockNumber.Add(nextCommitBlockNumber, big.NewInt(1))
+				processedBlocks++
+				rowGroupBlocks++
+			}
+
+			// Handle EOF and other errors
 			if err == io.EOF {
 				break
 			}
@@ -518,63 +597,6 @@ func streamParquetFile(filePath string, nextCommitBlockNumber *big.Int) error {
 			if n == 0 {
 				continue // No rows read in this call, try again
 			}
-
-			if len(row[0]) < 8 {
-				continue // Not enough columns
-			}
-
-			// Extract block number first to check if we need this row
-			blockNum := row[0][1].Uint64() // block_number is second column
-			blockNumber := big.NewInt(int64(blockNum))
-
-			// Skip if block number is less than next commit block number
-			if blockNumber.Cmp(nextCommitBlockNumber) < 0 {
-				log.Debug().
-					Str("file", filePath).
-					Uint64("block_number", blockNum).
-					Str("next_commit_block", nextCommitBlockNumber.String()).
-					Msg("Skipping block - already processed")
-				continue
-			}
-
-			// If block number is greater than next commit block number, exit with error
-			if blockNumber.Cmp(nextCommitBlockNumber) > 0 {
-				return fmt.Errorf("block data not found for block number %s in S3", nextCommitBlockNumber.String())
-			}
-
-			log.Debug().
-				Str("file", filePath).
-				Uint64("block_number", blockNum).
-				Str("next_commit_block", nextCommitBlockNumber.String()).
-				Msg("Processing block")
-
-			// Build ParquetBlockData from row
-			pd := ParquetBlockData{
-				ChainId:        row[0][0].Uint64(),
-				BlockNumber:    blockNum,
-				BlockHash:      row[0][2].String(),
-				BlockTimestamp: row[0][3].Int64(),
-				Block:          row[0][4].ByteArray(),
-				Transactions:   row[0][5].ByteArray(),
-				Logs:           row[0][6].ByteArray(),
-				Traces:         row[0][7].ByteArray(),
-			}
-
-			// Parse block data
-			blockData, err := parseBlockData(pd)
-			if err != nil {
-				return fmt.Errorf("failed to parse block data: %w", err)
-			}
-
-			log.Debug().
-				Str("file", filePath).
-				Uint64("block_number", blockNum).
-				Msg("Publishing block data to Kafka")
-
-			kafkaPublisher.PublishBlockData([]common.BlockData{blockData})
-			nextCommitBlockNumber.Add(nextCommitBlockNumber, big.NewInt(1))
-			processedBlocks++
-			rowGroupBlocks++
 		}
 
 		log.Debug().
