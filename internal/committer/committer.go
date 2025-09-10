@@ -726,15 +726,14 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 			continue
 		}
 
-		// Configuration variables
-		rpcBatchSize := int64(50)                               // Number of blocks per batch
-		rpcNumParallelCalls := int64(10)                        // Maximum number of parallel RPC calls
-		maxBlocksPerFetch := rpcBatchSize * rpcNumParallelCalls // Total blocks per fetch cycle
+		rpcNumParallelCalls := config.Cfg.CommitterRPCNumParallelCalls
+		rpcBatchSize := int64(50)
+		maxBlocksPerFetch := rpcBatchSize * rpcNumParallelCalls
 
 		// Calculate the range of blocks to fetch
 		blocksToFetch := new(big.Int).Sub(latestBlock, nextCommitBlockNumber)
 		if blocksToFetch.Cmp(big.NewInt(maxBlocksPerFetch)) > 0 {
-			blocksToFetch = big.NewInt(maxBlocksPerFetch) // Limit to maxBlocksPerFetch blocks per batch
+			blocksToFetch = big.NewInt(maxBlocksPerFetch)
 		}
 
 		log.Info().

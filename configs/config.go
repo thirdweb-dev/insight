@@ -288,6 +288,7 @@ type Config struct {
 	StagingS3AccessKeyID             string `env:"STAGING_S3_ACCESS_KEY_ID"`
 	StagingS3SecretAccessKey         string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
 	StagingS3MaxParallelFileDownload int    `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
+	CommitterRPCNumParallelCalls     int64  `env:"COMMITTER_RPC_NUM_PARALLEL_CALLS" envDefault:"10"`
 }
 
 var Cfg Config
