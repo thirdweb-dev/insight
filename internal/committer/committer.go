@@ -139,6 +139,9 @@ func Commit(chainId *big.Int) error {
 	}
 	log.Info().Str("max_block_number", maxBlockNumber.String()).Msg("Retrieved max block number from ClickHouse")
 
+	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
+	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting producer-consumer processing")
+
 	files, err := listS3ParquetFiles(chainId)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list S3 parquet files")
@@ -154,48 +157,44 @@ func Commit(chainId *big.Int) error {
 	log.Info().Int("filtered_ranges", len(blockRanges)).Msg("Filtered and sorted block ranges")
 
 	// Check if there are any files to process
-	if len(blockRanges) == 0 {
-		log.Info().
-			Str("next_commit_block", new(big.Int).Add(maxBlockNumber, big.NewInt(1)).String()).
-			Msg("No files to process - all blocks are up to date")
-		return nil
-	}
+	if len(blockRanges) != 0 {
+		// Start the block range processor goroutine
+		processorDone := make(chan struct{})
+		go func() {
+			blockRangeProcessor(nextCommitBlockNumber)
+			close(processorDone)
+		}()
 
-	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
-	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting producer-consumer processing")
+		// Download files synchronously and send to channel
+		for i, blockRange := range blockRanges {
+			log.Info().
+				Int("processing", i+1).
+				Int("total", len(blockRanges)).
+				Str("file", blockRange.S3Key).
+				Str("start_block", blockRange.StartBlock.String()).
+				Str("end_block", blockRange.EndBlock.String()).
+				Msg("Starting download")
 
-	// Start the block range processor goroutine
-	processorDone := make(chan struct{})
-	go func() {
-		blockRangeProcessor(nextCommitBlockNumber)
-		close(processorDone)
-	}()
+			if err := downloadFile(&blockRange); err != nil {
+				log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
+			}
 
-	// Download files synchronously and send to channel
-	for i, blockRange := range blockRanges {
-		log.Info().
-			Int("processing", i+1).
-			Int("total", len(blockRanges)).
-			Str("file", blockRange.S3Key).
-			Str("start_block", blockRange.StartBlock.String()).
-			Str("end_block", blockRange.EndBlock.String()).
-			Msg("Starting download")
-
-		if err := downloadFile(&blockRange); err != nil {
-			log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
+			log.Debug().Str("file", blockRange.S3Key).Msg("Download completed, sending to channel")
+			downloadComplete <- &blockRange
 		}
 
-		log.Debug().Str("file", blockRange.S3Key).Msg("Download completed, sending to channel")
-		downloadComplete <- &blockRange
+		// Close channel to signal processor that all downloads are done
+		log.Info().Msg("All downloads completed, waiting for processing to finish from S3")
+		close(downloadComplete)
+		<-processorDone
+		log.Info().Msg("All processing completed successfully from S3")
+	} else {
+		log.Info().
+			Str("next_commit_block", nextCommitBlockNumber.String()).
+			Msg("No files to process - all blocks are up to date from S3")
 	}
 
-	// Close channel to signal processor that all downloads are done
-	log.Info().Msg("All downloads completed, waiting for processing to finish from S3")
-	close(downloadComplete)
-	<-processorDone
-	log.Info().Msg("All processing completed successfully from S3")
-
-	log.Info().Msg("Fetching latest blocks")
+	log.Info().Msg("Consuming latest blocks from RPC")
 	fetchLatest(nextCommitBlockNumber)
 
 	return nil
@@ -451,11 +450,6 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 
 		// Skip files where end block is less than max block number from ClickHouse
 		if endBlock.Cmp(maxBlockNumber) <= 0 {
-			log.Debug().
-				Str("file", file).
-				Str("end_block", endBlock.String()).
-				Str("max_block", maxBlockNumber.String()).
-				Msg("Skipping file - end block is less than or equal to max block")
 			continue
 		}
 
@@ -468,9 +462,11 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 	}
 
 	// Sort by start block number in ascending order
-	sort.Slice(blockRanges, func(i, j int) bool {
-		return blockRanges[i].StartBlock.Cmp(blockRanges[j].StartBlock) < 0
-	})
+	if len(blockRanges) > 0 {
+		sort.Slice(blockRanges, func(i, j int) bool {
+			return blockRanges[i].StartBlock.Cmp(blockRanges[j].StartBlock) < 0
+		})
+	}
 
 	return blockRanges, nil
 }
