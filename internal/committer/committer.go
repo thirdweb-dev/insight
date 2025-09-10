@@ -264,7 +264,15 @@ func Commit(chainId *big.Int) error {
 			Msg("Publishing block range data to Kafka")
 
 		// publish the entire slice to kafka
-		kafkaPublisher.PublishBlockData(blocksToProcess)
+		if err := kafkaPublisher.PublishBlockData(blocksToProcess); err != nil {
+			log.Panic().
+				Err(err).
+				Str("file", blockRange.S3Key).
+				Uint64("start_block", blocksToProcess[0].Block.Number.Uint64()).
+				Uint64("end_block", blocksToProcess[len(blocksToProcess)-1].Block.Number.Uint64()).
+				Int("blocks_count", len(blocksToProcess)).
+				Msg("Failed to publish block data to Kafka")
+		}
 
 		log.Info().
 			Str("file", blockRange.S3Key).
