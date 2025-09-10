@@ -28,11 +28,12 @@ import (
 
 // BlockRange represents a range of blocks in an S3 parquet file
 type BlockRange struct {
-	StartBlock   *big.Int `json:"start_block"`
-	EndBlock     *big.Int `json:"end_block"`
-	S3Key        string   `json:"s3_key"`
-	IsDownloaded bool     `json:"is_downloaded"`
-	LocalPath    string   `json:"local_path,omitempty"`
+	StartBlock   *big.Int           `json:"start_block"`
+	EndBlock     *big.Int           `json:"end_block"`
+	S3Key        string             `json:"s3_key"`
+	IsDownloaded bool               `json:"is_downloaded"`
+	LocalPath    string             `json:"local_path,omitempty"`
+	BlockData    []common.BlockData `json:"block_data,omitempty"`
 }
 
 // ParquetBlockData represents the block data structure in parquet files
@@ -200,16 +201,56 @@ func Commit(chainId *big.Int) error {
 		}
 
 		log.Info().
-			Str("file", blockRange.LocalPath).
+			Str("file", blockRange.S3Key).
 			Str("next_commit_block", nextCommitBlockNumber.String()).
-			Msg("Starting to stream parquet file")
+			Int("total_blocks", len(blockRange.BlockData)).
+			Msg("Starting to process block data")
 
-		err := streamParquetFile(blockRange.LocalPath, nextCommitBlockNumber)
-		if err != nil {
-			log.Panic().Err(err).Str("S3Key", blockRange.S3Key).Msg("Failed to stream parquet file")
+		// Process block data sequentially
+		startIndex := 0
+		for i, blockData := range blockRange.BlockData {
+			blockNumber := blockData.Block.Number
+
+			// Skip if block number is less than next commit block number
+			if blockNumber.Cmp(nextCommitBlockNumber) < 0 {
+				log.Debug().
+					Str("file", blockRange.S3Key).
+					Uint64("block_number", blockData.Block.Number.Uint64()).
+					Str("next_commit_block", nextCommitBlockNumber.String()).
+					Msg("Skipping block - already processed")
+				startIndex = i + 1
+				continue
+			}
+
+			// If block number is greater than next commit block number, exit with error
+			if blockNumber.Cmp(nextCommitBlockNumber) > 0 {
+				log.Error().
+					Str("file", blockRange.S3Key).
+					Uint64("block_number", blockData.Block.Number.Uint64()).
+					Str("next_commit_block", nextCommitBlockNumber.String()).
+					Msg("Found block number greater than expected - missing block in sequence")
+				log.Panic().Msg("Block sequence mismatch")
+			}
+			nextCommitBlockNumber.Add(nextCommitBlockNumber, big.NewInt(1))
 		}
 
-		log.Info().Str("file", blockRange.LocalPath).Msg("Successfully streamed parquet file")
+		log.Info().
+			Str("file", blockRange.S3Key).
+			Int("blocks_processed", len(blockRange.BlockData[startIndex:])).
+			Int("start_index", startIndex).
+			Uint64("start_block", blockRange.BlockData[startIndex].Block.Number.Uint64()).
+			Uint64("end_block", blockRange.BlockData[len(blockRange.BlockData)-1].Block.Number.Uint64()).
+			Str("final_commit_block", nextCommitBlockNumber.String()).
+			Msg("Publishing block range data to Kafka")
+
+		// publish the entire slice to kafka
+		kafkaPublisher.PublishBlockData(blockRange.BlockData[startIndex:])
+
+		log.Info().
+			Str("file", blockRange.S3Key).
+			Int("blocks_processed", len(blockRange.BlockData)).
+			Str("final_commit_block", nextCommitBlockNumber.String()).
+			Msg("Successfully processed all block data")
 
 		// Clean up local file and notify download goroutine
 		if err := os.Remove(blockRange.LocalPath); err != nil {
@@ -448,10 +489,23 @@ func downloadFile(blockRange *BlockRange) error {
 	}
 	log.Debug().Str("file", blockRange.S3Key).Msg("File stream completed successfully")
 
-	// Update block range with local path and downloaded status
+	// Parse parquet file and extract block data
+	log.Debug().Str("file", blockRange.S3Key).Msg("Starting parquet parsing")
+	blockData, err := parseParquetFile(localPath)
+	if err != nil {
+		os.Remove(localPath) // Clean up on error
+		return fmt.Errorf("failed to parse parquet file: %w", err)
+	}
+	log.Debug().
+		Str("file", blockRange.S3Key).
+		Int("blocks_parsed", len(blockData)).
+		Msg("Successfully parsed parquet file")
+
+	// Update block range with local path, downloaded status, and block data
 	mu.Lock()
 	blockRange.LocalPath = localPath
 	blockRange.IsDownloaded = true
+	blockRange.BlockData = blockData
 	mu.Unlock()
 
 	log.Info().
@@ -460,6 +514,83 @@ func downloadFile(blockRange *BlockRange) error {
 		Msg("Successfully downloaded file from S3")
 
 	return nil
+}
+
+// parseParquetFile parses a parquet file and returns all block data
+func parseParquetFile(filePath string) ([]common.BlockData, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open parquet file: %w", err)
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file stats: %w", err)
+	}
+
+	pFile, err := parquet.OpenFile(file, stat.Size())
+	if err != nil {
+		return nil, fmt.Errorf("failed to open parquet file: %w", err)
+	}
+
+	var allBlockData []common.BlockData
+
+	for _, rg := range pFile.RowGroups() {
+		reader := parquet.NewRowGroupReader(rg)
+
+		for {
+			row := make([]parquet.Row, 1)
+			n, err := reader.ReadRows(row)
+
+			// Process the row if we successfully read it, even if EOF occurred
+			if n > 0 {
+				if len(row[0]) < 8 {
+					if err == io.EOF {
+						break // EOF and no valid row, we're done
+					}
+					continue // Not enough columns, try again
+				}
+
+				// Extract block number
+				blockNum := row[0][1].Uint64()
+
+				// Build ParquetBlockData from row
+				pd := ParquetBlockData{
+					ChainId:        row[0][0].Uint64(),
+					BlockNumber:    blockNum,
+					BlockHash:      row[0][2].String(),
+					BlockTimestamp: row[0][3].Int64(),
+					Block:          row[0][4].ByteArray(),
+					Transactions:   row[0][5].ByteArray(),
+					Logs:           row[0][6].ByteArray(),
+					Traces:         row[0][7].ByteArray(),
+				}
+
+				// Parse block data
+				blockData, err := parseBlockData(pd)
+				if err != nil {
+					log.Warn().Err(err).Uint64("block", blockNum).Msg("Failed to parse block data, skipping")
+					continue
+				}
+
+				allBlockData = append(allBlockData, blockData)
+			}
+
+			// Handle EOF and other errors
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed to read row: %w", err)
+			}
+			if n == 0 {
+				continue // No rows read in this call, try again
+			}
+		}
+	}
+
+	return allBlockData, nil
 }
 
 // streamParquetFile streams a parquet file row by row and processes blocks
