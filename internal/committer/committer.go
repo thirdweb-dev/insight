@@ -188,6 +188,7 @@ func Commit(chainId *big.Int) error {
 				mu.Lock()
 				blockRange.LocalPath = downloadedRange.LocalPath
 				blockRange.IsDownloaded = downloadedRange.IsDownloaded
+				blockRange.BlockData = downloadedRange.BlockData
 				mu.Unlock()
 				break
 			}
