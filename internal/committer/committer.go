@@ -56,9 +56,11 @@ var kafkaPublisher *storage.KafkaPublisher
 var tempDir = filepath.Join(os.TempDir(), "committer")
 var parquetFilenameRegex = regexp.MustCompile(`blocks_(\d+)_(\d+)\.parquet`)
 var mu sync.RWMutex
+var downloadComplete chan *BlockRange
 
 func Init(chainId *big.Int) {
 	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", chainId.Uint64()))
+	downloadComplete = make(chan *BlockRange, config.Cfg.StagingS3MaxParallelFileDownload)
 
 	initClickHouse()
 	initS3()
@@ -157,8 +159,16 @@ func Commit(chainId *big.Int) error {
 	}
 
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
-	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting sequential processing")
+	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting producer-consumer processing")
 
+	// Start the block range processor goroutine
+	processorDone := make(chan struct{})
+	go func() {
+		blockRangeProcessor(nextCommitBlockNumber)
+		close(processorDone)
+	}()
+
+	// Download files synchronously and send to channel
 	for i, blockRange := range blockRanges {
 		log.Info().
 			Int("processing", i+1).
@@ -166,28 +176,57 @@ func Commit(chainId *big.Int) error {
 			Str("file", blockRange.S3Key).
 			Str("start_block", blockRange.StartBlock.String()).
 			Str("end_block", blockRange.EndBlock.String()).
-			Msg("Processing file")
+			Msg("Starting download")
 
-		// Start downloading the next file in background (lookahead)
-		if i+1 < len(blockRanges) {
-			nextBlockRange := &blockRanges[i+1]
-			log.Debug().
-				Str("next_file", nextBlockRange.S3Key).
-				Msg("Starting lookahead download")
-			go func(br *BlockRange) {
-				if err := downloadFile(br); err != nil {
-					log.Error().Err(err).Str("file", br.S3Key).Msg("Failed to download file in background")
-				}
-			}(nextBlockRange)
-		}
-
-		// Download and parse the current file
-		log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
 		if err := downloadFile(&blockRange); err != nil {
 			log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
 		}
-		log.Debug().Str("file", blockRange.S3Key).Msg("File download completed")
 
+		log.Debug().Str("file", blockRange.S3Key).Msg("Download completed, sending to channel")
+		downloadComplete <- &blockRange
+	}
+
+	// Close channel to signal processor that all downloads are done
+	log.Info().Msg("All downloads completed, waiting for processing to finish")
+	close(downloadComplete)
+	<-processorDone
+	log.Info().Msg("All processing completed successfully")
+
+	return nil
+}
+
+func getMaxBlockNumberFromClickHouse(chainId *big.Int) (*big.Int, error) {
+	// Use toString() to force ClickHouse to return a string instead of UInt256
+	query := fmt.Sprintf("SELECT toString(max(block_number)) FROM blocks WHERE chain_id = %d", chainId.Uint64())
+	rows, err := clickhouseConn.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return big.NewInt(0), nil
+	}
+
+	var maxBlockNumberStr string
+	if err := rows.Scan(&maxBlockNumberStr); err != nil {
+		return nil, err
+	}
+
+	// Convert string to big.Int to handle UInt256 values
+	maxBlockNumber, ok := new(big.Int).SetString(maxBlockNumberStr, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse block number: %s", maxBlockNumberStr)
+	}
+
+	return maxBlockNumber, nil
+}
+
+// blockRangeProcessor processes BlockRanges from the download channel and publishes to Kafka
+func blockRangeProcessor(nextCommitBlockNumber *big.Int) {
+	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting block range processor")
+
+	for blockRange := range downloadComplete {
 		log.Info().
 			Str("file", blockRange.S3Key).
 			Str("next_commit_block", nextCommitBlockNumber.String()).
@@ -199,7 +238,7 @@ func Commit(chainId *big.Int) error {
 			log.Warn().
 				Str("file", blockRange.S3Key).
 				Msg("No block data found in parquet file, skipping")
-			return nil
+			continue
 		}
 
 		// Process block data sequentially
@@ -235,7 +274,7 @@ func Commit(chainId *big.Int) error {
 			log.Panic().
 				Str("file", blockRange.S3Key).
 				Msg("All blocks already processed, skipping Kafka publish")
-			return nil
+			continue
 		}
 
 		blocksToProcess := blockRange.BlockData[startIndex:]
@@ -330,40 +369,11 @@ func Commit(chainId *big.Int) error {
 		}
 
 		log.Info().
-			Int("processed", i+1).
-			Int("total", len(blockRanges)).
 			Str("file", blockRange.S3Key).
 			Msg("Completed processing file")
 	}
 
-	return nil
-}
-
-func getMaxBlockNumberFromClickHouse(chainId *big.Int) (*big.Int, error) {
-	// Use toString() to force ClickHouse to return a string instead of UInt256
-	query := fmt.Sprintf("SELECT toString(max(block_number)) FROM blocks WHERE chain_id = %d", chainId.Uint64())
-	rows, err := clickhouseConn.Query(context.Background(), query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return big.NewInt(0), nil
-	}
-
-	var maxBlockNumberStr string
-	if err := rows.Scan(&maxBlockNumberStr); err != nil {
-		return nil, err
-	}
-
-	// Convert string to big.Int to handle UInt256 values
-	maxBlockNumber, ok := new(big.Int).SetString(maxBlockNumberStr, 10)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse block number: %s", maxBlockNumberStr)
-	}
-
-	return maxBlockNumber, nil
+	log.Info().Msg("Block range processor finished")
 }
 
 // listS3ParquetFiles lists all parquet files in S3 with the chain prefix
@@ -462,45 +472,6 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 // downloadFile downloads a file from S3 and saves it to local storage
 func downloadFile(blockRange *BlockRange) error {
 	log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
-
-	// Check if file is already downloaded
-	mu.RLock()
-	if blockRange.IsDownloaded {
-		mu.RUnlock()
-		log.Debug().Str("file", blockRange.S3Key).Msg("File already downloaded, skipping")
-		return nil
-	}
-	mu.RUnlock()
-
-	// Check if file is already being downloaded by another goroutine
-	mu.Lock()
-	if blockRange.IsDownloading {
-		mu.Unlock()
-		log.Debug().Str("file", blockRange.S3Key).Msg("File is already being downloaded, waiting...")
-
-		// Poll every 250ms until download is complete
-		for {
-			time.Sleep(250 * time.Millisecond)
-			mu.RLock()
-			if blockRange.IsDownloaded {
-				mu.RUnlock()
-				log.Debug().Str("file", blockRange.S3Key).Msg("Download completed by another goroutine")
-				return nil
-			}
-			mu.RUnlock()
-		}
-	}
-
-	// Mark as downloading
-	blockRange.IsDownloading = true
-	mu.Unlock()
-
-	// Ensure downloading flag is cleared on error
-	defer func() {
-		mu.Lock()
-		blockRange.IsDownloading = false
-		mu.Unlock()
-	}()
 
 	// Ensure temp directory exists
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
