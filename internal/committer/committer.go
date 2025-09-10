@@ -248,9 +248,20 @@ func Commit(chainId *big.Int) error {
 
 		log.Info().
 			Str("file", blockRange.S3Key).
-			Int("blocks_processed", len(blockRange.BlockData)).
+			Int("blocks_processed", len(blockRange.BlockData[startIndex:])).
+			Uint64("start_block", blockRange.BlockData[startIndex].Block.Number.Uint64()).
+			Uint64("end_block", blockRange.BlockData[len(blockRange.BlockData)-1].Block.Number.Uint64()).
 			Str("final_commit_block", nextCommitBlockNumber.String()).
 			Msg("Successfully processed all block data")
+
+		// Clear block data from memory to free up space
+		mu.Lock()
+		blockRange.BlockData = nil
+		mu.Unlock()
+
+		log.Debug().
+			Str("file", blockRange.S3Key).
+			Msg("Cleared block data from memory")
 
 		// Clean up local file and notify download goroutine
 		if err := os.Remove(blockRange.LocalPath); err != nil {
