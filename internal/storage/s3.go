@@ -103,6 +103,9 @@ func NewS3Connector(cfg *config.S3StorageConfig) (*S3Connector, error) {
 	if cfg.BufferTimeout == 0 {
 		cfg.BufferTimeout = 1 * 60 * 60 // 1 hour in seconds default
 	}
+	if cfg.FlushTimeout == 0 {
+		cfg.FlushTimeout = 300 // 5 mins default
+	}
 
 	// Create formatter based on format
 	var formatter DataFormatter
@@ -309,8 +312,8 @@ func (s *S3Connector) Flush() error {
 		select {
 		case <-s.flushDoneCh:
 			return nil
-		case <-time.After(60 * time.Second):
-			return fmt.Errorf("flush timeout after 60 seconds")
+		case <-time.After(time.Duration(s.config.FlushTimeout) * time.Second):
+			return fmt.Errorf("flush timeout after %d seconds", s.config.FlushTimeout)
 		}
 	default:
 		// Flush channel is full, likely a flush is already in progress
@@ -318,8 +321,8 @@ func (s *S3Connector) Flush() error {
 		select {
 		case <-s.flushDoneCh:
 			return nil
-		case <-time.After(60 * time.Second):
-			return fmt.Errorf("flush timeout after 60 seconds")
+		case <-time.After(time.Duration(s.config.FlushTimeout) * time.Second):
+			return fmt.Errorf("flush timeout after %d seconds", s.config.FlushTimeout)
 		}
 	}
 }
