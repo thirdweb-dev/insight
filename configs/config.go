@@ -95,6 +95,7 @@ type S3StorageConfig struct {
 	BufferSize       int64 `mapstructure:"bufferSizeMB"`         // Target buffer size in MB before flush
 	BufferTimeout    int   `mapstructure:"bufferTimeoutSeconds"` // Max time in seconds before flush
 	MaxBlocksPerFile int   `mapstructure:"maxBlocksPerFile"`     // Max blocks per parquet file (0 = no limit, only size/timeout triggers)
+	FlushTimeout     int   `mapstructure:"flushTimeoutSeconds"`  // Timeout in seconds for flush operations (default: 60)
 }
 
 type ParquetConfig struct {
