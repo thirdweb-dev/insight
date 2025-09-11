@@ -348,11 +348,18 @@ func (m *Migrator) DetermineMigrationBoundaries(targetStartBlock, targetEndBlock
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get latest block from main storage")
 	}
+	latestBlockRPC, err := m.rpcClient.GetLatestBlockNumber(context.Background())
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get latest block from RPC")
+	}
 	log.Info().Msgf("Latest block in main storage: %d", latestBlockStored)
 
 	endBlock := latestBlockStored
-	if targetEndBlock.Sign() > 0 && targetEndBlock.Cmp(latestBlockStored) < 0 {
+	if targetEndBlock.Sign() > 0 && targetEndBlock.Cmp(latestBlockRPC) <= 0 {
 		endBlock = targetEndBlock
+	}
+	if targetEndBlock.Uint64() == 0 {
+		endBlock = latestBlockRPC
 	}
 
 	startBlock := targetStartBlock
