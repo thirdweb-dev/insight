@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -255,9 +256,7 @@ func (s *S3Source) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 			continue
 		}
 
-		for blockNum, result := range fileResults {
-			resultMap[blockNum] = result
-		}
+		maps.Copy(resultMap, fileResults)
 	}
 
 	// Build ordered results
