@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
 type GetFullBlockResult struct {
@@ -305,6 +306,7 @@ func (rpc *Client) GetLatestBlockNumber(ctx context.Context) (*big.Int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest block number: %v", err)
 	}
+	metrics.ChainHead.Set(float64(blockNumber))
 	return new(big.Int).SetUint64(blockNumber), nil
 }
 

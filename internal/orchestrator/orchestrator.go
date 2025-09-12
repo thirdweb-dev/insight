@@ -87,16 +87,6 @@ func (o *Orchestrator) Start() {
 		}()
 	}
 
-	// The chain tracker is always running
-	o.wg.Add(1)
-	go func() {
-		defer o.wg.Done()
-		chainTracker := NewChainTracker(o.rpc)
-		chainTracker.Start(ctx)
-
-		log.Info().Msg("Chain tracker completed")
-	}()
-
 	// Waiting for all goroutines to complete
 	o.wg.Wait()
 
