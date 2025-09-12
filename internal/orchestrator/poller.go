@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"runtime"
 	"sync"
 	"time"
-	"runtime"
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
