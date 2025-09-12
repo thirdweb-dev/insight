@@ -60,7 +60,10 @@ func WithPollerWorker(cfg *worker.Worker) PollerOption {
 func NewPoller(rpc rpc.IRPCClient, storage storage.IStorage, opts ...PollerOption) *Poller {
 	parallelPollers := config.Cfg.Poller.ParallelPollers
 	if parallelPollers == 0 {
-		parallelPollers = runtime.NumCPU()
+		parallelPollers = runtime.GOMAXPROCS(0)
+		if parallelPollers < 1 {
+			parallelPollers = 1
+		}
 	}
 
 	// Set the lookahead -> number of pollers + 2
