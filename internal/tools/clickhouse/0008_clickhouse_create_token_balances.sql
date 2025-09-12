@@ -31,11 +31,11 @@ CREATE TABLE IF NOT EXISTS token_balances
       owner_address,
       token_address,
       token_id,
-      sumState(balance_delta * if(is_deleted = 0, 1, -1)) AS balance_state,
-      minState(block_number) AS min_block_number_state,
-      minState(block_timestamp) AS min_block_timestamp_state,
-      maxState(block_number) AS max_block_number_state,
-      maxState(block_timestamp) AS max_block_timestamp_state
+      sum(balance_delta * if(is_deleted = 0, 1, -1)) AS balance_state,
+      min(block_number) AS min_block_number_state,
+      min(block_timestamp) AS min_block_timestamp_state,
+      max(block_number) AS max_block_number_state,
+      max(block_timestamp) AS max_block_timestamp_state
     GROUP BY chain_id, owner_address, token_address, token_id
   ),
   
@@ -46,11 +46,11 @@ CREATE TABLE IF NOT EXISTS token_balances
       token_address,
       token_id,
       owner_address,
-      sumState(balance_delta * if(is_deleted = 0, 1, -1)) AS balance_state,
-      minState(block_number) AS min_block_number_state,
-      minState(block_timestamp) AS min_block_timestamp_state,
-      maxState(block_number) AS max_block_number_state,
-      maxState(block_timestamp) AS max_block_timestamp_state
+      sum(balance_delta * if(is_deleted = 0, 1, -1)) AS balance_state,
+      min(block_number) AS min_block_number_state,
+      min(block_timestamp) AS min_block_timestamp_state,
+      max(block_number) AS max_block_number_state,
+      max(block_timestamp) AS max_block_timestamp_state
     GROUP BY chain_id, token_address, token_id, owner_address
   ),
 
