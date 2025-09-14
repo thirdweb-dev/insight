@@ -30,7 +30,10 @@ func RunBackfill() {
 	channelValidBlockDataForRange(startBlockNumber, endBlockNumber)
 	<-processorDone
 
-	log.Info().Msg("Backfilling completed")
+	log.Info().
+		Int64("start_block", startBlockNumber.Int64()).
+		Int64("end_block", endBlockNumber.Int64()).
+		Msg("Backfill completed. All block data saved to S3")
 }
 
 func saveBlockDataToS3(processorDone chan struct{}) {
