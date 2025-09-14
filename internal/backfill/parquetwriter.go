@@ -116,8 +116,14 @@ func SaveToParquet(blockData []*common.BlockData) error {
 }
 
 func FlushParquet() error {
-	// upload the parquet file to s3
-	if err := libs.UploadParquetToS3(parquetFile, libs.ChainId.Uint64(), parquetStartBlockNumber, parquetEndBlockNumber, parquetBlockTimestamp); err != nil {
+	// upload the parquet file to s3 (checksum is calculated inside UploadParquetToS3)
+	if err := libs.UploadParquetToS3(
+		parquetFile,
+		libs.ChainId.Uint64(),
+		parquetStartBlockNumber,
+		parquetEndBlockNumber,
+		parquetBlockTimestamp,
+	); err != nil {
 		return fmt.Errorf("failed to upload parquet file to s3: %w", err)
 	}
 

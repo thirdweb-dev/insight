@@ -2,7 +2,10 @@ package libs
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"regexp"
@@ -155,6 +158,12 @@ func UploadParquetToS3(parquetFile *os.File, chainId uint64, startBlock string, 
 		return fmt.Errorf("failed to get file info: %w", err)
 	}
 
+	// Calculate checksum from file content
+	checksum, err := calculateFileChecksum(parquetFile)
+	if err != nil {
+		return fmt.Errorf("failed to calculate file checksum: %w", err)
+	}
+
 	// Seek to beginning of file for streaming
 	_, err = parquetFile.Seek(0, 0)
 	if err != nil {
@@ -174,6 +183,7 @@ func UploadParquetToS3(parquetFile *os.File, chainId uint64, startBlock string, 
 			"end_block":   endBlock,
 			"block_count": fmt.Sprintf("%d", blockCount),
 			"timestamp":   blockTimestamp.Format(time.RFC3339),
+			"checksum":    checksum,
 			"file_size":   fmt.Sprintf("%d", fileInfo.Size()),
 		},
 	})
@@ -200,4 +210,31 @@ func generateS3Key(chainID uint64, startBlock string, endBlock string, blockTime
 		endBlock,
 		".parquet",
 	)
+}
+
+// calculateFileChecksum computes SHA256 checksum of the file content
+func calculateFileChecksum(file *os.File) (string, error) {
+	// Save current position
+	currentPos, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current file position: %w", err)
+	}
+
+	// Seek to beginning of file
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to seek to beginning of file: %w", err)
+	}
+
+	// Calculate SHA256 hash using streaming
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("failed to read file for checksum: %w", err)
+	}
+
+	// Restore original position
+	if _, err := file.Seek(currentPos, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to restore file position: %w", err)
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
