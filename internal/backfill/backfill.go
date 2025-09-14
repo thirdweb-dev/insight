@@ -40,12 +40,13 @@ func RunBackfill() {
 
 func saveBlockDataToS3(wg *sync.WaitGroup) {
 	wg.Add(1)
+	defer wg.Done()
+
 	for blockdata := range blockdataChannel {
 		SaveToParquet(blockdata)
 	}
 
 	FlushParquet()
-	wg.Done()
 }
 
 func channelValidBlockData(startBlockNumber *big.Int, endBlockNumber *big.Int) {
