@@ -43,7 +43,10 @@ func saveBlockDataToS3(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for blockdata := range blockdataChannel {
-		SaveToParquet(blockdata)
+		err := SaveToParquet(blockdata)
+		if err != nil {
+			log.Panic().Err(err).Msg("Failed to save parquet block data to S3")
+		}
 	}
 
 	FlushParquet()
