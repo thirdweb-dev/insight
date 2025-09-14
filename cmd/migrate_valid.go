@@ -4,10 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -37,12 +33,7 @@ const (
 )
 
 func RunValidationMigration(cmd *cobra.Command, args []string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Set up signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	ctx := context.Background()
 
 	migrator := NewMigrator()
 	defer migrator.Close()
@@ -53,136 +44,18 @@ func RunValidationMigration(cmd *cobra.Command, args []string) {
 
 	log.Info().Msgf("Migrating blocks from %s to %s (both ends inclusive)", rangeStartBlock.String(), rangeEndBlock.String())
 
-	// Calculate work distribution for workers
-	numWorkers := DEFAULT_WORKERS
-	if config.Cfg.Migrator.WorkerCount > 0 {
-		numWorkers = int(config.Cfg.Migrator.WorkerCount)
-	}
-	workRanges := divideBlockRange(rangeStartBlock, rangeEndBlock, numWorkers)
-	log.Info().Msgf("Starting %d workers to process migration", len(workRanges))
+	log.Info().Msg("Starting migration")
 
-	// Create error channel and wait group
-	errChan := make(chan error, numWorkers)
-	var wg sync.WaitGroup
-
-	// Start workers
-	for workerID, workRange := range workRanges {
-		wg.Add(1)
-		go func(id int, startBlock, endBlock *big.Int) {
-			defer wg.Done()
-
-			// Only check boundaries per-worker if we have multiple workers
-			// For single worker, we already determined boundaries globally
-			var actualStart, actualEnd *big.Int
-			if numWorkers > 1 {
-				// Multiple workers: each needs to check their specific range
-				actualStart, actualEnd = migrator.DetermineMigrationBoundariesForRange(startBlock, endBlock)
-				if actualStart == nil || actualEnd == nil {
-					log.Info().Msgf("Worker %d: Range %s to %s already fully migrated", id, startBlock.String(), endBlock.String())
-					return
-				}
-				log.Info().Msgf("Worker %d starting: blocks %s to %s (adjusted from %s to %s)",
-					id, actualStart.String(), actualEnd.String(), startBlock.String(), endBlock.String())
-			} else {
-				// Single worker: use the already-determined boundaries
-				actualStart, actualEnd = startBlock, endBlock
-				log.Info().Msgf("Worker %d starting: blocks %s to %s", id, actualStart.String(), actualEnd.String())
-			}
-
-			if err := processBlockRange(ctx, migrator, id, actualStart, actualEnd); err != nil {
-				errChan <- err
-				log.Error().Err(err).Msgf("Worker %d failed", id)
-				return
-			}
-
-			log.Info().Msgf("Worker %d completed successfully", id)
-		}(workerID, workRange.start, workRange.end)
-	}
-
-	// Monitor for completion or interruption
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	// Wait for either completion, error, or interrupt signal
-	select {
-	case <-done:
-		log.Info().Msg("All workers completed successfully")
-		// 3. then finally copy partitions from target table to main tables
-		log.Info().Msg("Migration completed successfully")
-	case err := <-errChan:
-		log.Error().Err(err).Msg("Migration failed due to worker error")
-		cancel()
-		wg.Wait()
+	// Process the entire range in a single thread
+	if err := processBlockRange(ctx, migrator, rangeStartBlock, rangeEndBlock); err != nil {
+		log.Error().Err(err).Msg("Migration failed")
 		log.Fatal().Msg("Migration stopped due to error")
-	case sig := <-sigChan:
-		log.Info().Msgf("Received signal: %s, initiating graceful shutdown...", sig)
-		cancel()
-		wg.Wait()
-		log.Info().Msg("Migration stopped gracefully")
-	}
-}
-
-type blockRange struct {
-	start *big.Int
-	end   *big.Int
-}
-
-func divideBlockRange(startBlock, endBlock *big.Int, numWorkers int) []blockRange {
-	ranges := make([]blockRange, 0, numWorkers)
-
-	// Calculate total blocks
-	totalBlocks := new(big.Int).Sub(endBlock, startBlock)
-	totalBlocks.Add(totalBlocks, big.NewInt(1)) // inclusive range
-
-	// Calculate blocks per worker
-	blocksPerWorker := new(big.Int).Div(totalBlocks, big.NewInt(int64(numWorkers)))
-	remainder := new(big.Int).Mod(totalBlocks, big.NewInt(int64(numWorkers)))
-
-	currentStart := new(big.Int).Set(startBlock)
-
-	for i := 0; i < numWorkers; i++ {
-		// Calculate end block for this worker
-		workerBlockCount := new(big.Int).Set(blocksPerWorker)
-
-		// Distribute remainder blocks to first workers
-		if big.NewInt(int64(i)).Cmp(remainder) < 0 {
-			workerBlockCount.Add(workerBlockCount, big.NewInt(1))
-		}
-
-		// Skip if no blocks for this worker
-		if workerBlockCount.Sign() == 0 {
-			continue
-		}
-
-		currentEnd := new(big.Int).Add(currentStart, workerBlockCount)
-		currentEnd.Sub(currentEnd, big.NewInt(1)) // inclusive range
-
-		// Ensure we don't exceed the end block
-		if currentEnd.Cmp(endBlock) > 0 {
-			currentEnd = new(big.Int).Set(endBlock)
-		}
-
-		ranges = append(ranges, blockRange{
-			start: new(big.Int).Set(currentStart),
-			end:   new(big.Int).Set(currentEnd),
-		})
-
-		// Move to next range
-		currentStart = new(big.Int).Add(currentEnd, big.NewInt(1))
-
-		// Stop if we've covered all blocks
-		if currentStart.Cmp(endBlock) > 0 {
-			break
-		}
 	}
 
-	return ranges
+	log.Info().Msg("Migration completed successfully")
 }
 
-func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, startBlock, endBlock *big.Int) error {
+func processBlockRange(ctx context.Context, migrator *Migrator, startBlock, endBlock *big.Int) error {
 	currentBlock := new(big.Int).Set(startBlock)
 
 	for currentBlock.Cmp(endBlock) <= 0 {
@@ -191,7 +64,7 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 		// Check for cancellation
 		select {
 		case <-ctx.Done():
-			log.Info().Msgf("Worker %d: Migration interrupted at block %s", workerID, currentBlock.String())
+			log.Info().Msgf("Migration interrupted at block %s", currentBlock.String())
 			return nil
 		default:
 		}
@@ -209,7 +82,7 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 		fetchDuration := time.Since(fetchStartTime)
 		if err != nil {
 			// If we got an error fetching valid blocks, we'll continue
-			log.Error().Err(err).Msgf("Worker %d: Failed to get valid blocks for range", workerID)
+			log.Error().Err(err).Msg("Failed to get valid blocks for range")
 			time.Sleep(3 * time.Second)
 			continue
 		}
@@ -232,16 +105,16 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 
 		// Fetch missing blocks from RPC
 		if len(missingBlocks) > 0 {
-			log.Debug().Dur("duration", mapBuildDuration).Int("missing_blocks", len(missingBlocks)).Msgf("Worker %d: Identified missing blocks", workerID)
+			log.Debug().Dur("duration", mapBuildDuration).Int("missing_blocks", len(missingBlocks)).Msg("Identified missing blocks")
 
 			rpcFetchStartTime := time.Now()
 			validMissingBlocks := migrator.GetValidBlocksFromRPC(missingBlocks)
 			rpcFetchDuration := time.Since(rpcFetchStartTime)
-			log.Debug().Dur("duration", rpcFetchDuration).Int("blocks_fetched", len(validMissingBlocks)).Msgf("Worker %d: Fetched missing blocks from RPC", workerID)
+			log.Debug().Dur("duration", rpcFetchDuration).Int("blocks_fetched", len(validMissingBlocks)).Msg("Fetched missing blocks from RPC")
 
 			for _, blockData := range validMissingBlocks {
 				if blockData.Block.ChainId.Sign() == 0 {
-					return fmt.Errorf("worker %d: block %s has chain ID 0", workerID, blockData.Block.Number.String())
+					return fmt.Errorf("block %s has chain ID 0", blockData.Block.Number.String())
 				}
 				blocksToInsertMap[blockData.Block.Number.String()] = blockData
 			}
@@ -258,7 +131,7 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 		err = migrator.destination.InsertBlockData(blocksToInsert)
 		insertDuration := time.Since(insertStartTime)
 		if err != nil {
-			log.Error().Err(err).Dur("duration", insertDuration).Msgf("Worker %d: Failed to insert blocks to target storage", workerID)
+			log.Error().Err(err).Dur("duration", insertDuration).Msg("Failed to insert blocks to target storage")
 			time.Sleep(3 * time.Second)
 			continue
 		}
@@ -271,7 +144,7 @@ func processBlockRange(ctx context.Context, migrator *Migrator, workerID int, st
 			Int("blocks_processed", len(blocksToInsert)).
 			Str("start_block_number", blockNumbers[0].String()).
 			Str("end_block_number", blockNumbers[len(blockNumbers)-1].String()).
-			Msgf("Worker %d: Batch processed successfully for %s - %s", workerID, blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
+			Msgf("Batch processed successfully for %s - %s", blockNumbers[0].String(), blockNumbers[len(blockNumbers)-1].String())
 
 		currentBlock = new(big.Int).Add(batchEndBlock, big.NewInt(1))
 	}
@@ -391,53 +264,6 @@ func (m *Migrator) DetermineMigrationBoundaries(targetStartBlock, targetEndBlock
 	}
 
 	return startBlock, endBlock
-}
-
-// DetermineMigrationBoundariesForRange determines the actual migration boundaries for a worker's specific range
-// Returns nil, nil if the range is already fully migrated
-// Fails fatally if it cannot determine boundaries (to ensure data correctness)
-func (m *Migrator) DetermineMigrationBoundariesForRange(rangeStart, rangeEnd *big.Int) (*big.Int, *big.Int) {
-	// Check how many blocks we have in this specific range
-	blockCount, err := m.destination.GetBlockCount(m.rpcClient.GetChainID(), rangeStart, rangeEnd)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("Worker failed to get block count for range %s to %s", rangeStart.String(), rangeEnd.String())
-		return nil, nil
-	}
-
-	expectedCount := new(big.Int).Sub(rangeEnd, rangeStart)
-	expectedCount = expectedCount.Add(expectedCount, big.NewInt(1))
-
-	// If all blocks are already migrated, return nil
-	if expectedCount.Cmp(blockCount) == 0 {
-		log.Debug().Msgf("Range %s to %s already fully migrated (%s blocks)", rangeStart.String(), rangeEnd.String(), blockCount.String())
-		return nil, nil
-	}
-
-	// Find the actual starting point by checking what blocks we already have
-	maxStoredBlock, err := m.destination.GetMaxBlockNumberInRange(m.rpcClient.GetChainID(), rangeStart, rangeEnd)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("Worker failed to get max block in range %s to %s", rangeStart.String(), rangeEnd.String())
-		return nil, nil
-	}
-
-	actualStart := rangeStart
-	// Only adjust start block if we actually have blocks stored (blockCount > 0)
-	// When blockCount is 0, maxStoredBlock might be 0 but that doesn't mean block 0 exists
-	if blockCount.Sign() > 0 && maxStoredBlock != nil && maxStoredBlock.Cmp(rangeStart) >= 0 {
-		// We have some blocks already, start from the next one
-		actualStart = new(big.Int).Add(maxStoredBlock, big.NewInt(1))
-
-		// If the new start is beyond our range end, the range is fully migrated
-		if actualStart.Cmp(rangeEnd) > 0 {
-			log.Debug().Msgf("Range %s to %s already fully migrated (max block: %s)", rangeStart.String(), rangeEnd.String(), maxStoredBlock.String())
-			return nil, nil
-		}
-	}
-
-	log.Debug().Msgf("Range %s-%s: found %s blocks, max stored: %v, will migrate from %s",
-		rangeStart.String(), rangeEnd.String(), blockCount.String(), maxStoredBlock, actualStart.String())
-
-	return actualStart, rangeEnd
 }
 
 func (m *Migrator) FetchBlocksFromRPC(blockNumbers []*big.Int) ([]common.BlockData, error) {

@@ -3,10 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/thirdweb-dev/indexer/internal/committer"
-	"github.com/thirdweb-dev/indexer/internal/rpc"
 )
 
 var committerCmd = &cobra.Command{
@@ -18,12 +16,6 @@ var committerCmd = &cobra.Command{
 
 func RunCommitter(cmd *cobra.Command, args []string) {
 	fmt.Println("running committer")
-	rpc, err := rpc.Initialize()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize RPC")
-	}
-	chainId := rpc.GetChainID()
-
-	committer.Init(chainId, rpc)
-	committer.Commit(chainId)
+	committer.Init()
+	committer.Commit()
 }

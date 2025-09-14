@@ -430,6 +430,7 @@ func init() {
 	rootCmd.AddCommand(orchestratorCmd)
 	rootCmd.AddCommand(apiCmd)
 	rootCmd.AddCommand(committerCmd)
+	rootCmd.AddCommand(backfillCmd)
 	rootCmd.AddCommand(validateAndFixCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(migrateValidationCmd)

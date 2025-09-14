@@ -274,6 +274,12 @@ type Config struct {
 	Validation   ValidationConfig   `mapstructure:"validation"`
 	Migrator     MigratorConfig     `mapstructure:"migrator"`
 
+	OldClickhouseDatabaseV1          string `env:"OLD_CLICKHOUSE_DATABASE_V1"`
+	OldClickhouseHostV1              string `env:"OLD_CLICKHOUSE_HOST_V1"`
+	OldClickhousePortV1              int    `env:"OLD_CLICKHOUSE_PORT_V1"`
+	OldClickhouseUsernameV1          string `env:"OLD_CLICKHOUSE_USERNAME_V1"`
+	OldClickhousePasswordV1          string `env:"OLD_CLICKHOUSE_PASSWORD_V1"`
+	OldClickhouseEnableTLSV1         bool   `env:"OLD_CLICKHOUSE_ENABLE_TLS_V1" envDefault:"true"`
 	CommitterClickhouseDatabase      string `env:"COMMITTER_CLICKHOUSE_DATABASE"`
 	CommitterClickhouseHost          string `env:"COMMITTER_CLICKHOUSE_HOST"`
 	CommitterClickhousePort          int    `env:"COMMITTER_CLICKHOUSE_PORT"`

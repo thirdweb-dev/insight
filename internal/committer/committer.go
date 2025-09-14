@@ -2,7 +2,6 @@ package committer
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,123 +15,37 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/parquet-go/parquet-go"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
+	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/rpc"
-	"github.com/thirdweb-dev/indexer/internal/storage"
+	"github.com/thirdweb-dev/indexer/internal/types"
 )
 
-// BlockRange represents a range of blocks in an S3 parquet file
-type BlockRange struct {
-	StartBlock    *big.Int           `json:"start_block"`
-	EndBlock      *big.Int           `json:"end_block"`
-	S3Key         string             `json:"s3_key"`
-	IsDownloaded  bool               `json:"is_downloaded"`
-	IsDownloading bool               `json:"is_downloading"`
-	LocalPath     string             `json:"local_path,omitempty"`
-	BlockData     []common.BlockData `json:"block_data,omitempty"`
-}
-
-// ParquetBlockData represents the block data structure in parquet files
-type ParquetBlockData struct {
-	ChainId        uint64 `parquet:"chain_id"`
-	BlockNumber    uint64 `parquet:"block_number"`
-	BlockHash      string `parquet:"block_hash"`
-	BlockTimestamp int64  `parquet:"block_timestamp"`
-	Block          []byte `parquet:"block_json"`
-	Transactions   []byte `parquet:"transactions_json"`
-	Logs           []byte `parquet:"logs_json"`
-	Traces         []byte `parquet:"traces_json"`
-}
-
-var rpcClient rpc.IRPCClient
-var clickhouseConn clickhouse.Conn
-var s3Client *s3.Client
-var kafkaPublisher *storage.KafkaPublisher
 var tempDir = filepath.Join(os.TempDir(), "committer")
 var parquetFilenameRegex = regexp.MustCompile(`blocks_(\d+)_(\d+)\.parquet`)
 var mu sync.RWMutex
-var downloadComplete chan *BlockRange
+var downloadComplete chan *types.BlockRange
 
-func Init(chainId *big.Int, rpc rpc.IRPCClient) {
-	rpcClient = rpc
-	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", chainId.Uint64()))
-	downloadComplete = make(chan *BlockRange, config.Cfg.StagingS3MaxParallelFileDownload)
+func Init() {
+	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", libs.ChainId.Uint64()))
+	downloadComplete = make(chan *types.BlockRange, config.Cfg.StagingS3MaxParallelFileDownload)
 
-	initClickHouse()
-	initS3()
-	initKafka()
-}
-
-func initClickHouse() {
-	var err error
-	clickhouseConn, err = clickhouse.Open(&clickhouse.Options{
-		Addr:     []string{fmt.Sprintf("%s:%d", config.Cfg.CommitterClickhouseHost, config.Cfg.CommitterClickhousePort)},
-		Protocol: clickhouse.Native,
-		TLS: func() *tls.Config {
-			if config.Cfg.CommitterClickhouseEnableTLS {
-				return &tls.Config{}
-			}
-			return nil
-		}(),
-		Auth: clickhouse.Auth{
-			Username: config.Cfg.CommitterClickhouseUsername,
-			Password: config.Cfg.CommitterClickhousePassword,
-			Database: config.Cfg.CommitterClickhouseDatabase,
-		},
-		Compression: &clickhouse.Compression{
-			Method: clickhouse.CompressionLZ4,
-		},
-	})
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to ClickHouse")
-	}
-}
-
-func initS3() {
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
-		awsconfig.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
-			return aws.Credentials{
-				AccessKeyID:     config.Cfg.StagingS3AccessKeyID,
-				SecretAccessKey: config.Cfg.StagingS3SecretAccessKey,
-			}, nil
-		})),
-		awsconfig.WithRegion(config.Cfg.StagingS3Region),
-	)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize AWS config")
-	}
-
-	s3Client = s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String("https://s3.us-west-2.amazonaws.com")
-	})
-}
-
-func initKafka() {
-	var err error
-	kafkaPublisher, err = storage.NewKafkaPublisher(&config.KafkaConfig{
-		Brokers:   config.Cfg.CommitterKafkaBrokers,
-		Username:  config.Cfg.CommitterKafkaUsername,
-		Password:  config.Cfg.CommitterKafkaPassword,
-		EnableTLS: config.Cfg.CommitterKafkaEnableTLS,
-	})
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize Kafka publisher")
-	}
+	libs.InitNewClickHouseV2()
+	libs.InitS3()
+	libs.InitKafkaV2()
 }
 
 // Reads data from s3 and writes to Kafka
 // if block is not found in s3, it will panic
-func Commit(chainId *big.Int) error {
-	log.Info().Str("chain_id", chainId.String()).Msg("Starting commit process")
+func Commit() error {
+	log.Info().Str("chain_id", libs.ChainId.String()).Msg("Starting commit process")
 
-	maxBlockNumber, err := getMaxBlockNumberFromClickHouse(chainId)
+	maxBlockNumber, err := libs.GetMaxBlockNumberFromClickHouseV2(libs.ChainId)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get max block number from ClickHouse")
 		return err
@@ -142,7 +55,7 @@ func Commit(chainId *big.Int) error {
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
 	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting producer-consumer processing")
 
-	files, err := listS3ParquetFiles(chainId)
+	files, err := listS3ParquetFiles(libs.ChainId)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list S3 parquet files")
 		return err
@@ -198,33 +111,6 @@ func Commit(chainId *big.Int) error {
 	fetchLatest(nextCommitBlockNumber)
 
 	return nil
-}
-
-func getMaxBlockNumberFromClickHouse(chainId *big.Int) (*big.Int, error) {
-	// Use toString() to force ClickHouse to return a string instead of UInt256
-	query := fmt.Sprintf("SELECT toString(max(block_number)) FROM blocks WHERE chain_id = %d", chainId.Uint64())
-	rows, err := clickhouseConn.Query(context.Background(), query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return big.NewInt(0), nil
-	}
-
-	var maxBlockNumberStr string
-	if err := rows.Scan(&maxBlockNumberStr); err != nil {
-		return nil, err
-	}
-
-	// Convert string to big.Int to handle UInt256 values
-	maxBlockNumber, ok := new(big.Int).SetString(maxBlockNumberStr, 10)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse block number: %s", maxBlockNumberStr)
-	}
-
-	return maxBlockNumber, nil
 }
 
 // blockRangeProcessor processes BlockRanges from the download channel and publishes to Kafka
@@ -317,7 +203,7 @@ func blockRangeProcessor(nextCommitBlockNumber *big.Int) {
 				Uint64("end_block", batch[len(batch)-1].Block.Number.Uint64()).
 				Msg("Publishing batch to Kafka")
 
-			if err := kafkaPublisher.PublishBlockData(batch); err != nil {
+			if err := libs.KafkaPublisherV2.PublishBlockData(batch); err != nil {
 				log.Panic().
 					Err(err).
 					Str("file", blockRange.S3Key).
@@ -386,7 +272,7 @@ func listS3ParquetFiles(chainId *big.Int) ([]string, error) {
 	prefix := fmt.Sprintf("chain_%d/", chainId.Uint64())
 	var files []string
 
-	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+	paginator := s3.NewListObjectsV2Paginator(libs.S3Client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(config.Cfg.StagingS3Bucket),
 		Prefix: aws.String(prefix),
 	})
@@ -438,8 +324,8 @@ func parseBlockRangeFromFilename(filename string) (*big.Int, *big.Int, error) {
 }
 
 // filterAndSortBlockRanges filters block ranges by max block number and sorts them
-func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockRange, error) {
-	var blockRanges []BlockRange
+func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]types.BlockRange, error) {
+	var blockRanges []types.BlockRange
 
 	for _, file := range files {
 		startBlock, endBlock, err := parseBlockRangeFromFilename(file)
@@ -453,7 +339,7 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 			continue
 		}
 
-		blockRanges = append(blockRanges, BlockRange{
+		blockRanges = append(blockRanges, types.BlockRange{
 			StartBlock:   startBlock,
 			EndBlock:     endBlock,
 			S3Key:        file,
@@ -472,7 +358,7 @@ func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]BlockR
 }
 
 // downloadFile downloads a file from S3 and saves it to local storage
-func downloadFile(blockRange *BlockRange) error {
+func downloadFile(blockRange *types.BlockRange) error {
 	log.Debug().Str("file", blockRange.S3Key).Msg("Starting file download")
 
 	// Ensure temp directory exists
@@ -494,7 +380,7 @@ func downloadFile(blockRange *BlockRange) error {
 		Str("key", blockRange.S3Key).
 		Msg("Starting S3 download")
 
-	result, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+	result, err := libs.S3Client.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(config.Cfg.StagingS3Bucket),
 		Key:    aws.String(blockRange.S3Key),
 	})
@@ -603,7 +489,7 @@ func parseParquetFile(filePath string) ([]common.BlockData, error) {
 				blockNum := row[0][1].Uint64()
 
 				// Build ParquetBlockData from row
-				pd := ParquetBlockData{
+				pd := types.ParquetBlockData{
 					ChainId:        row[0][0].Uint64(),
 					BlockNumber:    blockNum,
 					BlockHash:      row[0][2].String(),
@@ -665,7 +551,7 @@ func parseParquetFile(filePath string) ([]common.BlockData, error) {
 }
 
 // parseBlockData converts ParquetBlockData to common.BlockData
-func parseBlockData(pd ParquetBlockData) (common.BlockData, error) {
+func parseBlockData(pd types.ParquetBlockData) (common.BlockData, error) {
 	// Unmarshal JSON data
 	var block common.Block
 	if err := json.Unmarshal(pd.Block, &block); err != nil {
@@ -703,11 +589,11 @@ func parseBlockData(pd ParquetBlockData) (common.BlockData, error) {
 
 // Close cleans up resources
 func Close() error {
-	if clickhouseConn != nil {
-		clickhouseConn.Close()
+	if libs.ClickhouseConnV2 != nil {
+		libs.ClickhouseConnV2.Close()
 	}
-	if kafkaPublisher != nil {
-		kafkaPublisher.Close()
+	if libs.KafkaPublisherV2 != nil {
+		libs.KafkaPublisherV2.Close()
 	}
 	// Clean up temp directory
 	return os.RemoveAll(tempDir)
@@ -715,7 +601,7 @@ func Close() error {
 
 func fetchLatest(nextCommitBlockNumber *big.Int) error {
 	for {
-		latestBlock, err := rpcClient.GetLatestBlockNumber(context.Background())
+		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to get latest block number, retrying...")
 			time.Sleep(250 * time.Millisecond)
@@ -784,7 +670,7 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 				var fetchErr error
 
 				for retry := 0; retry < 3; retry++ {
-					batchResults = rpcClient.GetFullBlocks(context.Background(), blockNumbers)
+					batchResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbers)
 
 					// Check if all blocks were fetched successfully
 					allSuccess := true
@@ -880,7 +766,7 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 			Int("blocks_to_publish", len(blockDataArray)).
 			Msg("Publishing blocks to Kafka")
 
-		if err := kafkaPublisher.PublishBlockData(blockDataArray); err != nil {
+		if err := libs.KafkaPublisherV2.PublishBlockData(blockDataArray); err != nil {
 			log.Panic().
 				Err(err).
 				Int("blocks_count", len(blockDataArray)).
