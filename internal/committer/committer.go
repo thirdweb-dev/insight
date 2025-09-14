@@ -9,9 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,19 +52,12 @@ func Commit() error {
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
 	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting producer-consumer processing")
 
-	files, err := listS3ParquetFiles(libs.ChainId)
+	blockRanges, err := getBlockRangesFromS3(maxBlockNumber)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to list S3 parquet files")
+		log.Error().Err(err).Msg("Failed to get block ranges from S3")
 		return err
 	}
-	log.Info().Int("total_files", len(files)).Msg("Listed S3 parquet files")
-
-	blockRanges, err := filterAndSortBlockRanges(files, maxBlockNumber)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to filter and sort block ranges")
-		return err
-	}
-	log.Info().Int("filtered_ranges", len(blockRanges)).Msg("Filtered and sorted block ranges")
+	log.Info().Int("filtered_ranges", len(blockRanges)).Msg("Got block ranges from S3")
 
 	// Check if there are any files to process
 	if len(blockRanges) != 0 {
@@ -267,94 +257,24 @@ func blockRangeProcessor(nextCommitBlockNumber *big.Int) {
 	log.Info().Msg("Block range processor finished")
 }
 
-// listS3ParquetFiles lists all parquet files in S3 with the chain prefix
-func listS3ParquetFiles(chainId *big.Int) ([]string, error) {
-	prefix := fmt.Sprintf("chain_%d/", chainId.Uint64())
-	var files []string
-
-	paginator := s3.NewListObjectsV2Paginator(libs.S3Client, &s3.ListObjectsV2Input{
-		Bucket: aws.String(config.Cfg.StagingS3Bucket),
-		Prefix: aws.String(prefix),
-	})
-
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to list S3 objects: %w", err)
-		}
-
-		for _, obj := range page.Contents {
-			if obj.Key != nil && strings.HasSuffix(*obj.Key, ".parquet") {
-				files = append(files, *obj.Key)
-			}
-		}
-	}
-
-	return files, nil
-}
-
-// parseBlockRangeFromFilename extracts start and end block numbers from S3 filename
-// Expected format: chain_${chainId}/year=2024/blocks_1000_2000.parquet
-func parseBlockRangeFromFilename(filename string) (*big.Int, *big.Int, error) {
-	// Extract the filename part after the last slash
-	parts := strings.Split(filename, "/")
-	if len(parts) == 0 {
-		return nil, nil, fmt.Errorf("invalid filename format: %s", filename)
-	}
-
-	filePart := parts[len(parts)-1]
-
-	// Use regex to extract block numbers from filename like "blocks_1000_2000.parquet"
-	matches := parquetFilenameRegex.FindStringSubmatch(filePart)
-	if len(matches) != 3 {
-		return nil, nil, fmt.Errorf("could not parse block range from filename: %s", filename)
-	}
-
-	startBlock, err := strconv.ParseInt(matches[1], 10, 64)
+func getBlockRangesFromS3(lastUploadedBlockNumber *big.Int) ([]types.BlockRange, error) {
+	sortBlockRanges, err := libs.GetS3ParquetBlockRangesSorted(libs.ChainId)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid start block number: %s", matches[1])
+		log.Error().Err(err).Msg("Failed to get S3 parquet block ranges sorted")
+		return nil, err
 	}
 
-	endBlock, err := strconv.ParseInt(matches[2], 10, 64)
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid end block number: %s", matches[2])
-	}
-
-	return big.NewInt(startBlock), big.NewInt(endBlock), nil
-}
-
-// filterAndSortBlockRanges filters block ranges by max block number and sorts them
-func filterAndSortBlockRanges(files []string, maxBlockNumber *big.Int) ([]types.BlockRange, error) {
-	var blockRanges []types.BlockRange
-
-	for _, file := range files {
-		startBlock, endBlock, err := parseBlockRangeFromFilename(file)
-		if err != nil {
-			log.Warn().Err(err).Str("file", file).Msg("Skipping file with invalid format")
+	skipToIndex := 0
+	for i, blockRange := range sortBlockRanges {
+		endBlock := blockRange.EndBlock
+		if endBlock.Cmp(lastUploadedBlockNumber) <= 0 {
 			continue
 		}
-
-		// Skip files where end block is less than max block number from ClickHouse
-		if endBlock.Cmp(maxBlockNumber) <= 0 {
-			continue
-		}
-
-		blockRanges = append(blockRanges, types.BlockRange{
-			StartBlock:   startBlock,
-			EndBlock:     endBlock,
-			S3Key:        file,
-			IsDownloaded: false,
-		})
+		skipToIndex = i
+		break
 	}
 
-	// Sort by start block number in ascending order
-	if len(blockRanges) > 0 {
-		sort.Slice(blockRanges, func(i, j int) bool {
-			return blockRanges[i].StartBlock.Cmp(blockRanges[j].StartBlock) < 0
-		})
-	}
-
-	return blockRanges, nil
+	return sortBlockRanges[skipToIndex:], nil
 }
 
 // downloadFile downloads a file from S3 and saves it to local storage

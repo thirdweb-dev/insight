@@ -290,12 +290,14 @@ type Config struct {
 	CommitterKafkaUsername           string `env:"COMMITTER_KAFKA_USERNAME"`
 	CommitterKafkaPassword           string `env:"COMMITTER_KAFKA_PASSWORD"`
 	CommitterKafkaEnableTLS          bool   `env:"COMMITTER_KAFKA_ENABLE_TLS" envDefault:"true"`
+	CommitterRPCNumParallelCalls     int64  `env:"COMMITTER_RPC_NUM_PARALLEL_CALLS" envDefault:"10"`
 	StagingS3Bucket                  string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
 	StagingS3Region                  string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
 	StagingS3AccessKeyID             string `env:"STAGING_S3_ACCESS_KEY_ID"`
 	StagingS3SecretAccessKey         string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
 	StagingS3MaxParallelFileDownload int    `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
-	CommitterRPCNumParallelCalls     int64  `env:"COMMITTER_RPC_NUM_PARALLEL_CALLS" envDefault:"10"`
+	BackfillStartBlock               int64  `env:"BACKFILL_START_BLOCK"`
+	BackfillEndBlock                 int64  `env:"BACKFILL_END_BLOCK"`
 }
 
 var Cfg Config
