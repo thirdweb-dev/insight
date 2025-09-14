@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
 	"time"
 
@@ -19,12 +18,11 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
-	"github.com/thirdweb-dev/indexer/internal/rpc"
+	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 	"github.com/thirdweb-dev/indexer/internal/types"
 )
 
 var tempDir = filepath.Join(os.TempDir(), "committer")
-var parquetFilenameRegex = regexp.MustCompile(`blocks_(\d+)_(\d+)\.parquet`)
 var mu sync.RWMutex
 var downloadComplete chan *types.BlockRange
 
@@ -98,7 +96,7 @@ func Commit() error {
 	}
 
 	log.Info().Msg("Consuming latest blocks from RPC")
-	fetchLatest(nextCommitBlockNumber)
+	pollLatest(nextCommitBlockNumber)
 
 	return nil
 }
@@ -507,19 +505,7 @@ func parseBlockData(pd types.ParquetBlockData) (common.BlockData, error) {
 	}, nil
 }
 
-// Close cleans up resources
-func Close() error {
-	if libs.ClickhouseConnV2 != nil {
-		libs.ClickhouseConnV2.Close()
-	}
-	if libs.KafkaPublisherV2 != nil {
-		libs.KafkaPublisherV2.Close()
-	}
-	// Clean up temp directory
-	return os.RemoveAll(tempDir)
-}
-
-func fetchLatest(nextCommitBlockNumber *big.Int) error {
+func pollLatest(nextCommitBlockNumber *big.Int) error {
 	for {
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
 		if err != nil {
@@ -532,139 +518,12 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 			continue
 		}
 
-		rpcNumParallelCalls := config.Cfg.RPCNumParallelCalls
-		rpcBatchSize := config.Cfg.RPCBatchSize
-		maxBlocksPerFetch := rpcBatchSize * rpcNumParallelCalls
-
-		// Calculate the range of blocks to fetch
-		blocksToFetch := new(big.Int).Sub(latestBlock, nextCommitBlockNumber)
-		if blocksToFetch.Cmp(big.NewInt(maxBlocksPerFetch)) > 0 {
-			blocksToFetch = big.NewInt(maxBlocksPerFetch)
-		}
-
-		log.Info().
-			Str("next_commit_block", nextCommitBlockNumber.String()).
-			Str("latest_block", latestBlock.String()).
-			Str("blocks_to_fetch", blocksToFetch.String()).
-			Int64("batch_size", rpcBatchSize).
-			Int64("max_parallel_calls", rpcNumParallelCalls).
-			Msg("Starting to fetch latest blocks")
-
-		// Precreate array of block data
-		blockDataArray := make([]common.BlockData, blocksToFetch.Int64())
-
-		// Create batches and calculate number of parallel calls needed
-		numBatches := min((blocksToFetch.Int64()+rpcBatchSize-1)/rpcBatchSize, rpcNumParallelCalls)
-
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-		var fetchErrors []error
-
-		for batchIndex := int64(0); batchIndex < numBatches; batchIndex++ {
-			wg.Add(1)
-			go func(batchIdx int64) {
-				defer wg.Done()
-
-				startBlock := new(big.Int).Add(nextCommitBlockNumber, big.NewInt(batchIdx*rpcBatchSize))
-				endBlock := new(big.Int).Add(startBlock, big.NewInt(rpcBatchSize-1))
-
-				// Don't exceed the latest block
-				if endBlock.Cmp(latestBlock) > 0 {
-					endBlock = latestBlock
-				}
-
-				log.Debug().
-					Int64("batch", batchIdx).
-					Str("start_block", startBlock.String()).
-					Str("end_block", endBlock.String()).
-					Msg("Starting batch fetch")
-
-				// Create block numbers array for this batch
-				var blockNumbers []*big.Int
-				for i := new(big.Int).Set(startBlock); i.Cmp(endBlock) <= 0; i.Add(i, big.NewInt(1)) {
-					blockNumbers = append(blockNumbers, new(big.Int).Set(i))
-				}
-
-				// Make RPC call with retry mechanism (3 retries)
-				var batchResults []rpc.GetFullBlockResult
-				var fetchErr error
-
-				for retry := range 3 {
-					batchResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbers)
-
-					// Check if all blocks were fetched successfully
-					allSuccess := true
-					for _, result := range batchResults {
-						if result.Error != nil {
-							allSuccess = false
-							break
-						}
-					}
-
-					if allSuccess {
-						break
-					}
-
-					if retry < 2 {
-						log.Warn().
-							Int64("batch", batchIdx).
-							Int("retry", retry+1).
-							Msg("Batch fetch failed, retrying...")
-						time.Sleep(time.Duration(retry+1) * 100 * time.Millisecond)
-					} else {
-						fetchErr = fmt.Errorf("batch %d failed after 3 retries", batchIdx)
-					}
-				}
-
-				if fetchErr != nil {
-					mu.Lock()
-					fetchErrors = append(fetchErrors, fetchErr)
-					mu.Unlock()
-					return
-				}
-
-				// Set values to the array
-				mu.Lock()
-				for i, result := range batchResults {
-					arrayIndex := batchIdx*rpcBatchSize + int64(i)
-					if arrayIndex < int64(len(blockDataArray)) {
-						blockDataArray[arrayIndex] = result.Data
-						batchResults[i] = rpc.GetFullBlockResult{} // free memory
-					}
-				}
-				mu.Unlock()
-
-				log.Debug().
-					Int64("batch", batchIdx).
-					Int("blocks_fetched", len(batchResults)).
-					Msg("Completed batch fetch")
-			}(batchIndex)
-		}
-
-		// Wait for all goroutines to complete
-		wg.Wait()
-
-		// Check for fetch errors
-		if len(fetchErrors) > 0 {
-			log.Error().
-				Int("error_count", len(fetchErrors)).
-				Msg("Some batches failed to fetch")
-			for _, err := range fetchErrors {
-				log.Error().Err(err).Msg("Batch fetch error")
-			}
-			log.Panic().Msg("Failed to fetch all required blocks")
-		}
+		// will panic if any block is invalid
+		blockDataArray := libblockdata.GetValidBlockDataInBatch(latestBlock, nextCommitBlockNumber)
 
 		// Validate that all blocks are sequential and nothing is missing
 		expectedBlockNumber := new(big.Int).Set(nextCommitBlockNumber)
 		for i, blockData := range blockDataArray {
-			if blockData.Block.Number == nil {
-				log.Panic().
-					Int("index", i).
-					Str("expected_block", expectedBlockNumber.String()).
-					Msg("Found nil block number in array")
-			}
-
 			if blockData.Block.Number.Cmp(expectedBlockNumber) != 0 {
 				log.Panic().
 					Int("index", i).
@@ -676,16 +535,12 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 			expectedBlockNumber.Add(expectedBlockNumber, big.NewInt(1))
 		}
 
-		log.Info().
+		// Publish to Kafka
+		log.Debug().
 			Int("total_blocks", len(blockDataArray)).
 			Str("start_block", nextCommitBlockNumber.String()).
 			Str("end_block", new(big.Int).Sub(expectedBlockNumber, big.NewInt(1)).String()).
-			Msg("All blocks validated successfully")
-
-		// Publish to Kafka
-		log.Info().
-			Int("blocks_to_publish", len(blockDataArray)).
-			Msg("Publishing blocks to Kafka")
+			Msg("All blocks validated successfully. Publishing blocks to Kafka")
 
 		if err := libs.KafkaPublisherV2.PublishBlockData(blockDataArray); err != nil {
 			log.Panic().
@@ -694,7 +549,7 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 				Msg("Failed to publish blocks to Kafka")
 		}
 
-		log.Info().
+		log.Debug().
 			Int("blocks_published", len(blockDataArray)).
 			Str("next_commit_block", expectedBlockNumber.String()).
 			Msg("Successfully published blocks to Kafka")
