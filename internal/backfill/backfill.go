@@ -1,14 +1,15 @@
 package backfill
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
-	"github.com/thirdweb-dev/indexer/internal/types"
 )
+
+var blockdataChannel = make(chan []common.BlockData, config.Cfg.RPCNumParallelCalls)
 
 func Init() {
 	libs.InitOldClickHouseV1()
@@ -18,80 +19,83 @@ func Init() {
 }
 
 func RunBackfill() {
-	startBlock, endBlock := getBackfillBoundaries()
-	log.Info().Int64("start_block", startBlock.Int64()).Int64("end_block", endBlock.Int64()).Msg("Backfilling")
+	startBlockNumber, endBlockNumber := GetBackfillBoundaries()
+	log.Info().
+		Int64("start_block", startBlockNumber.Int64()).
+		Int64("end_block", endBlockNumber.Int64()).
+		Msg("Backfilling")
 
+	processorDone := make(chan struct{})
+	go saveBlockDataToS3(processorDone)
+	channelValidBlockDataForRange(startBlockNumber, endBlockNumber)
+	<-processorDone
+
+	log.Info().Msg("Backfilling completed")
 }
 
-func getBackfillBoundaries() (*big.Int, *big.Int) {
-	startBlock, err := getStartBoundry()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get start boundry")
+func saveBlockDataToS3(processorDone chan struct{}) {
+	for blockdata := range blockdataChannel {
+		log.Debug().Int("blockdata_count", len(blockdata)).Msg("Saving block data to S3")
 	}
-
-	endBlock, err := getEndBoundry()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get end boundry")
-	}
-
-	if startBlock.Cmp(endBlock) > 0 {
-		log.Fatal().
-			Int64("start_block", startBlock.Int64()).
-			Int64("end_block", endBlock.Int64()).
-			Msg("Start block is greater than end block")
-	}
-
-	log.Info().Int64("start_block", startBlock.Int64()).Int64("end_block", endBlock.Int64()).Msg("Backfilling with boundries")
-
-	return startBlock, endBlock
+	close(processorDone)
 }
 
-func getStartBoundry() (*big.Int, error) {
-	startBlock := big.NewInt(config.Cfg.BackfillStartBlock)
-	endBlock := big.NewInt(config.Cfg.BackfillEndBlock)
+func channelValidBlockDataForRange(startBlockNumber *big.Int, endBlockNumber *big.Int) {
+	batchSize := big.NewInt(config.Cfg.RPCBatchSize)
+	for bn := startBlockNumber; bn.Cmp(endBlockNumber) < 0; bn.Add(bn, batchSize) {
+		startBlock := bn
+		endBlock := bn.Add(bn, batchSize)
+		if endBlock.Cmp(endBlockNumber) > 0 {
+			endBlock = endBlockNumber
+		}
 
-	blockRanges, err := libs.GetS3ParquetBlockRangesSorted(libs.ChainId)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get S3 parquet block ranges sorted")
+		blockdata := getValidBlockDataForRange(startBlock, endBlock)
+		blockdataChannel <- blockdata
 	}
+}
 
-	var lastValidRangeForConfigBoundry types.BlockRange
-	for _, blockRange := range blockRanges {
-		if blockRange.EndBlock.Cmp(endBlock) <= 0 {
-			lastValidRangeForConfigBoundry = blockRange
+func getValidBlockDataForRange(startBlockNumber *big.Int, endBlockNumber *big.Int) []common.BlockData {
+	validBlockData := make([]common.BlockData, new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64())
+	clickhouseBlockData := getValidBlockDataFromClickhouseV1(startBlockNumber, endBlockNumber)
+
+	// fetch data from clickhouse
+	missingBlockNumbers := make([]*big.Int, 0)
+	clickhouseBdIndex := 0
+	for i, _ := range validBlockData {
+		sb := new(big.Int).Add(startBlockNumber, big.NewInt(int64(i)))
+		if sb != clickhouseBlockData[clickhouseBdIndex].Block.Number {
+			missingBlockNumbers = append(missingBlockNumbers, sb)
 			continue
 		}
-		break
+		validBlockData[i] = clickhouseBlockData[clickhouseBdIndex]
+		clickhouseBlockData[clickhouseBdIndex] = common.BlockData{} // clear out duplicate memory
+		clickhouseBdIndex++
 	}
 
-	// if nothing is uploaded to s3 for the range, return the start block
-	if lastValidRangeForConfigBoundry.EndBlock == nil {
-		return startBlock, nil
+	// fetch data from rpc
+	rpcBlockData := getValidBlockDataFromRpc(missingBlockNumbers)
+	if len(rpcBlockData) != len(missingBlockNumbers) {
+		log.Fatal().Msg("RPC block data length does not match missing block numbers length")
 	}
 
-	// if something was uploaded to s3 for the range, return the end block of the end block of last valid range + 1
-	log.Debug().
-		Int64("start_block", startBlock.Int64()).
-		Any("last_valid_range_for_config_boundry", lastValidRangeForConfigBoundry).
-		Msg("Last valid boundry found")
+	// validate data from rpc and add to validBlockData
+	rpcBdIndex := 0
+	for i, _ := range validBlockData {
+		sb := new(big.Int).Add(startBlockNumber, big.NewInt(int64(i)))
+		if sb != rpcBlockData[rpcBdIndex].Block.Number {
+			log.Fatal().Msg("RPC didn't fetch all missing block data")
+		}
+		validBlockData[i] = rpcBlockData[rpcBdIndex]
+		rpcBlockData[rpcBdIndex] = common.BlockData{} // clear out duplicate memory
+		rpcBdIndex++
+	}
 
-	return lastValidRangeForConfigBoundry.EndBlock.Add(lastValidRangeForConfigBoundry.EndBlock, big.NewInt(1)), nil
+	return validBlockData
 }
 
-func getEndBoundry() (*big.Int, error) {
-	endBlock := big.NewInt(config.Cfg.BackfillEndBlock)
+func getValidBlockDataFromClickhouseV1(startBlockNumber *big.Int, endBlockNumber *big.Int) []common.BlockData {
 
-	// if endBlock is 0, set it to latest block
-	if endBlock.Cmp(big.NewInt(0)) <= 0 {
-		var err error
-		endBlock, err = libs.RpcClient.GetLatestBlockNumber(context.Background())
-		if err != nil {
-			log.Fatal().
-				Err(err).
-				Int64("end_block", endBlock.Int64()).
-				Msg("Failed to get latest block number")
-		}
-	}
+}
 
-	return endBlock, nil
+func getValidBlockDataFromRpc(blockNumbers []*big.Int) []common.BlockData {
 }
