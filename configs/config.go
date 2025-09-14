@@ -299,6 +299,7 @@ type Config struct {
 	BackfillEndBlock                 int64  `env:"BACKFILL_END_BLOCK"`
 	RPCNumParallelCalls              int64  `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"10"`
 	RPCBatchSize                     int64  `env:"RPC_BATCH_SIZE" envDefault:"50"`
+	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
 }
 
 var Cfg Config

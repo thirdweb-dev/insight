@@ -5,12 +5,43 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/big"
+	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/common"
 )
+
+var defaultBlockFields = []string{
+	"chain_id", "block_number", "hash", "parent_hash", "block_timestamp", "nonce",
+	"sha3_uncles", "mix_hash", "miner", "state_root", "transactions_root", "logs_bloom",
+	"receipts_root", "difficulty", "total_difficulty", "size", "extra_data", "gas_limit",
+	"gas_used", "transaction_count", "base_fee_per_gas", "withdrawals_root",
+}
+
+var defaultTransactionFields = []string{
+	"chain_id", "hash", "nonce", "block_hash", "block_number", "block_timestamp",
+	"transaction_index", "from_address", "to_address", "value", "gas", "gas_price",
+	"data", "function_selector", "max_fee_per_gas", "max_priority_fee_per_gas",
+	"max_fee_per_blob_gas", "blob_versioned_hashes", "transaction_type", "r", "s", "v",
+	"access_list", "authorization_list", "contract_address", "gas_used", "cumulative_gas_used",
+	"effective_gas_price", "blob_gas_used", "blob_gas_price", "logs_bloom", "status",
+}
+
+var defaultLogFields = []string{
+	"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash",
+	"transaction_index", "log_index", "address", "data", "topic_0", "topic_1", "topic_2", "topic_3",
+}
+
+var defaultTraceFields = []string{
+	"chain_id", "block_number", "block_hash", "block_timestamp", "transaction_hash",
+	"transaction_index", "subtraces", "trace_address", "type", "call_type", "error",
+	"from_address", "to_address", "gas", "gas_used", "input", "output", "value", "author",
+	"reward_type", "refund_address",
+}
 
 // only use this for backfill or getting old data.
 var ClickhouseConnV1 clickhouse.Conn
@@ -78,7 +109,7 @@ func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (*big.Int, error) {
 	defer rows.Close()
 
 	if !rows.Next() {
-		return big.NewInt(0), nil
+		return big.NewInt(-1), nil
 	}
 
 	var maxBlockNumberStr string
@@ -93,4 +124,178 @@ func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (*big.Int, error) {
 	}
 
 	return maxBlockNumber, nil
+}
+
+func GetBlockDataFromClickHouseV1(startBlockNumber *big.Int, endBlockNumber *big.Int) ([]*common.BlockData, error) {
+	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+
+	blockData := make([]*common.BlockData, length)
+	blocksRaw := make([]common.Block, length)
+	transactionsRaw := make([][]common.Transaction, length)
+	logsRaw := make([][]common.Log, length)
+	tracesRaw := make([][]common.Trace, length)
+
+	wg := sync.WaitGroup{}
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		blocksRaw, _ = getBlocksFromV1(startBlockNumber, endBlockNumber)
+	}()
+
+	go func() {
+		defer wg.Done()
+		transactionsRaw, _ = getTransactionsFromV1(startBlockNumber, endBlockNumber)
+	}()
+
+	go func() {
+		defer wg.Done()
+		logsRaw, _ = getLogsFromV1(startBlockNumber, endBlockNumber)
+	}()
+
+	go func() {
+		defer wg.Done()
+		tracesRaw, _ = getTracesFromV1(startBlockNumber, endBlockNumber)
+	}()
+	wg.Wait()
+
+	for i := range blockData {
+		blockData[i] = &common.BlockData{
+			Block:        blocksRaw[i],
+			Transactions: transactionsRaw[i],
+			Logs:         logsRaw[i],
+			Traces:       tracesRaw[i],
+		}
+	}
+	return blockData, nil
+}
+
+func getBlocksFromV1(startBlockNumber *big.Int, endBlockNumber *big.Int) ([]common.Block, error) {
+	sb := startBlockNumber.Int64()
+	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+
+	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE block_number BETWEEN %s AND %s order by block_number",
+		strings.Join(defaultBlockFields, ", "),
+		config.Cfg.OldClickhouseDatabaseV1,
+		startBlockNumber.String(),
+		endBlockNumber.String(),
+	)
+	blocks, err := execQueryV1[common.Block](query)
+	if err != nil {
+		return []common.Block{}, err
+	}
+
+	// just to make sure the blocks are in the correct order
+	blocksRaw := make([]common.Block, length)
+	for _, block := range blocks {
+		idx := block.Number.Int64() - sb
+		if idx < 0 || idx >= length {
+			log.Error().Msgf("Block number %s is out of range", block.Number.String())
+			continue
+		}
+		blocksRaw[idx] = block
+	}
+	return blocksRaw, nil
+}
+
+func getTransactionsFromV1(startBlockNumber *big.Int, endBlockNumber *big.Int) ([][]common.Transaction, error) {
+	sb := startBlockNumber.Int64()
+	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+
+	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE block_number BETWEEN %s AND %s order by block_number, transaction_index",
+		strings.Join(defaultTransactionFields, ", "),
+		config.Cfg.OldClickhouseDatabaseV1,
+		startBlockNumber.String(),
+		endBlockNumber.String(),
+	)
+	transactions, err := execQueryV1[common.Transaction](query)
+	if err != nil {
+		return [][]common.Transaction{}, err
+	}
+
+	// put transactions per block in order
+	transactionsRaw := make([][]common.Transaction, length)
+	for _, transaction := range transactions {
+		idx := transaction.BlockNumber.Int64() - sb
+		if idx < 0 || idx >= length {
+			log.Error().Msgf("Transaction block number %s is out of range", transaction.BlockNumber.String())
+			continue
+		}
+		transactionsRaw[idx] = append(transactionsRaw[idx], transaction)
+	}
+	return transactionsRaw, nil
+}
+
+func getLogsFromV1(startBlockNumber *big.Int, endBlockNumber *big.Int) ([][]common.Log, error) {
+	sb := startBlockNumber.Int64()
+	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+
+	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE block_number BETWEEN %s AND %s order by block_number, log_index",
+		strings.Join(defaultLogFields, ", "),
+		config.Cfg.OldClickhouseDatabaseV1,
+		startBlockNumber.String(),
+		endBlockNumber.String(),
+	)
+	logs, err := execQueryV1[common.Log](query)
+	if err != nil {
+		return [][]common.Log{}, err
+	}
+
+	// put logs per block in order
+	logsRaw := make([][]common.Log, length)
+	for _, l := range logs {
+		idx := l.BlockNumber.Int64() - sb
+		if idx < 0 || idx >= length {
+			log.Error().Msgf("Log block number %s is out of range", l.BlockNumber.String())
+			continue
+		}
+		logsRaw[idx] = append(logsRaw[idx], l)
+	}
+	return logsRaw, nil
+}
+
+func getTracesFromV1(startBlockNumber *big.Int, endBlockNumber *big.Int) ([][]common.Trace, error) {
+	sb := startBlockNumber.Int64()
+	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+
+	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE block_number BETWEEN %s AND %s order by block_number",
+		strings.Join(defaultTraceFields, ", "),
+		config.Cfg.OldClickhouseDatabaseV1,
+		startBlockNumber.String(),
+		endBlockNumber.String(),
+	)
+	traces, err := execQueryV1[common.Trace](query)
+	if err != nil {
+		return [][]common.Trace{}, err
+	}
+
+	// put traces per block in order
+	tracesRaw := make([][]common.Trace, length)
+	for _, t := range traces {
+		idx := t.BlockNumber.Int64() - sb
+		if idx < 0 || idx >= length {
+			log.Error().Msgf("Trace block number %s is out of range", t.BlockNumber.String())
+			continue
+		}
+		tracesRaw[idx] = append(tracesRaw[idx], t)
+	}
+	return tracesRaw, nil
+}
+
+func execQueryV1[T any](query string) ([]T, error) {
+	rows, err := ClickhouseConnV1.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	queryResult := []T{}
+	for rows.Next() {
+		var item T
+		err := rows.Scan(&item)
+		if err != nil {
+			return nil, err
+		}
+		queryResult = append(queryResult, item)
+	}
+	return queryResult, nil
 }

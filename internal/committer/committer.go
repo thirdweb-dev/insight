@@ -47,7 +47,7 @@ func Commit() error {
 		log.Error().Err(err).Msg("Failed to get max block number from ClickHouse")
 		return err
 	}
-	log.Info().Str("max_block_number", maxBlockNumber.String()).Msg("Retrieved max block number from ClickHouse")
+	log.Info().Str("max_block_number", maxBlockNumber.String()).Msg("Retrieved max block number from ClickHouse.(-1 means nothing committed yet, start from 0)")
 
 	nextCommitBlockNumber := new(big.Int).Add(maxBlockNumber, big.NewInt(1))
 	log.Info().Str("next_commit_block", nextCommitBlockNumber.String()).Msg("Starting producer-consumer processing")
@@ -589,7 +589,7 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 				var batchResults []rpc.GetFullBlockResult
 				var fetchErr error
 
-				for retry := 0; retry < 3; retry++ {
+				for retry := range 3 {
 					batchResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbers)
 
 					// Check if all blocks were fetched successfully
@@ -629,6 +629,7 @@ func fetchLatest(nextCommitBlockNumber *big.Int) error {
 					arrayIndex := batchIdx*rpcBatchSize + int64(i)
 					if arrayIndex < int64(len(blockDataArray)) {
 						blockDataArray[arrayIndex] = result.Data
+						batchResults[i] = rpc.GetFullBlockResult{} // free memory
 					}
 				}
 				mu.Unlock()

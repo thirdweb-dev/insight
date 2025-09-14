@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -139,4 +141,63 @@ func parseBlockRangeFromFilename(filename string) (*big.Int, *big.Int, error) {
 	}
 
 	return big.NewInt(startBlock), big.NewInt(endBlock), nil
+}
+
+// stream the parquet file to s3
+func UploadParquetToS3(parquetFile *os.File, chainId uint64, startBlock string, endBlock string, blockTimestamp time.Time) error {
+	startBlockInt, _ := strconv.ParseInt(startBlock, 10, 64)
+	endBlockInt, _ := strconv.ParseInt(endBlock, 10, 64)
+	blockCount := endBlockInt - startBlockInt + 1
+
+	// Get file info for size
+	fileInfo, err := parquetFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	// Seek to beginning of file for streaming
+	_, err = parquetFile.Seek(0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to seek to beginning of file: %w", err)
+	}
+
+	// Upload to S3 - stream the file directly without loading into memory
+	ctx := context.Background()
+	_, err = S3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(config.Cfg.StagingS3Bucket),
+		Key:         aws.String(generateS3Key(chainId, startBlock, endBlock, blockTimestamp)),
+		Body:        parquetFile,
+		ContentType: aws.String("application/octet-stream"),
+		Metadata: map[string]string{
+			"chain_id":    fmt.Sprintf("%d", chainId),
+			"start_block": startBlock,
+			"end_block":   endBlock,
+			"block_count": fmt.Sprintf("%d", blockCount),
+			"timestamp":   blockTimestamp.Format(time.RFC3339),
+			"file_size":   fmt.Sprintf("%d", fileInfo.Size()),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to upload to S3: %w", err)
+	}
+
+	// delete the parquet file
+	if err := os.Remove(parquetFile.Name()); err != nil {
+		return fmt.Errorf("failed to delete parquet file: %w", err)
+	}
+
+	return nil
+}
+
+func generateS3Key(chainID uint64, startBlock string, endBlock string, blockTimestamp time.Time) string {
+	// Use the block's timestamp for year partitioning
+	year := blockTimestamp.Year()
+	return fmt.Sprintf("chain_%d/year=%d/blocks_%s_%s%s",
+		chainID,
+		year,
+		startBlock,
+		endBlock,
+		".parquet",
+	)
 }

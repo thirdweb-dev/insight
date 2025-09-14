@@ -13,16 +13,16 @@ import (
 func GetBackfillBoundaries() (*big.Int, *big.Int) {
 	startBlock, err := getStartBoundry()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get start boundry")
+		log.Panic().Err(err).Msg("Failed to get start boundry")
 	}
 
 	endBlock, err := getEndBoundry()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get end boundry")
+		log.Panic().Err(err).Msg("Failed to get end boundry")
 	}
 
 	if startBlock.Cmp(endBlock) > 0 {
-		log.Fatal().
+		log.Panic().
 			Int64("start_block", startBlock.Int64()).
 			Int64("end_block", endBlock.Int64()).
 			Msg("Start block is greater than end block")
@@ -40,7 +40,7 @@ func getStartBoundry() (*big.Int, error) {
 
 	blockRanges, err := libs.GetS3ParquetBlockRangesSorted(libs.ChainId)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get S3 parquet block ranges sorted")
+		log.Panic().Err(err).Msg("Failed to get S3 parquet block ranges sorted")
 	}
 
 	var lastValidRangeForConfigBoundry types.BlockRange
@@ -75,7 +75,7 @@ func getEndBoundry() (*big.Int, error) {
 		var err error
 		endBlock, err = libs.RpcClient.GetLatestBlockNumber(context.Background())
 		if err != nil {
-			log.Fatal().
+			log.Panic().
 				Err(err).
 				Int64("end_block", endBlock.Int64()).
 				Msg("Failed to get latest block number")
