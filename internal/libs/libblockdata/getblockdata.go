@@ -135,6 +135,7 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 				Uint64("end_block", endBlockNumber).
 				Uint64("should_be_block_number", sb).
 				Uint64("rpc_response_block_number", rpcBlockData[rpcBdIndex].Block.Number.Uint64()).
+				Any("missing_block_numbers", missingBlockNumbers).
 				Msg("RPC didn't fetch all missing block data")
 		}
 		validBlockData[i] = rpcBlockData[rpcBdIndex]
@@ -165,6 +166,12 @@ func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 	var fetchErr error
 
 	for retry := range 3 {
+		log.Debug().
+			Int("retry", retry+1).
+			Int("block_numbers_length", len(blockNumbers)).
+			Any("block_numbers", blockNumbersToBigInt(blockNumbers)).
+			Any("big_block_numbers", blockNumbersToBigInt(blockNumbers)).
+			Msg("Fetching block data from RPC")
 		rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
 
 		// Check if all blocks were fetched successfully
