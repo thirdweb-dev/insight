@@ -170,19 +170,38 @@ func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 	totalBlocks := len(blockNumbers)
 	blockData := make([]*common.BlockData, totalBlocks)
 
-	// Process blocks in batches
-	for start := 0; start < totalBlocks; start += int(rpcBatchSize) {
-		end := min(start+int(rpcBatchSize), totalBlocks)
+	// Calculate number of batches
+	numBatches := (totalBlocks + int(rpcBatchSize) - 1) / int(rpcBatchSize)
 
-		batchBlockNumbers := blockNumbers[start:end]
-		batchResults := getValidBlockDataFromRpcBatch(batchBlockNumbers)
+	var wg sync.WaitGroup
 
-		// Copy results to the main array
-		for i, result := range batchResults {
-			blockData[start+i] = result
-		}
+	// Process blocks in parallel batches
+	for batchIndex := 0; batchIndex < numBatches; batchIndex++ {
+		wg.Add(1)
+		go func(batchIdx int) {
+			defer wg.Done()
+
+			start := batchIdx * int(rpcBatchSize)
+			end := min(start+int(rpcBatchSize), totalBlocks)
+
+			batchBlockNumbers := blockNumbers[start:end]
+			batchResults := getValidBlockDataFromRpcBatch(batchBlockNumbers)
+
+			// Copy results directly to assigned indices (no locks needed)
+			for i, result := range batchResults {
+				blockData[start+i] = result
+			}
+
+			log.Debug().
+				Int("batch", batchIdx).
+				Int("start", start).
+				Int("end", end).
+				Int("batch_size", len(batchBlockNumbers)).
+				Msg("Completed RPC batch fetch")
+		}(batchIndex)
 	}
 
+	wg.Wait()
 	return blockData
 }
 
