@@ -59,6 +59,9 @@ func SaveToParquet(blockData []*common.BlockData) error {
 	log.Debug().
 		Int("blockdata_length", len(parquetData)).
 		Int64("bytes_written", bytesWritten).
+		Str("start_block", parquetStartBlockNumber).
+		Str("end_block", parquetEndBlockNumber).
+		Str("block_timestamp", parquetBlockTimestamp.Format(time.RFC3339)).
 		Msg("Writing parquet data")
 	if _, err := parquetWriter.Write(parquetData); err != nil {
 		return fmt.Errorf("failed to write parquet data: %w", err)

@@ -10,8 +10,8 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 )
 
-// var blockdataChannel = make(chan []*common.BlockData, config.Cfg.RPCNumParallelCalls)
-var blockdataChannel = make(chan []*common.BlockData, 1)
+var blockdataChannel = make(chan []*common.BlockData, config.Cfg.RPCNumParallelCalls)
+var batchSizeChannel = make(chan uint64, 1)
 
 func Init() {
 	libs.InitOldClickHouseV1()
