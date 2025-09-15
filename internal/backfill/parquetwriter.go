@@ -43,11 +43,14 @@ func SaveToParquet(blockData []*common.BlockData, avgMemoryPerBlockChannel chan 
 		return nil
 	}
 
-	maybeInitParquetWriter(
+	err := maybeInitParquetWriter(
 		blockData[0].Block.Timestamp,
 		blockData[0].Block.Number.String(),
 		blockData[len(blockData)-1].Block.Number.String(),
 	)
+	if err != nil {
+		return fmt.Errorf("failed to init parquet writer: %w", err)
+	}
 
 	parquetData, err := getParquetData(blockData, avgMemoryPerBlockChannel)
 	if err != nil {
@@ -202,23 +205,6 @@ func FlushParquet() error {
 	return resetParquet()
 }
 
-func resetParquet() error {
-	log.Debug().Msg("Resetting parquet writer")
-	if parquetFile != nil {
-		if err := parquetFile.Close(); err != nil {
-			return fmt.Errorf("failed to close parquet file: %w", err)
-		}
-		parquetFile = nil
-	}
-
-	// Reset tracking variables
-	parquetBlockTimestamp = time.Time{}
-	parquetStartBlockNumber = ""
-	parquetEndBlockNumber = ""
-
-	return nil
-}
-
 func maybeFlushParquetBuffer(force bool) error {
 	if !force && parquetTempBufferBytes < maxTempBufferSize {
 		return nil
@@ -232,7 +218,29 @@ func maybeFlushParquetBuffer(force bool) error {
 	return nil
 }
 
+func resetParquet() error {
+	log.Debug().Msg("Resetting parquet writer")
+	if parquetFile != nil {
+		if err := parquetFile.Close(); err != nil {
+			return fmt.Errorf("failed to close parquet file: %w", err)
+		}
+		parquetFile = nil
+	}
+
+	// Reset tracking variables
+	parquetBlockTimestamp = time.Time{}
+	parquetStartBlockNumber = ""
+	parquetEndBlockNumber = ""
+	parquetTempBufferBytes = 0
+
+	return nil
+}
+
 func getBytesWritten() int64 {
+	if parquetFile == nil {
+		return 0
+	}
+
 	fi, err := parquetFile.Stat()
 	if err != nil {
 		return 0

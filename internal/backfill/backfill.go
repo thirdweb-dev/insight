@@ -102,8 +102,8 @@ func computeBatchSize(currentBatchSize uint64) uint64 {
 			targetBatchSize := max(min(targetMemBytes/uint64(avgBytes), maxBatchSize), minBatchSize)
 
 			// only update if it changes a lot (±20%)
-			lower := uint64(float64(targetBatchSize) * 0.8)
-			upper := uint64(float64(targetBatchSize) * 1.2)
+			lower := uint64(float64(currentBatchSize) * 0.8)
+			upper := uint64(float64(currentBatchSize) * 1.2)
 			if targetBatchSize < lower || targetBatchSize > upper {
 				return targetBatchSize
 			}
