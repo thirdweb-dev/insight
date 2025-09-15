@@ -94,51 +94,26 @@ func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.I
 func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) []*common.BlockData {
 	length := endBlockNumber - startBlockNumber + 1
 	validBlockData := make([]*common.BlockData, length)
+
 	clickhouseBlockData := getValidBlockDataFromClickhouseV1(startBlockNumber, endBlockNumber)
-
-	// log.Debug().
-	// 	Uint64("start_block", startBlockNumber).
-	// 	Uint64("end_block", endBlockNumber).
-	// 	Uint64("length", length).
-	// 	Int("clickhouse_block_data_length", len(clickhouseBlockData)).
-	// 	Msg("Got list of block data from clickhouse v1")
-
-	// fetch data from clickhouse
 	missingBlockNumbers := make([]uint64, 0)
 	for i := range validBlockData {
 		bn := startBlockNumber + uint64(i)
 		if clickhouseBlockData[i] == nil || bn != clickhouseBlockData[i].Block.Number.Uint64() {
-			// log.Debug().
-			// 	Uint64("start_block", startBlockNumber).
-			// 	Uint64("end_block", endBlockNumber).
-			// 	Uint64("block_number", bn).
-			// 	Int("index", i).
-			// 	Msg("Missing block data from clickhouse")
 			missingBlockNumbers = append(missingBlockNumbers, bn)
+			log.Debug().
+				Uint64("start_block", startBlockNumber).
+				Uint64("end_block", endBlockNumber).
+				Uint64("block_number", bn).
+				Msg("Missing block data from clickhouse")
 			continue
 		}
-		// log.Debug().
-		// 	Uint64("start_block", startBlockNumber).
-		// 	Uint64("end_block", endBlockNumber).
-		// 	Int("index", i).
-		// 	Msg("Valid block data from clickhouse")
+
 		validBlockData[i] = clickhouseBlockData[i]
 		clickhouseBlockData[i] = nil // clear out duplicate memory
 	}
 
-	// log.Debug().
-	// 	Uint64("start_block", startBlockNumber).
-	// 	Uint64("end_block", endBlockNumber).
-	// 	Int("missing_block_numbers_length", len(missingBlockNumbers)).
-	// 	Msg("Missing block numbers")
-
 	if len(missingBlockNumbers) == 0 {
-		// count := validBlockData[len(validBlockData)-1].Block.Number.Uint64() - validBlockData[0].Block.Number.Uint64() + 1
-		// log.Debug().
-		// 	Uint64("start_block", startBlockNumber).
-		// 	Uint64("end_block", endBlockNumber).
-		// 	Uint64("block_count", count).
-		// 	Msg("No missing block numbers")
 		return validBlockData
 	}
 
@@ -174,34 +149,16 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 
 func getValidBlockDataFromClickhouseV1(startBlockNumber uint64, endBlockNumber uint64) []*common.BlockData {
 	blockData, err := libs.GetBlockDataFromClickHouseV1(startBlockNumber, endBlockNumber)
-	// log.Debug().
-	// 	Uint64("start_block", startBlockNumber).
-	// 	Uint64("end_block", endBlockNumber).
-	// 	Int("block_data_length", len(blockData)).
-	// 	Msg("Got Block data from clickhouse v1")
+
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to get block data from ClickHouseV1")
 	}
 
 	for i, block := range blockData {
-		// log.Debug().
-		// 	Int("index", i).
-		// 	Msg("Validating block data from clickhouse")
 		if isValid, _ := Validate(block); !isValid {
 			blockData[i] = nil
-			// log.Debug().
-			// 	Int("index", i).
-			// 	Uint64("start_block", startBlockNumber).
-			// 	Uint64("end_block", endBlockNumber).
-			// 	Msg("Failed to validate block data from clickhouse")
 		}
 	}
-
-	// log.Debug().
-	// 	Uint64("start_block", startBlockNumber).
-	// 	Uint64("end_block", endBlockNumber).
-	// 	Int("block_data_length", len(blockData)).
-	// 	Msg("Validated block data from clickhouse v1")
 	return blockData
 }
 
