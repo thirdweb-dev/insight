@@ -160,20 +160,20 @@ func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBl
 
 	for i := range blockData {
 		if blocksRaw[i].ChainId == nil || blocksRaw[i].ChainId.Uint64() == 0 {
-			log.Debug().
+			log.Info().
 				Any("chainId", blocksRaw[i].ChainId).
 				Msg("skipping block because chainId is nil")
 			continue
 		}
 		if blocksRaw[i].TransactionCount != uint64(len(transactionsRaw[i])) {
-			log.Debug().
+			log.Info().
 				Any("transactionCount", blocksRaw[i].TransactionCount).
 				Any("transactionsRaw", transactionsRaw[i]).
 				Msg("skipping block because transactionCount does not match")
 			continue
 		}
 		if (blocksRaw[i].LogsBloom != "" && blocksRaw[i].LogsBloom != EMPTY_LOGS_BLOOM) && len(logsRaw[i]) == 0 {
-			log.Debug().
+			log.Info().
 				Any("logsBloom", blocksRaw[i].LogsBloom).
 				Any("logsRaw", logsRaw[i]).
 				Msg("skipping block because logsBloom is not empty and logsRaw is empty")
