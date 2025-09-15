@@ -42,6 +42,9 @@ func getStartBoundry() (uint64, error) {
 
 	var lastValidRangeForConfigBoundry types.BlockRange
 	for _, blockRange := range blockRanges {
+		if blockRange.EndBlock.Uint64() < startBlock {
+			continue
+		}
 		if blockRange.EndBlock.Uint64() <= endBlock {
 			lastValidRangeForConfigBoundry = blockRange
 			continue
