@@ -37,7 +37,7 @@ func InitParquetWriter() {
 	resetParquet()
 }
 
-func SaveToParquet(blockData []*common.BlockData) error {
+func SaveToParquet(blockData []*common.BlockData, avgMemoryPerBlockChannel chan int) error {
 	if len(blockData) == 0 {
 		log.Debug().Msg("No block data to save to parquet")
 		return nil
@@ -49,7 +49,7 @@ func SaveToParquet(blockData []*common.BlockData) error {
 		blockData[len(blockData)-1].Block.Number.String(),
 	)
 
-	parquetData, err := getParquetData(blockData)
+	parquetData, err := getParquetData(blockData, avgMemoryPerBlockChannel)
 	if err != nil {
 		return fmt.Errorf("failed to get parquet data: %w", err)
 	}
@@ -109,7 +109,8 @@ func maybeInitParquetWriter(timestamp time.Time, startBlockNumber string, endBlo
 	return nil
 }
 
-func getParquetData(blockData []*common.BlockData) ([]types.ParquetBlockData, error) {
+func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan int) ([]types.ParquetBlockData, error) {
+	totalMemoryInBatchBytes := 0
 	parquetData := make([]types.ParquetBlockData, 0, len(blockData))
 	for _, d := range blockData {
 		if lastTrackedBlockNumber == -1 {
@@ -164,10 +165,14 @@ func getParquetData(blockData []*common.BlockData) ([]types.ParquetBlockData, er
 			Traces:         tracesJSON,
 		}
 		parquetData = append(parquetData, pd)
-		parquetTempBufferBytes += len(blockJSON) + len(txJSON) + len(logsJSON) + len(tracesJSON)
+		totalMemoryInBatchBytes += len(blockJSON) + len(txJSON) + len(logsJSON) + len(tracesJSON)
 		parquetEndBlockNumber = d.Block.Number.String()
 		lastTrackedBlockNumber = d.Block.Number.Int64()
+
 	}
+	parquetTempBufferBytes += totalMemoryInBatchBytes
+	sendAvgMemoryPerBlock(avgMemoryPerBlockChannel, totalMemoryInBatchBytes/len(blockData))
+
 	return parquetData, nil
 }
 
@@ -234,4 +239,15 @@ func getBytesWritten() int64 {
 	}
 	sizeOnDisk := fi.Size()
 	return sizeOnDisk
+}
+
+func sendAvgMemoryPerBlock(avgMemoryPerBlockChannel chan int, avgMemoryPerBlock int) {
+	select {
+	case <-avgMemoryPerBlockChannel: // drain old if present
+	default:
+	}
+	select {
+	case avgMemoryPerBlockChannel <- avgMemoryPerBlock: // push new; should succeed after drain
+	default:
+	}
 }
