@@ -166,6 +166,27 @@ func getValidBlockDataFromClickhouseV1(startBlockNumber uint64, endBlockNumber u
 }
 
 func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
+	rpcBatchSize := config.Cfg.RPCBatchSize
+	totalBlocks := len(blockNumbers)
+	blockData := make([]*common.BlockData, totalBlocks)
+
+	// Process blocks in batches
+	for start := 0; start < totalBlocks; start += int(rpcBatchSize) {
+		end := min(start+int(rpcBatchSize), totalBlocks)
+
+		batchBlockNumbers := blockNumbers[start:end]
+		batchResults := getValidBlockDataFromRpcBatch(batchBlockNumbers)
+
+		// Copy results to the main array
+		for i, result := range batchResults {
+			blockData[start+i] = result
+		}
+	}
+
+	return blockData
+}
+
+func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 	var rpcResults []rpc.GetFullBlockResult
 	var fetchErr error
 
@@ -188,6 +209,7 @@ func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 		if retry < 2 {
 			log.Warn().
 				Int("retry", retry+1).
+				Int("batch_size", len(blockNumbers)).
 				Msg("Batch fetch failed, retrying...")
 			time.Sleep(time.Duration(retry+1) * 100 * time.Millisecond)
 		} else {
