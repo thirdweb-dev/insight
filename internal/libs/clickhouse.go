@@ -126,7 +126,7 @@ func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (*big.Int, error) {
 	return maxBlockNumber, nil
 }
 
-func GetBlockDataFromClickHouseV1(startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
+func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
 	length := endBlockNumber - startBlockNumber + 1
 
 	blockData := make([]*common.BlockData, length)
@@ -139,33 +139,44 @@ func GetBlockDataFromClickHouseV1(startBlockNumber uint64, endBlockNumber uint64
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		blocksRaw, _ = getBlocksFromV1(startBlockNumber, endBlockNumber)
+		blocksRaw, _ = getBlocksFromV1(chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		transactionsRaw, _ = getTransactionsFromV1(startBlockNumber, endBlockNumber)
+		transactionsRaw, _ = getTransactionsFromV1(chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		logsRaw, _ = getLogsFromV1(startBlockNumber, endBlockNumber)
+		logsRaw, _ = getLogsFromV1(chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		tracesRaw, _ = getTracesFromV1(startBlockNumber, endBlockNumber)
+		tracesRaw, _ = getTracesFromV1(chainId, startBlockNumber, endBlockNumber)
 	}()
 	wg.Wait()
 
 	for i := range blockData {
 		if blocksRaw[i].ChainId == nil || blocksRaw[i].ChainId.Uint64() == 0 {
+			log.Debug().
+				Any("chainId", blocksRaw[i].ChainId).
+				Msg("skipping block because chainId is nil")
 			continue
 		}
 		if blocksRaw[i].TransactionCount != uint64(len(transactionsRaw[i])) {
+			log.Debug().
+				Any("transactionCount", blocksRaw[i].TransactionCount).
+				Any("transactionsRaw", transactionsRaw[i]).
+				Msg("skipping block because transactionCount does not match")
 			continue
 		}
-		if blocksRaw[i].LogsBloom != "" && len(logsRaw[i]) == 0 {
+		if (blocksRaw[i].LogsBloom != "" && blocksRaw[i].LogsBloom != EMPTY_LOGS_BLOOM) && len(logsRaw[i]) == 0 {
+			log.Debug().
+				Any("logsBloom", blocksRaw[i].LogsBloom).
+				Any("logsRaw", logsRaw[i]).
+				Msg("skipping block because logsBloom is not empty and logsRaw is empty")
 			continue
 		}
 		blockData[i] = &common.BlockData{
@@ -178,14 +189,15 @@ func GetBlockDataFromClickHouseV1(startBlockNumber uint64, endBlockNumber uint64
 	return blockData, nil
 }
 
-func getBlocksFromV1(startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {
+func getBlocksFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	blocksRaw := make([]common.Block, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE block_number BETWEEN %d AND %d order by block_number",
+	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		strings.Join(defaultBlockFields, ", "),
 		config.Cfg.OldClickhouseDatabaseV1,
+		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
@@ -206,14 +218,15 @@ func getBlocksFromV1(startBlockNumber uint64, endBlockNumber uint64) ([]common.B
 	return blocksRaw, nil
 }
 
-func getTransactionsFromV1(startBlockNumber uint64, endBlockNumber uint64) ([][]common.Transaction, error) {
+func getTransactionsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Transaction, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	transactionsRaw := make([][]common.Transaction, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE block_number BETWEEN %d AND %d order by block_number, transaction_index",
+	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, transaction_index",
 		strings.Join(defaultTransactionFields, ", "),
 		config.Cfg.OldClickhouseDatabaseV1,
+		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
@@ -234,14 +247,15 @@ func getTransactionsFromV1(startBlockNumber uint64, endBlockNumber uint64) ([][]
 	return transactionsRaw, nil
 }
 
-func getLogsFromV1(startBlockNumber uint64, endBlockNumber uint64) ([][]common.Log, error) {
+func getLogsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Log, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	logsRaw := make([][]common.Log, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE block_number BETWEEN %d AND %d order by block_number, log_index",
+	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, log_index",
 		strings.Join(defaultLogFields, ", "),
 		config.Cfg.OldClickhouseDatabaseV1,
+		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
@@ -262,14 +276,15 @@ func getLogsFromV1(startBlockNumber uint64, endBlockNumber uint64) ([][]common.L
 	return logsRaw, nil
 }
 
-func getTracesFromV1(startBlockNumber uint64, endBlockNumber uint64) ([][]common.Trace, error) {
+func getTracesFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Trace, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	tracesRaw := make([][]common.Trace, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE block_number BETWEEN %d AND %d order by block_number",
+	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		strings.Join(defaultTraceFields, ", "),
 		config.Cfg.OldClickhouseDatabaseV1,
+		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
@@ -291,20 +306,9 @@ func getTracesFromV1(startBlockNumber uint64, endBlockNumber uint64) ([][]common
 }
 
 func execQueryV1[T any](query string) ([]T, error) {
-	rows, err := ClickhouseConnV1.Query(context.Background(), query)
-	if err != nil {
+	var out []T
+	if err := ClickhouseConnV1.Select(context.Background(), &out, query); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	queryResult := []T{}
-	for rows.Next() {
-		var item T
-		err := rows.Scan(&item)
-		if err != nil {
-			return nil, err
-		}
-		queryResult = append(queryResult, item)
-	}
-	return queryResult, nil
+	return out, nil
 }

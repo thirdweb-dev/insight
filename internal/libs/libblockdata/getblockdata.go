@@ -148,7 +148,7 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 }
 
 func getValidBlockDataFromClickhouseV1(startBlockNumber uint64, endBlockNumber uint64) []*common.BlockData {
-	blockData, err := libs.GetBlockDataFromClickHouseV1(startBlockNumber, endBlockNumber)
+	blockData, err := libs.GetBlockDataFromClickHouseV1(libs.ChainId.Uint64(), startBlockNumber, endBlockNumber)
 
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to get block data from ClickHouseV1")
