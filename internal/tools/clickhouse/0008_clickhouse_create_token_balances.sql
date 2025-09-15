@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS token_balances
   `insert_timestamp` DateTime DEFAULT now(),
   `is_deleted` UInt8 DEFAULT 0,
 
+  INDEX idx_block_number block_number TYPE minmax GRANULARITY 1,
   INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
   INDEX idx_token_address token_address TYPE bloom_filter GRANULARITY 3,
   INDEX idx_owner_address owner_address TYPE bloom_filter GRANULARITY 3,
