@@ -170,12 +170,6 @@ func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 	var fetchErr error
 
 	for retry := range 3 {
-		log.Debug().
-			Int("retry", retry+1).
-			Int("block_numbers_length", len(blockNumbers)).
-			Any("block_numbers", blockNumbersToBigInt(blockNumbers)).
-			Any("big_block_numbers", blockNumbersToBigInt(blockNumbers)).
-			Msg("Fetching block data from RPC")
 		rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
 
 		// Check if all blocks were fetched successfully
