@@ -139,22 +139,23 @@ func blockRangeProcessor(nextCommitBlockNumber *big.Int) {
 
 			// If block number is greater than next commit block number, exit with error
 			if blockNumber.Cmp(nextCommitBlockNumber) > 0 {
-				log.Error().
+				log.Panic().
 					Str("file", blockRange.S3Key).
 					Uint64("block_number", blockData.Block.Number.Uint64()).
 					Str("next_commit_block", nextCommitBlockNumber.String()).
 					Msg("Found block number greater than expected - missing block in sequence")
-				log.Panic().Msg("Block sequence mismatch")
 			}
 			nextCommitBlockNumber.Add(nextCommitBlockNumber, big.NewInt(1))
 		}
 
-		// Check if we have any blocks to process after filtering
+		// Check if we have any blocks to process after filtering. if completed, exit.
 		if startIndex >= len(blockRange.BlockData) {
 			log.Panic().
+				Int("start_index", startIndex).
+				Uint64("start_block", blockRange.BlockData[0].Block.Number.Uint64()).
+				Uint64("end_block", blockRange.BlockData[len(blockRange.BlockData)-1].Block.Number.Uint64()).
 				Str("file", blockRange.S3Key).
 				Msg("All blocks already processed, skipping Kafka publish")
-			continue
 		}
 
 		blocksToProcess := blockRange.BlockData[startIndex:]
@@ -263,7 +264,7 @@ func getBlockRangesFromS3(lastUploadedBlockNumber *big.Int) ([]types.BlockRange,
 		return nil, err
 	}
 
-	skipToIndex := 0
+	skipToIndex := -1
 	for i, blockRange := range sortBlockRanges {
 		endBlock := blockRange.EndBlock
 		if endBlock.Cmp(lastUploadedBlockNumber) <= 0 {
@@ -271,6 +272,11 @@ func getBlockRangesFromS3(lastUploadedBlockNumber *big.Int) ([]types.BlockRange,
 		}
 		skipToIndex = i
 		break
+	}
+
+	// all files processed
+	if skipToIndex == -1 {
+		return []types.BlockRange{}, nil
 	}
 
 	return sortBlockRanges[skipToIndex:], nil
