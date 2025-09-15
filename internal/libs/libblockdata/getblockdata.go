@@ -128,20 +128,18 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 	for i := range validBlockData {
 		sb := startBlockNumber + uint64(i)
 		if sb != rpcBlockData[rpcBdIndex].Block.Number.Uint64() {
-			log.Panic().Msg("RPC didn't fetch all missing block data")
+			log.Panic().
+				Int("i", i).
+				Int("rpc_bd_index", rpcBdIndex).
+				Uint64("start_block", startBlockNumber).
+				Uint64("end_block", endBlockNumber).
+				Uint64("should_be_block_number", sb).
+				Uint64("rpc_response_block_number", rpcBlockData[rpcBdIndex].Block.Number.Uint64()).
+				Msg("RPC didn't fetch all missing block data")
 		}
 		validBlockData[i] = rpcBlockData[rpcBdIndex]
 		rpcBlockData[rpcBdIndex] = nil // clear out duplicate memory
 		rpcBdIndex++
-
-		// sanity check for block number sequence
-		if validBlockData[i].Block.Number.Uint64() != sb {
-			log.Panic().
-				Uint64("start_block", startBlockNumber).
-				Uint64("end_block", endBlockNumber).
-				Uint64("block_number", sb).
-				Msg("GetValidBlockDataForRange: Block number sequence mismatch")
-		}
 	}
 
 	return validBlockData
