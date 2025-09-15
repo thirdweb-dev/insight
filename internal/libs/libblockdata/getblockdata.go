@@ -126,6 +126,10 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 	// validate data from rpc and add to validBlockData
 	rpcBdIndex := 0
 	for i := range validBlockData {
+		// already filled from clickhouse
+		if validBlockData[i] != nil {
+			continue
+		}
 		sb := startBlockNumber + uint64(i)
 		if sb != rpcBlockData[rpcBdIndex].Block.Number.Uint64() {
 			log.Panic().
