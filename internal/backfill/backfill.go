@@ -60,13 +60,8 @@ func channelValidBlockData(startBlockNumber uint64, endBlockNumber uint64) {
 		startBlock := bn
 		endBlock := min(bn+batchSize-1, endBlockNumber)
 
-		log.Info().Any("start_block", startBlock).Any("end_block", endBlock).Msg("Getting valid block data for range")
+		log.Debug().Any("start_block", startBlock).Any("end_block", endBlock).Msg("Getting valid block data for range")
 		blockdata := libblockdata.GetValidBlockDataForRange(startBlock, endBlock)
-		log.Debug().
-			Uint64("start_block", startBlock).
-			Uint64("end_block", endBlock).
-			Int("blockdata_length", len(blockdata)).
-			Msg("Pushing blockdata to channel")
 
 		if endBlock-startBlock+1 != uint64(len(blockdata)) {
 			log.Panic().

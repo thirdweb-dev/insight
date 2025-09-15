@@ -159,17 +159,17 @@ func GetBlockDataFromClickHouseV1(startBlockNumber uint64, endBlockNumber uint64
 	wg.Wait()
 
 	for i := range blockData {
-		log.Debug().
-			Uint64("start_block", startBlockNumber).
-			Uint64("end_block", endBlockNumber).
-			Int("index", i).
-			Uint64("length", length).
-			Int("len_block_data", len(blockData)).
-			Int("len_raw_blocks", len(blocksRaw)).
-			Int("len_raw_transactions", len(transactionsRaw)).
-			Int("len_raw_logs", len(logsRaw)).
-			Int("len_raw_traces", len(tracesRaw)).
-			Msg("Building block data")
+		// log.Debug().
+		// 	Uint64("start_block", startBlockNumber).
+		// 	Uint64("end_block", endBlockNumber).
+		// 	Int("index", i).
+		// 	Uint64("length", length).
+		// 	Int("len_block_data", len(blockData)).
+		// 	Int("len_raw_blocks", len(blocksRaw)).
+		// 	Int("len_raw_transactions", len(transactionsRaw)).
+		// 	Int("len_raw_logs", len(logsRaw)).
+		// 	Int("len_raw_traces", len(tracesRaw)).
+		// 	Msg("Building block data")
 
 		if blocksRaw[i].ChainId == nil || blocksRaw[i].ChainId.Uint64() == 0 {
 			continue
@@ -186,11 +186,11 @@ func GetBlockDataFromClickHouseV1(startBlockNumber uint64, endBlockNumber uint64
 			Logs:         logsRaw[i],
 			Traces:       tracesRaw[i],
 		}
-		log.Debug().
-			Uint64("start_block", startBlockNumber).
-			Uint64("end_block", endBlockNumber).
-			Int("index", i).
-			Msg("Block data built")
+		// log.Debug().
+		// 	Uint64("start_block", startBlockNumber).
+		// 	Uint64("end_block", endBlockNumber).
+		// 	Int("index", i).
+		// 	Msg("Block data built")
 	}
 	return blockData, nil
 }

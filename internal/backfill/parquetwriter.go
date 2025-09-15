@@ -30,7 +30,7 @@ var writerOptions = []parquet.WriterOption{
 }
 
 func InitParquetWriter() {
-	maxFileSize = config.Cfg.ParquetMaxFileSizeMB
+	maxFileSize = config.Cfg.ParquetMaxFileSizeMB * 1024 * 1024
 	resetParquet()
 }
 
