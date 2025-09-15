@@ -62,9 +62,9 @@ func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.I
 				Msg("Starting batch fetch")
 
 			// Create block numbers array for this batch
-			var blockNumbers []*big.Int
-			for i := new(big.Int).Set(startBlock); i.Cmp(endBlock) <= 0; i.Add(i, big.NewInt(1)) {
-				blockNumbers = append(blockNumbers, new(big.Int).Set(i))
+			var blockNumbers []uint64
+			for i := startBlock.Uint64(); i <= endBlock.Uint64(); i++ {
+				blockNumbers = append(blockNumbers, i)
 			}
 
 			// will panic if any block is invalid
@@ -91,30 +91,55 @@ func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.I
 	return blockDataArray
 }
 
-func GetValidBlockDataForRange(startBlockNumber *big.Int, endBlockNumber *big.Int) []*common.BlockData {
-	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) []*common.BlockData {
+	length := endBlockNumber - startBlockNumber + 1
 	validBlockData := make([]*common.BlockData, length)
 	clickhouseBlockData := getValidBlockDataFromClickhouseV1(startBlockNumber, endBlockNumber)
 
 	log.Debug().
-		Int64("start_block", startBlockNumber.Int64()).
-		Int64("end_block", endBlockNumber.Int64()).
-		Int64("length", length).
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
+		Uint64("length", length).
 		Int("clickhouse_block_data_length", len(clickhouseBlockData)).
-		Msg("Getting valid block data for range")
+		Msg("Got list of block data from clickhouse v1")
 
 	// fetch data from clickhouse
-	missingBlockNumbers := make([]*big.Int, 0)
-	chBdIdx := 0
-	for i, _ := range validBlockData {
-		sb := new(big.Int).Add(startBlockNumber, big.NewInt(int64(i)))
-		if clickhouseBlockData[chBdIdx] == nil || sb != clickhouseBlockData[chBdIdx].Block.Number {
-			missingBlockNumbers = append(missingBlockNumbers, sb)
+	missingBlockNumbers := make([]uint64, 0)
+	for i := range validBlockData {
+		bn := startBlockNumber + uint64(i)
+		if clickhouseBlockData[i] == nil || bn != clickhouseBlockData[i].Block.Number.Uint64() {
+			log.Debug().
+				Uint64("start_block", startBlockNumber).
+				Uint64("end_block", endBlockNumber).
+				Uint64("block_number", bn).
+				Int("index", i).
+				Msg("Missing block data from clickhouse")
+			missingBlockNumbers = append(missingBlockNumbers, bn)
 			continue
 		}
-		validBlockData[i] = clickhouseBlockData[chBdIdx]
-		clickhouseBlockData[chBdIdx] = nil // clear out duplicate memory
-		chBdIdx++
+		log.Debug().
+			Uint64("start_block", startBlockNumber).
+			Uint64("end_block", endBlockNumber).
+			Int("index", i).
+			Msg("Valid block data from clickhouse")
+		validBlockData[i] = clickhouseBlockData[i]
+		clickhouseBlockData[i] = nil // clear out duplicate memory
+	}
+
+	log.Debug().
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
+		Int("missing_block_numbers_length", len(missingBlockNumbers)).
+		Msg("Missing block numbers")
+
+	if len(missingBlockNumbers) == 0 {
+		count := validBlockData[len(validBlockData)-1].Block.Number.Uint64() - validBlockData[0].Block.Number.Uint64() + 1
+		log.Debug().
+			Uint64("start_block", startBlockNumber).
+			Uint64("end_block", endBlockNumber).
+			Uint64("block_count", count).
+			Msg("No missing block numbers")
+		return validBlockData
 	}
 
 	// fetch data from rpc
@@ -125,41 +150,67 @@ func GetValidBlockDataForRange(startBlockNumber *big.Int, endBlockNumber *big.In
 
 	// validate data from rpc and add to validBlockData
 	rpcBdIndex := 0
-	for i, _ := range validBlockData {
-		sb := new(big.Int).Add(startBlockNumber, big.NewInt(int64(i)))
-		if sb != rpcBlockData[rpcBdIndex].Block.Number {
+	for i := range validBlockData {
+		sb := startBlockNumber + uint64(i)
+		if sb != rpcBlockData[rpcBdIndex].Block.Number.Uint64() {
 			log.Panic().Msg("RPC didn't fetch all missing block data")
 		}
 		validBlockData[i] = rpcBlockData[rpcBdIndex]
 		rpcBlockData[rpcBdIndex] = nil // clear out duplicate memory
 		rpcBdIndex++
+
+		// sanity check for block number sequence
+		if validBlockData[i].Block.Number.Uint64() != sb {
+			log.Panic().
+				Uint64("start_block", startBlockNumber).
+				Uint64("end_block", endBlockNumber).
+				Uint64("block_number", sb).
+				Msg("GetValidBlockDataForRange: Block number sequence mismatch")
+		}
 	}
 
 	return validBlockData
 }
 
-func getValidBlockDataFromClickhouseV1(startBlockNumber *big.Int, endBlockNumber *big.Int) []*common.BlockData {
+func getValidBlockDataFromClickhouseV1(startBlockNumber uint64, endBlockNumber uint64) []*common.BlockData {
 	blockData, err := libs.GetBlockDataFromClickHouseV1(startBlockNumber, endBlockNumber)
+	log.Debug().
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
+		Int("block_data_length", len(blockData)).
+		Msg("Got Block data from clickhouse v1")
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to get block data from ClickHouseV1")
 	}
 
 	for i, block := range blockData {
+		log.Debug().
+			Int("index", i).
+			Msg("Validating block data from clickhouse")
 		if isValid, _ := Validate(block); !isValid {
 			blockData[i] = nil
-			log.Error().Int("index", i).Msg("Failed to validate block data from clickhouse")
+			log.Debug().
+				Int("index", i).
+				Uint64("start_block", startBlockNumber).
+				Uint64("end_block", endBlockNumber).
+				Msg("Failed to validate block data from clickhouse")
 		}
 	}
 
+	log.Debug().
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
+		Int("block_data_length", len(blockData)).
+		Msg("Validated block data from clickhouse v1")
 	return blockData
 }
 
-func GetValidBlockDataFromRpc(blockNumbers []*big.Int) []*common.BlockData {
+func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 	var rpcResults []rpc.GetFullBlockResult
 	var fetchErr error
 
 	for retry := range 3 {
-		rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbers)
+		rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
 
 		// Check if all blocks were fetched successfully
 		allSuccess := true
@@ -180,7 +231,7 @@ func GetValidBlockDataFromRpc(blockNumbers []*big.Int) []*common.BlockData {
 				Msg("Batch fetch failed, retrying...")
 			time.Sleep(time.Duration(retry+1) * 100 * time.Millisecond)
 		} else {
-			fetchErr = fmt.Errorf("Failed to fetch block data from RPC after 3 retries")
+			fetchErr = fmt.Errorf("failed to fetch block data from RPC after 3 retries")
 		}
 	}
 
@@ -201,4 +252,12 @@ func GetValidBlockDataFromRpc(blockNumbers []*big.Int) []*common.BlockData {
 	}
 
 	return blockData
+}
+
+func blockNumbersToBigInt(blockNumbers []uint64) []*big.Int {
+	bigInts := make([]*big.Int, len(blockNumbers))
+	for i, blockNumber := range blockNumbers {
+		bigInts[i] = big.NewInt(int64(blockNumber))
+	}
+	return bigInts
 }

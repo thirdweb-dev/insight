@@ -295,8 +295,8 @@ type Config struct {
 	StagingS3AccessKeyID             string `env:"STAGING_S3_ACCESS_KEY_ID"`
 	StagingS3SecretAccessKey         string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
 	StagingS3MaxParallelFileDownload int    `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
-	BackfillStartBlock               int64  `env:"BACKFILL_START_BLOCK"`
-	BackfillEndBlock                 int64  `env:"BACKFILL_END_BLOCK"`
+	BackfillStartBlock               uint64 `env:"BACKFILL_START_BLOCK"`
+	BackfillEndBlock                 uint64 `env:"BACKFILL_END_BLOCK"`
 	RPCNumParallelCalls              int64  `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"10"`
 	RPCBatchSize                     int64  `env:"RPC_BATCH_SIZE" envDefault:"50"`
 	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`

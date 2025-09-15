@@ -11,6 +11,9 @@ import (
 )
 
 func Validate(blockData *common.BlockData) (valid bool, err error) {
+	if blockData == nil {
+		return false, nil
+	}
 	if config.Cfg.Validation.Mode == "disabled" {
 		return true, nil
 	}

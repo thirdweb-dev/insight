@@ -2,7 +2,6 @@ package backfill
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
@@ -10,7 +9,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/types"
 )
 
-func GetBackfillBoundaries() (*big.Int, *big.Int) {
+func GetBackfillBoundaries() (uint64, uint64) {
 	startBlock, err := getStartBoundry()
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to get start boundry")
@@ -21,22 +20,20 @@ func GetBackfillBoundaries() (*big.Int, *big.Int) {
 		log.Panic().Err(err).Msg("Failed to get end boundry")
 	}
 
-	if startBlock.Cmp(endBlock) > 0 {
+	if startBlock > endBlock {
 		log.Panic().
-			Int64("start_block", startBlock.Int64()).
-			Int64("end_block", endBlock.Int64()).
+			Uint64("start_block", startBlock).
+			Uint64("end_block", endBlock).
 			Msg("Start block is greater than end block")
 	}
-
-	log.Info().Int64("start_block", startBlock.Int64()).Int64("end_block", endBlock.Int64()).Msg("Backfilling with boundries")
 
 	return startBlock, endBlock
 }
 
 // get start blocknumber from s3 or default to env start block number
-func getStartBoundry() (*big.Int, error) {
-	startBlock := big.NewInt(config.Cfg.BackfillStartBlock)
-	endBlock := big.NewInt(config.Cfg.BackfillEndBlock)
+func getStartBoundry() (uint64, error) {
+	startBlock := config.Cfg.BackfillStartBlock
+	endBlock := config.Cfg.BackfillEndBlock
 
 	blockRanges, err := libs.GetS3ParquetBlockRangesSorted(libs.ChainId)
 	if err != nil {
@@ -45,7 +42,7 @@ func getStartBoundry() (*big.Int, error) {
 
 	var lastValidRangeForConfigBoundry types.BlockRange
 	for _, blockRange := range blockRanges {
-		if blockRange.EndBlock.Cmp(endBlock) <= 0 {
+		if blockRange.EndBlock.Uint64() <= endBlock {
 			lastValidRangeForConfigBoundry = blockRange
 			continue
 		}
@@ -59,25 +56,26 @@ func getStartBoundry() (*big.Int, error) {
 
 	// if something was uploaded to s3 for the range, return the end block of the end block of last valid range + 1
 	log.Debug().
-		Int64("start_block", startBlock.Int64()).
+		Uint64("start_block", startBlock).
 		Any("last_valid_range_for_config_boundry", lastValidRangeForConfigBoundry).
 		Msg("Last valid boundry found")
 
-	return lastValidRangeForConfigBoundry.EndBlock.Add(lastValidRangeForConfigBoundry.EndBlock, big.NewInt(1)), nil
+	return lastValidRangeForConfigBoundry.EndBlock.Uint64() + 1, nil
 }
 
 // get end block number from env or latest block from RPC
-func getEndBoundry() (*big.Int, error) {
-	endBlock := big.NewInt(config.Cfg.BackfillEndBlock)
+func getEndBoundry() (uint64, error) {
+	endBlock := config.Cfg.BackfillEndBlock
 
 	// if endBlock is 0, set it to latest block
-	if endBlock.Cmp(big.NewInt(0)) <= 0 {
+	if endBlock <= 0 {
 		var err error
-		endBlock, err = libs.RpcClient.GetLatestBlockNumber(context.Background())
+		endBlockBig, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
+		endBlock = endBlockBig.Uint64()
 		if err != nil {
 			log.Panic().
 				Err(err).
-				Int64("end_block", endBlock.Int64()).
+				Uint64("end_block", endBlock).
 				Msg("Failed to get latest block number")
 		}
 	}

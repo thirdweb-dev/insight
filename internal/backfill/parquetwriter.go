@@ -51,6 +51,11 @@ func SaveToParquet(blockData []*common.BlockData) error {
 		}
 
 		var err error
+		// Safety check to prevent index out of range panic
+		if len(blockData) == 0 {
+			return fmt.Errorf("cannot create parquet file with empty block data")
+		}
+
 		parquetBlockTimestamp = blockData[0].Block.Timestamp
 		parquetStartBlockNumber = blockData[0].Block.Number.String()
 		parquetEndBlockNumber = blockData[len(blockData)-1].Block.Number.String()

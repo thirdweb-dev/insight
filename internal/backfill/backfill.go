@@ -1,7 +1,6 @@
 package backfill
 
 import (
-	"math/big"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -11,7 +10,8 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 )
 
-var blockdataChannel = make(chan []*common.BlockData, config.Cfg.RPCNumParallelCalls)
+// var blockdataChannel = make(chan []*common.BlockData, config.Cfg.RPCNumParallelCalls)
+var blockdataChannel = make(chan []*common.BlockData, 1)
 
 func Init() {
 	libs.InitOldClickHouseV1()
@@ -23,9 +23,9 @@ func Init() {
 func RunBackfill() {
 	startBlockNumber, endBlockNumber := GetBackfillBoundaries()
 	log.Info().
-		Int64("start_block", startBlockNumber.Int64()).
-		Int64("end_block", endBlockNumber.Int64()).
-		Msg("Backfilling")
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
+		Msg("Backfilling with boundries")
 
 	wg := sync.WaitGroup{}
 	go saveBlockDataToS3(&wg)
@@ -33,8 +33,8 @@ func RunBackfill() {
 	wg.Wait()
 
 	log.Info().
-		Int64("start_block", startBlockNumber.Int64()).
-		Int64("end_block", endBlockNumber.Int64()).
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
 		Msg("Backfill completed. All block data saved to S3")
 }
 
@@ -52,29 +52,35 @@ func saveBlockDataToS3(wg *sync.WaitGroup) {
 	FlushParquet()
 }
 
-func channelValidBlockData(startBlockNumber *big.Int, endBlockNumber *big.Int) {
+func channelValidBlockData(startBlockNumber uint64, endBlockNumber uint64) {
 	defer close(blockdataChannel)
 
-	batchSize := big.NewInt(config.Cfg.RPCBatchSize)
-	for bn := startBlockNumber; bn.Cmp(endBlockNumber) < 0; bn.Add(bn, batchSize) {
+	batchSize := uint64(config.Cfg.RPCBatchSize)
+	for bn := startBlockNumber; bn <= endBlockNumber; bn += batchSize {
 		startBlock := bn
-		endBlock := bn.Add(bn, batchSize)
-		if endBlock.Cmp(endBlockNumber) > 0 {
-			endBlock = endBlockNumber
-		}
+		endBlock := min(bn+batchSize-1, endBlockNumber)
 
-		log.Debug().Any("start_block", startBlock).Any("end_block", endBlock).Msg("Getting valid block data for range")
+		log.Info().Any("start_block", startBlock).Any("end_block", endBlock).Msg("Getting valid block data for range")
 		blockdata := libblockdata.GetValidBlockDataForRange(startBlock, endBlock)
 		log.Debug().
-			Int64("start_block", startBlock.Int64()).
-			Int64("end_block", endBlock.Int64()).
+			Uint64("start_block", startBlock).
+			Uint64("end_block", endBlock).
 			Int("blockdata_length", len(blockdata)).
 			Msg("Pushing blockdata to channel")
+
+		if endBlock-startBlock+1 != uint64(len(blockdata)) {
+			log.Panic().
+				Uint64("start_block", startBlock).
+				Uint64("end_block", endBlock).
+				Int("blockdata_length", len(blockdata)).
+				Int("expected_length", int(endBlock-startBlock+1)).
+				Msg("Blockdata length does not match expected length")
+		}
 		blockdataChannel <- blockdata
 	}
 
 	log.Info().
-		Int64("start_block", startBlockNumber.Int64()).
-		Int64("end_block", endBlockNumber.Int64()).
+		Uint64("start_block", startBlockNumber).
+		Uint64("end_block", endBlockNumber).
 		Msg("all blocks pushed to channel")
 }
