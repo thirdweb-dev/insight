@@ -27,12 +27,13 @@ var mu sync.RWMutex
 var downloadComplete chan *types.BlockRange
 
 func Init() {
-	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", libs.ChainId.Uint64()))
-	downloadComplete = make(chan *types.BlockRange, config.Cfg.StagingS3MaxParallelFileDownload)
-
+	libs.InitRPCClient()
 	libs.InitNewClickHouseV2()
 	libs.InitS3()
 	libs.InitKafkaV2()
+
+	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", libs.ChainId.Uint64()))
+	downloadComplete = make(chan *types.BlockRange, config.Cfg.StagingS3MaxParallelFileDownload)
 }
 
 // Reads data from s3 and writes to Kafka
