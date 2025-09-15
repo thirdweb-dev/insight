@@ -19,14 +19,17 @@ var parquetWriter *parquet.GenericWriter[types.ParquetBlockData]
 var parquetBlockTimestamp time.Time
 var parquetStartBlockNumber string
 var parquetEndBlockNumber string
-var bytesWritten int64
-var maxFileSize int64 = 512 * 1024 * 1024 // 512MB
+var parquetTempBufferBytes int
+var maxTempBufferSize int = 8 * 1024 * 1024 // 8MB. For somereason PageBufferSize is not autoflushing to flushing manually with this.
+var maxFileSize int64 = 512 * 1024 * 1024   // 512MB
+// used to sanity check for block ordering
+var lastTrackedBlockNumber int64 = -1
 
 var writerOptions = []parquet.WriterOption{
 	parquet.Compression(&parquet.Zstd),
 	parquet.DataPageStatistics(true),
-	parquet.PageBufferSize(8 * 1024 * 1024), // 8MB pages
-	parquet.ColumnIndexSizeLimit(16 * 1024), // 16KB limit for column index
+	parquet.PageBufferSize(maxTempBufferSize), // 8MB pages
+	parquet.ColumnIndexSizeLimit(16 * 1024),   // 16KB limit for column index
 }
 
 func InitParquetWriter() {
@@ -40,62 +43,111 @@ func SaveToParquet(blockData []*common.BlockData) error {
 		return nil
 	}
 
-	// Check if we need to create a new file or rotate due to size
-	isNewFile := parquetFile == nil
-	if isNewFile || bytesWritten >= maxFileSize {
-		if parquetFile != nil {
-			// Close current file before creating new one
-			if err := FlushParquet(); err != nil {
-				return fmt.Errorf("failed to flush current parquet file: %w", err)
-			}
-		}
+	maybeInitParquetWriter(
+		blockData[0].Block.Timestamp,
+		blockData[0].Block.Number.String(),
+		blockData[len(blockData)-1].Block.Number.String(),
+	)
 
-		var err error
-		// Safety check to prevent index out of range panic
-		if len(blockData) == 0 {
-			return fmt.Errorf("cannot create parquet file with empty block data")
-		}
-
-		parquetBlockTimestamp = blockData[0].Block.Timestamp
-		parquetStartBlockNumber = blockData[0].Block.Number.String()
-		parquetEndBlockNumber = blockData[len(blockData)-1].Block.Number.String()
-
-		filename := fmt.Sprintf("%d.parquet", time.Now().Unix())
-		parquetFile, err = os.Create(filename)
-		if err != nil {
-			return fmt.Errorf("failed to create parquet file: %w", err)
-		}
-
-		// Create new parquet writer
-		parquetWriter = parquet.NewGenericWriter[types.ParquetBlockData](parquetFile, writerOptions...)
-		bytesWritten = 0
-		log.Debug().
-			Str("start_block", parquetStartBlockNumber).
-			Str("end_block", parquetEndBlockNumber).
-			Str("block_timestamp", parquetBlockTimestamp.Format(time.RFC3339)).
-			Msg("Created new parquet file")
+	parquetData, err := getParquetData(blockData)
+	if err != nil {
+		return fmt.Errorf("failed to get parquet data: %w", err)
 	}
 
-	parquetData := make([]types.ParquetBlockData, len(blockData))
+	bytesWritten := getBytesWritten()
+
+	log.Debug().
+		Int("blockdata_length", len(parquetData)).
+		Int64("bytes_written", bytesWritten).
+		Msg("Writing parquet data")
+	if _, err := parquetWriter.Write(parquetData); err != nil {
+		return fmt.Errorf("failed to write parquet data: %w", err)
+	}
+
+	// flush parquet buffer if it exceeds the max temp buffer size
+	if err := maybeFlushParquetBuffer(false); err != nil {
+		return fmt.Errorf("failed to flush parquet data: %w", err)
+	}
+
+	if bytesWritten >= maxFileSize {
+		if err := FlushParquet(); err != nil {
+			return fmt.Errorf("failed to flush parquet file: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func maybeInitParquetWriter(timestamp time.Time, startBlockNumber string, endBlockNumber string) error {
+	isNewFile := parquetFile == nil
+	if !isNewFile {
+		return nil
+	}
+
+	var err error
+	parquetBlockTimestamp = timestamp
+	parquetStartBlockNumber = startBlockNumber
+	parquetEndBlockNumber = endBlockNumber
+
+	filename := fmt.Sprintf("%d.parquet", time.Now().Unix())
+	parquetFile, err = os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create parquet file: %w", err)
+	}
+
+	// Create new parquet writer
+	parquetWriter = parquet.NewGenericWriter[types.ParquetBlockData](parquetFile, writerOptions...)
+	log.Debug().
+		Str("start_block", parquetStartBlockNumber).
+		Str("end_block", parquetEndBlockNumber).
+		Str("block_timestamp", parquetBlockTimestamp.Format(time.RFC3339)).
+		Msg("Created new parquet file")
+
+	return nil
+}
+
+func getParquetData(blockData []*common.BlockData) ([]types.ParquetBlockData, error) {
+	parquetData := make([]types.ParquetBlockData, 0, len(blockData))
 	for _, d := range blockData {
+		if lastTrackedBlockNumber == -1 {
+			lastTrackedBlockNumber = d.Block.Number.Int64() - 1
+		}
+
+		// sanity check for block ordering
+		if d.Block.Number.Int64() != lastTrackedBlockNumber+1 {
+			return nil, fmt.Errorf("block number is not consecutive: %d", d.Block.Number.Int64())
+		}
+
 		blockJSON, err := json.Marshal(d.Block)
 		if err != nil {
-			return fmt.Errorf("failed to marshal block: %w", err)
+			return nil, fmt.Errorf("failed to marshal block: %w", err)
 		}
 
-		txJSON, err := json.Marshal(d.Transactions)
+		txs := d.Transactions
+		if txs == nil {
+			txs = []common.Transaction{}
+		}
+		txJSON, err := json.Marshal(txs)
 		if err != nil {
-			return fmt.Errorf("failed to marshal transactions: %w", err)
+			return nil, fmt.Errorf("failed to marshal transactions: %w", err)
 		}
 
-		logsJSON, err := json.Marshal(d.Logs)
+		logs := d.Logs
+		if logs == nil {
+			logs = []common.Log{}
+		}
+		logsJSON, err := json.Marshal(logs)
 		if err != nil {
-			return fmt.Errorf("failed to marshal logs: %w", err)
+			return nil, fmt.Errorf("failed to marshal logs: %w", err)
 		}
 
-		tracesJSON, err := json.Marshal(d.Traces)
+		traces := d.Traces
+		if traces == nil {
+			traces = []common.Trace{}
+		}
+		tracesJSON, err := json.Marshal(traces)
 		if err != nil {
-			return fmt.Errorf("failed to marshal traces: %w", err)
+			return nil, fmt.Errorf("failed to marshal traces: %w", err)
 		}
 
 		pd := types.ParquetBlockData{
@@ -109,29 +161,24 @@ func SaveToParquet(blockData []*common.BlockData) error {
 			Traces:         tracesJSON,
 		}
 		parquetData = append(parquetData, pd)
-
-		// Update bytes written (approximate)
-		bytesWritten += int64(len(blockJSON) + len(txJSON) + len(logsJSON) + len(tracesJSON))
+		parquetTempBufferBytes += len(blockJSON) + len(txJSON) + len(logsJSON) + len(tracesJSON)
+		parquetEndBlockNumber = d.Block.Number.String()
+		lastTrackedBlockNumber = d.Block.Number.Int64()
 	}
-
-	log.Debug().
-		Int("blockdata_length", len(parquetData)).
-		Int64("bytes_written", bytesWritten).
-		Msg("Writing parquet data")
-	if _, err := parquetWriter.Write(parquetData); err != nil {
-		return fmt.Errorf("failed to write parquet data: %w", err)
-	}
-
-	if bytesWritten >= maxFileSize {
-		if err := FlushParquet(); err != nil {
-			return fmt.Errorf("failed to flush parquet file: %w", err)
-		}
-	}
-
-	return nil
+	return parquetData, nil
 }
 
 func FlushParquet() error {
+	// flush any data in parquet writer buffer
+	if err := maybeFlushParquetBuffer(true); err != nil {
+		return fmt.Errorf("failed to flush parquet data: %w", err)
+	}
+	// need to close to write parquet footer to file
+	if err := parquetWriter.Close(); err != nil {
+		return fmt.Errorf("failed to close parquet writer: %w", err)
+	}
+	parquetWriter = nil
+
 	log.Debug().Msg("Flushing parquet file")
 	// upload the parquet file to s3 (checksum is calculated inside UploadParquetToS3)
 	if err := libs.UploadParquetToS3(
@@ -149,13 +196,6 @@ func FlushParquet() error {
 
 func resetParquet() error {
 	log.Debug().Msg("Resetting parquet writer")
-	if parquetWriter != nil {
-		if err := parquetWriter.Close(); err != nil {
-			return fmt.Errorf("failed to close parquet writer: %w", err)
-		}
-		parquetWriter = nil
-	}
-
 	if parquetFile != nil {
 		if err := parquetFile.Close(); err != nil {
 			return fmt.Errorf("failed to close parquet file: %w", err)
@@ -167,7 +207,28 @@ func resetParquet() error {
 	parquetBlockTimestamp = time.Time{}
 	parquetStartBlockNumber = ""
 	parquetEndBlockNumber = ""
-	bytesWritten = 0
 
 	return nil
+}
+
+func maybeFlushParquetBuffer(force bool) error {
+	if !force && parquetTempBufferBytes < maxTempBufferSize {
+		return nil
+	}
+
+	if err := parquetWriter.Flush(); err != nil {
+		return fmt.Errorf("failed to flush parquet data: %w", err)
+	}
+	parquetTempBufferBytes = 0
+	parquetFile.Sync()
+	return nil
+}
+
+func getBytesWritten() int64 {
+	fi, err := parquetFile.Stat()
+	if err != nil {
+		return 0
+	}
+	sizeOnDisk := fi.Size()
+	return sizeOnDisk
 }
