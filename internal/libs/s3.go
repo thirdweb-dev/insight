@@ -170,6 +170,15 @@ func UploadParquetToS3(parquetFile *os.File, chainId uint64, startBlock string, 
 		return fmt.Errorf("failed to seek to beginning of file: %w", err)
 	}
 
+	log.Debug().
+		Str("start_block", startBlock).
+		Str("end_block", endBlock).
+		Str("block_count", fmt.Sprintf("%d", blockCount)).
+		Str("block_timestamp", blockTimestamp.Format(time.RFC3339)).
+		Str("checksum", checksum).
+		Int("file_size", int(fileInfo.Size())).
+		Msg("Uploading parquet file to S3")
+
 	// Upload to S3 - stream the file directly without loading into memory
 	ctx := context.Background()
 	_, err = S3Client.PutObject(ctx, &s3.PutObjectInput{

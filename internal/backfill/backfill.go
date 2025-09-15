@@ -63,7 +63,13 @@ func channelValidBlockData(startBlockNumber *big.Int, endBlockNumber *big.Int) {
 			endBlock = endBlockNumber
 		}
 
+		log.Debug().Any("start_block", startBlock).Any("end_block", endBlock).Msg("Getting valid block data for range")
 		blockdata := libblockdata.GetValidBlockDataForRange(startBlock, endBlock)
+		log.Debug().
+			Int64("start_block", startBlock.Int64()).
+			Int64("end_block", endBlock.Int64()).
+			Int("blockdata_length", len(blockdata)).
+			Msg("Pushing blockdata to channel")
 		blockdataChannel <- blockdata
 	}
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/parquet-go/parquet-go"
+	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
@@ -35,6 +36,7 @@ func InitParquetWriter() {
 
 func SaveToParquet(blockData []*common.BlockData) error {
 	if len(blockData) == 0 {
+		log.Debug().Msg("No block data to save to parquet")
 		return nil
 	}
 
@@ -62,6 +64,11 @@ func SaveToParquet(blockData []*common.BlockData) error {
 		// Create new parquet writer
 		parquetWriter = parquet.NewGenericWriter[types.ParquetBlockData](parquetFile, writerOptions...)
 		bytesWritten = 0
+		log.Debug().
+			Str("start_block", parquetStartBlockNumber).
+			Str("end_block", parquetEndBlockNumber).
+			Str("block_timestamp", parquetBlockTimestamp.Format(time.RFC3339)).
+			Msg("Created new parquet file")
 	}
 
 	parquetData := make([]types.ParquetBlockData, len(blockData))
@@ -102,6 +109,10 @@ func SaveToParquet(blockData []*common.BlockData) error {
 		bytesWritten += int64(len(blockJSON) + len(txJSON) + len(logsJSON) + len(tracesJSON))
 	}
 
+	log.Debug().
+		Int("blockdata_length", len(parquetData)).
+		Int64("bytes_written", bytesWritten).
+		Msg("Writing parquet data")
 	if _, err := parquetWriter.Write(parquetData); err != nil {
 		return fmt.Errorf("failed to write parquet data: %w", err)
 	}
@@ -116,6 +127,7 @@ func SaveToParquet(blockData []*common.BlockData) error {
 }
 
 func FlushParquet() error {
+	log.Debug().Msg("Flushing parquet file")
 	// upload the parquet file to s3 (checksum is calculated inside UploadParquetToS3)
 	if err := libs.UploadParquetToS3(
 		parquetFile,
@@ -131,6 +143,7 @@ func FlushParquet() error {
 }
 
 func resetParquet() error {
+	log.Debug().Msg("Resetting parquet writer")
 	if parquetWriter != nil {
 		if err := parquetWriter.Close(); err != nil {
 			return fmt.Errorf("failed to close parquet writer: %w", err)

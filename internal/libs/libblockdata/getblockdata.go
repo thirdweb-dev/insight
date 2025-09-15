@@ -92,8 +92,16 @@ func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.I
 }
 
 func GetValidBlockDataForRange(startBlockNumber *big.Int, endBlockNumber *big.Int) []*common.BlockData {
-	validBlockData := make([]*common.BlockData, new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64())
+	length := new(big.Int).Sub(endBlockNumber, startBlockNumber).Int64()
+	validBlockData := make([]*common.BlockData, length)
 	clickhouseBlockData := getValidBlockDataFromClickhouseV1(startBlockNumber, endBlockNumber)
+
+	log.Debug().
+		Int64("start_block", startBlockNumber.Int64()).
+		Int64("end_block", endBlockNumber.Int64()).
+		Int64("length", length).
+		Int("clickhouse_block_data_length", len(clickhouseBlockData)).
+		Msg("Getting valid block data for range")
 
 	// fetch data from clickhouse
 	missingBlockNumbers := make([]*big.Int, 0)
