@@ -174,12 +174,18 @@ func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 	numBatches := (totalBlocks + int(rpcBatchSize) - 1) / int(rpcBatchSize)
 
 	var wg sync.WaitGroup
+	maxConcurrentBatches := 4
+	semaphore := make(chan struct{}, maxConcurrentBatches)
 
-	// Process blocks in parallel batches
+	// Process blocks in parallel batches with concurrency limit
 	for batchIndex := 0; batchIndex < numBatches; batchIndex++ {
 		wg.Add(1)
 		go func(batchIdx int) {
 			defer wg.Done()
+
+			// Acquire semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
 			start := batchIdx * int(rpcBatchSize)
 			end := min(start+int(rpcBatchSize), totalBlocks)
