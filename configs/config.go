@@ -297,9 +297,9 @@ type Config struct {
 	StagingS3MaxParallelFileDownload int    `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
 	BackfillStartBlock               uint64 `env:"BACKFILL_START_BLOCK"`
 	BackfillEndBlock                 uint64 `env:"BACKFILL_END_BLOCK"`
-	RPCNumParallelCalls              int64  `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"10"`
-	RPCBatchSize                     int64  `env:"RPC_BATCH_SIZE" envDefault:"50"`
-	RPCBatchMaxMemoryUsageMB         uint64 `env:"RPC_BATCH_MAX_MEMORY_USAGE_MB" envDefault:"200"`
+	RPCNumParallelCalls              int64  `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"20"`
+	RPCBatchSize                     int64  `env:"RPC_BATCH_SIZE" envDefault:"10"`
+	RPCBatchMaxMemoryUsageMB         uint64 `env:"RPC_BATCH_MAX_MEMORY_USAGE_MB" envDefault:"32"`
 	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
 }
 
