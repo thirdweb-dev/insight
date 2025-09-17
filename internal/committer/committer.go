@@ -61,28 +61,27 @@ func CommitStreaming() error {
 	}
 
 	// if nothing to process, return
-	if len(blockRanges) == 0 {
+	if len(blockRanges) != 0 {
 		log.Info().
 			Int64("maxBlockNumber", maxBlockNumber).
 			Msg("No files to process - all blocks are up to date from S3")
-		return nil
+
+			// Initialize nextBlockNumber for streaming processing
+		nextBlockNumber = uint64(maxBlockNumber + 1)
+		log.Info().Uint64("next_commit_block", nextBlockNumber).Msg("Starting streaming producer-consumer processing")
+
+		blockParserDone := make(chan struct{})
+		blockProcessorDone := make(chan struct{})
+		go blockParserRoutine(blockParserDone)
+		go blockProcessorRoutine(blockProcessorDone)
+
+		downloadFilesForBlockRange(blockRanges)
+		close(downloadedFilePathChannel)
+
+		<-blockParserDone
+		close(blockDataChannel)
+		<-blockProcessorDone
 	}
-
-	// Initialize nextBlockNumber for streaming processing
-	nextBlockNumber = uint64(maxBlockNumber + 1)
-	log.Info().Uint64("next_commit_block", nextBlockNumber).Msg("Starting streaming producer-consumer processing")
-
-	blockParserDone := make(chan struct{})
-	blockProcessorDone := make(chan struct{})
-	go blockParserRoutine(blockParserDone)
-	go blockProcessorRoutine(blockProcessorDone)
-
-	downloadFilesForBlockRange(blockRanges)
-	close(downloadedFilePathChannel)
-
-	<-blockParserDone
-	close(blockDataChannel)
-	<-blockProcessorDone
 
 	log.Info().Msg("Consuming latest blocks from RPC")
 	pollLatest()
