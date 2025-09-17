@@ -37,16 +37,23 @@ CREATE TABLE IF NOT EXISTS logs (
             transaction_index,
             log_index
     ),
-    PROJECTION chain_topic0_projection
+    PROJECTION chain_address_block_number_full_projection
+    (
+        SELECT 
+            *
+        ORDER BY
+            chain_id,
+            address,
+            block_number
+    ),
+    PROJECTION chain_topic0_full_projection
     (
         SELECT
-            _part_offset
+            *
         ORDER BY 
             chain_id,
             topic_0,
             block_number,
-            transaction_index,
-            log_index,
             address
     ),
     PROJECTION address_topic0_state_projection
