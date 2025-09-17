@@ -35,7 +35,7 @@ func NewKafkaConnector(cfg *config.KafkaConfig, orchestratorStorage *IOrchestrat
 }
 
 // InsertBlockData publishes block data to Kafka instead of storing in database
-func (kr *KafkaConnector) InsertBlockData(data []common.BlockData) error {
+func (kr *KafkaConnector) InsertBlockData(data []*common.BlockData) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -58,7 +58,7 @@ func (kr *KafkaConnector) InsertBlockData(data []common.BlockData) error {
 }
 
 // ReplaceBlockData handles reorg by publishing both old and new data to Kafka
-func (kr *KafkaConnector) ReplaceBlockData(data []common.BlockData) ([]common.BlockData, error) {
+func (kr *KafkaConnector) ReplaceBlockData(data []*common.BlockData) ([]common.BlockData, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}

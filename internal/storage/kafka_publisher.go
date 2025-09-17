@@ -110,11 +110,11 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 	return publisher, nil
 }
 
-func (p *KafkaPublisher) PublishBlockData(blockData []common.BlockData) error {
+func (p *KafkaPublisher) PublishBlockData(blockData []*common.BlockData) error {
 	return p.publishBlockData(blockData, false)
 }
 
-func (p *KafkaPublisher) PublishReorg(oldData []common.BlockData, newData []common.BlockData) error {
+func (p *KafkaPublisher) PublishReorg(oldData []*common.BlockData, newData []*common.BlockData) error {
 	chainId := newData[0].Block.ChainId.Uint64()
 	newHead := uint64(newData[0].Block.Number.Uint64())
 	// Publish revert the revert to the new head - 1, so that the new updated block data can be re-processed
@@ -227,7 +227,7 @@ func (p *KafkaPublisher) publishBlockRevert(chainId uint64, blockNumber uint64) 
 	return nil
 }
 
-func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isDeleted bool) error {
+func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDeleted bool) error {
 	if len(blockData) == 0 {
 		return nil
 	}
@@ -254,11 +254,11 @@ func (p *KafkaPublisher) publishBlockData(blockData []common.BlockData, isDelete
 	return nil
 }
 
-func (p *KafkaPublisher) createBlockDataMessage(block common.BlockData, isDeleted bool) (*kgo.Record, error) {
+func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDeleted bool) (*kgo.Record, error) {
 	timestamp := time.Now()
 
 	data := PublishableMessageBlockData{
-		BlockData:       &block,
+		BlockData:       block,
 		ChainId:         block.Block.ChainId.Uint64(),
 		IsDeleted:       0,
 		InsertTimestamp: timestamp,

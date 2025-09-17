@@ -14,56 +14,55 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 )
 
-func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.Int) []common.BlockData {
+func GetValidBlockDataInBatch(latestBlock uint64, nextCommitBlockNumber uint64) []common.BlockData {
 	rpcNumParallelCalls := config.Cfg.RPCNumParallelCalls
 	rpcBatchSize := config.Cfg.RPCBatchSize
 	maxBlocksPerFetch := rpcBatchSize * rpcNumParallelCalls
 
 	// Calculate the range of blocks to fetch
-	blocksToFetch := new(big.Int).Sub(latestBlock, nextCommitBlockNumber)
-	if blocksToFetch.Cmp(big.NewInt(maxBlocksPerFetch)) > 0 {
-		blocksToFetch = big.NewInt(maxBlocksPerFetch)
+	blocksToFetch := latestBlock - nextCommitBlockNumber
+	if blocksToFetch > maxBlocksPerFetch {
+		blocksToFetch = maxBlocksPerFetch
 	}
 
 	log.Debug().
-		Str("next_commit_block", nextCommitBlockNumber.String()).
-		Str("latest_block", latestBlock.String()).
-		Str("blocks_to_fetch", blocksToFetch.String()).
-		Int64("batch_size", rpcBatchSize).
-		Int64("max_parallel_calls", rpcNumParallelCalls).
+		Uint64("next_commit_block", nextCommitBlockNumber).
+		Uint64("latest_block", latestBlock).
+		Uint64("blocks_to_fetch", blocksToFetch).
+		Uint64("batch_size", rpcBatchSize).
+		Uint64("max_parallel_calls", rpcNumParallelCalls).
 		Msg("Starting to fetch latest blocks")
 
 	// Precreate array of block data
-	blockDataArray := make([]common.BlockData, blocksToFetch.Int64())
+	blockDataArray := make([]common.BlockData, blocksToFetch)
 
 	// Create batches and calculate number of parallel calls needed
-	numBatches := min((blocksToFetch.Int64()+rpcBatchSize-1)/rpcBatchSize, rpcNumParallelCalls)
+	numBatches := min((blocksToFetch+rpcBatchSize-1)/rpcBatchSize, rpcNumParallelCalls)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for batchIndex := int64(0); batchIndex < numBatches; batchIndex++ {
+	for batchIndex := uint64(0); batchIndex < numBatches; batchIndex++ {
 		wg.Add(1)
-		go func(batchIdx int64) {
+		go func(batchIdx uint64) {
 			defer wg.Done()
 
-			startBlock := new(big.Int).Add(nextCommitBlockNumber, big.NewInt(batchIdx*rpcBatchSize))
-			endBlock := new(big.Int).Add(startBlock, big.NewInt(rpcBatchSize-1))
-
+			startBlock := nextCommitBlockNumber + batchIdx*rpcBatchSize
+			endBlock := startBlock + rpcBatchSize - 1
 			// Don't exceed the latest block
-			if endBlock.Cmp(latestBlock) > 0 {
+			if endBlock > latestBlock {
 				endBlock = latestBlock
 			}
 
 			log.Debug().
-				Int64("batch", batchIdx).
-				Str("start_block", startBlock.String()).
-				Str("end_block", endBlock.String()).
+				Uint64("batch", batchIdx).
+				Uint64("start_block", startBlock).
+				Uint64("end_block", endBlock).
 				Msg("Starting batch fetch")
 
 			// Create block numbers array for this batch
 			var blockNumbers []uint64
-			for i := startBlock.Uint64(); i <= endBlock.Uint64(); i++ {
+			for i := startBlock; i <= endBlock; i++ {
 				blockNumbers = append(blockNumbers, i)
 			}
 
@@ -72,8 +71,8 @@ func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.I
 
 			mu.Lock()
 			for i, bd := range batchResults {
-				arrayIndex := batchIdx*rpcBatchSize + int64(i)
-				if arrayIndex < int64(len(blockDataArray)) {
+				arrayIndex := batchIdx*rpcBatchSize + uint64(i)
+				if arrayIndex < uint64(len(blockDataArray)) {
 					blockDataArray[arrayIndex] = *bd // todo: update to use pointer, kafka is using normal block data
 					batchResults[i] = nil            // free memory
 				}
@@ -81,7 +80,7 @@ func GetValidBlockDataInBatch(latestBlock *big.Int, nextCommitBlockNumber *big.I
 			mu.Unlock()
 
 			log.Debug().
-				Int64("batch", batchIdx).
+				Uint64("batch", batchIdx).
 				Int("blocks_fetched", len(batchResults)).
 				Msg("Completed batch fetch")
 		}(batchIndex)

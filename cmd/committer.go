@@ -17,5 +17,5 @@ var committerCmd = &cobra.Command{
 func RunCommitter(cmd *cobra.Command, args []string) {
 	fmt.Println("running committer")
 	committer.Init()
-	committer.Commit()
+	committer.CommitStreaming()
 }

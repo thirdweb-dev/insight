@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -99,28 +100,27 @@ func initClickhouse(host string, port int, username string, password string, dat
 	return clickhouseConn
 }
 
-func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (*big.Int, error) {
+func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (int64, error) {
 	// Use toString() to force ClickHouse to return a string instead of UInt256
-	query := fmt.Sprintf("SELECT toString(max(block_number)) FROM blocks WHERE chain_id = %d", chainId.Uint64())
+	query := fmt.Sprintf("SELECT max(block_number) FROM blocks WHERE chain_id = %d HAVING count() > 0", chainId.Uint64())
 	rows, err := ClickhouseConnV2.Query(context.Background(), query)
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return big.NewInt(-1), nil
+		return -1, nil
 	}
 
 	var maxBlockNumberStr string
 	if err := rows.Scan(&maxBlockNumberStr); err != nil {
-		return nil, err
+		return -1, err
 	}
 
-	// Convert string to big.Int to handle UInt256 values
-	maxBlockNumber, ok := new(big.Int).SetString(maxBlockNumberStr, 10)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse block number: %s", maxBlockNumberStr)
+	maxBlockNumber, err := strconv.ParseInt(maxBlockNumberStr, 10, 64)
+	if err != nil {
+		return -1, fmt.Errorf("failed to parse block number: %s", maxBlockNumberStr)
 	}
 
 	return maxBlockNumber, nil

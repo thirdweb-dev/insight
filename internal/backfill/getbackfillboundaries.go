@@ -42,10 +42,10 @@ func getStartBoundry() (uint64, error) {
 
 	var lastValidRangeForConfigBoundry types.BlockRange
 	for _, blockRange := range blockRanges {
-		if blockRange.EndBlock.Uint64() < startBlock {
+		if blockRange.EndBlock < startBlock {
 			continue
 		}
-		if blockRange.EndBlock.Uint64() <= endBlock {
+		if blockRange.EndBlock <= endBlock {
 			lastValidRangeForConfigBoundry = blockRange
 			continue
 		}
@@ -53,7 +53,7 @@ func getStartBoundry() (uint64, error) {
 	}
 
 	// if nothing is uploaded to s3 for the range, return the start block
-	if lastValidRangeForConfigBoundry.EndBlock == nil {
+	if lastValidRangeForConfigBoundry.EndBlock == 0 {
 		return startBlock, nil
 	}
 
@@ -63,7 +63,7 @@ func getStartBoundry() (uint64, error) {
 		Any("last_valid_range_for_config_boundry", lastValidRangeForConfigBoundry).
 		Msg("Last valid boundry found")
 
-	return lastValidRangeForConfigBoundry.EndBlock.Uint64() + 1, nil
+	return lastValidRangeForConfigBoundry.EndBlock + 1, nil
 }
 
 // get end block number from env or latest block from RPC

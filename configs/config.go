@@ -290,6 +290,8 @@ type Config struct {
 	CommitterKafkaUsername           string `env:"COMMITTER_KAFKA_USERNAME"`
 	CommitterKafkaPassword           string `env:"COMMITTER_KAFKA_PASSWORD"`
 	CommitterKafkaEnableTLS          bool   `env:"COMMITTER_KAFKA_ENABLE_TLS" envDefault:"true"`
+	CommitterBlocksQueueSize         int    `env:"COMMITTER_BLOCKS_QUEUE_SIZE" envDefault:"1000"`
+	CommitterMaxMemoryMB             int    `env:"COMMITTER_MAX_MEMORY_MB" envDefault:"512"`
 	StagingS3Bucket                  string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
 	StagingS3Region                  string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
 	StagingS3AccessKeyID             string `env:"STAGING_S3_ACCESS_KEY_ID"`
@@ -297,8 +299,8 @@ type Config struct {
 	StagingS3MaxParallelFileDownload int    `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
 	BackfillStartBlock               uint64 `env:"BACKFILL_START_BLOCK"`
 	BackfillEndBlock                 uint64 `env:"BACKFILL_END_BLOCK"`
-	RPCNumParallelCalls              int64  `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"20"`
-	RPCBatchSize                     int64  `env:"RPC_BATCH_SIZE" envDefault:"10"`
+	RPCNumParallelCalls              uint64 `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"20"`
+	RPCBatchSize                     uint64 `env:"RPC_BATCH_SIZE" envDefault:"10"`
 	RPCBatchMaxMemoryUsageMB         uint64 `env:"RPC_BATCH_MAX_MEMORY_USAGE_MB" envDefault:"32"`
 	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
 }
