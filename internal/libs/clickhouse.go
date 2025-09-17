@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -101,7 +100,6 @@ func initClickhouse(host string, port int, username string, password string, dat
 }
 
 func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (int64, error) {
-	// Use toString() to force ClickHouse to return a string instead of UInt256
 	query := fmt.Sprintf("SELECT max(block_number) FROM blocks WHERE chain_id = %d HAVING count() > 0", chainId.Uint64())
 	rows, err := ClickhouseConnV2.Query(context.Background(), query)
 	if err != nil {
@@ -113,14 +111,9 @@ func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (int64, error) {
 		return -1, nil
 	}
 
-	var maxBlockNumberStr string
-	if err := rows.Scan(&maxBlockNumberStr); err != nil {
+	var maxBlockNumber int64
+	if err := rows.Scan(&maxBlockNumber); err != nil {
 		return -1, err
-	}
-
-	maxBlockNumber, err := strconv.ParseInt(maxBlockNumberStr, 10, 64)
-	if err != nil {
-		return -1, fmt.Errorf("failed to parse block number: %s", maxBlockNumberStr)
 	}
 
 	return maxBlockNumber, nil
