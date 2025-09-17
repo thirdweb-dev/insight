@@ -10,7 +10,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 )
 
-func PollLatest() error {
+func pollLatest() error {
 	for {
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
 		if err != nil {

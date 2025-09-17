@@ -6,7 +6,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/libs"
 )
 
-func BlockProcessorRoutine(blockProcessorDone chan struct{}) {
+func blockProcessorRoutine(blockProcessorDone chan struct{}) {
 	defer close(blockProcessorDone)
 	processBlocks()
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func BlockParserRoutine(blockParserDone chan struct{}) {
+func blockParserRoutine(blockParserDone chan struct{}) {
 	defer close(blockParserDone)
 	if err := channelParseBlocksFromFile(); err != nil {
 		log.Error().Err(err).Msg("Error in parquet parsing goroutine")

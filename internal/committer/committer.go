@@ -74,8 +74,8 @@ func CommitStreaming() error {
 
 	blockParserDone := make(chan struct{})
 	blockProcessorDone := make(chan struct{})
-	go BlockParserRoutine(blockParserDone)
-	go BlockProcessorRoutine(blockProcessorDone)
+	go blockParserRoutine(blockParserDone)
+	go blockProcessorRoutine(blockProcessorDone)
 
 	downloadFilesForBlockRange(blockRanges)
 	close(downloadedFilePathChannel)
@@ -85,7 +85,7 @@ func CommitStreaming() error {
 	<-blockProcessorDone
 
 	log.Info().Msg("Consuming latest blocks from RPC")
-	PollLatest()
+	pollLatest()
 
 	return nil
 }
