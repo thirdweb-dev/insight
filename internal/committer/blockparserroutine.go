@@ -67,6 +67,12 @@ func channelParseBlocksFromFile() error {
 					}
 
 					byteSize, blockData, err := ParseParquetRow(row[0])
+
+					// skip to nextBlockNumber. happens on the first run.
+					if blockData.Block.Number.Uint64() < nextBlockNumber {
+						continue
+					}
+
 					acquireMemoryPermit(byteSize)
 
 					if err != nil {
