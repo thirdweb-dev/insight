@@ -11,6 +11,7 @@ import (
 )
 
 func pollLatest() error {
+	log.Info().Msg("Streaming latest blocks from RPC")
 	for {
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
 		if err != nil {

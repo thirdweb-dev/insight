@@ -59,16 +59,13 @@ func CommitStreaming() error {
 			Msg("Failed to get last tracked block number and block ranges from S3")
 		return err
 	}
+	log.Debug().
+		Int64("maxBlockNumber", maxBlockNumber).
+		Msg("No files to process - all blocks are up to date from S3")
 
-	// if nothing to process, return
+	nextBlockNumber = uint64(maxBlockNumber + 1)
 	if len(blockRanges) != 0 {
-		log.Info().
-			Int64("maxBlockNumber", maxBlockNumber).
-			Msg("No files to process - all blocks are up to date from S3")
-
-			// Initialize nextBlockNumber for streaming processing
-		nextBlockNumber = uint64(maxBlockNumber + 1)
-		log.Info().Uint64("next_commit_block", nextBlockNumber).Msg("Starting streaming producer-consumer processing")
+		log.Info().Uint64("next_commit_block", nextBlockNumber).Msg("Streaming data from s3")
 
 		blockParserDone := make(chan struct{})
 		blockProcessorDone := make(chan struct{})
