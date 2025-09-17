@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS token_transfers
     `insert_timestamp` DateTime DEFAULT now(),
     `is_deleted` UInt8 DEFAULT 0,
 
+    INDEX idx_block_number block_number TYPE minmax GRANULARITY 1,
     INDEX idx_block_timestamp block_timestamp TYPE minmax GRANULARITY 1,
     INDEX idx_from_address from_address TYPE bloom_filter GRANULARITY 3,
     INDEX idx_to_address to_address TYPE bloom_filter GRANULARITY 3,
