@@ -290,7 +290,6 @@ type Config struct {
 	CommitterKafkaUsername           string `env:"COMMITTER_KAFKA_USERNAME"`
 	CommitterKafkaPassword           string `env:"COMMITTER_KAFKA_PASSWORD"`
 	CommitterKafkaEnableTLS          bool   `env:"COMMITTER_KAFKA_ENABLE_TLS" envDefault:"true"`
-	CommitterBlocksQueueSize         int    `env:"COMMITTER_BLOCKS_QUEUE_SIZE" envDefault:"1000"`
 	CommitterMaxMemoryMB             int    `env:"COMMITTER_MAX_MEMORY_MB" envDefault:"512"`
 	StagingS3Bucket                  string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
 	StagingS3Region                  string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`

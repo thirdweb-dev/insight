@@ -40,11 +40,10 @@ func Init() {
 	log.Info().
 		Int("max_memory_mb", config.Cfg.CommitterMaxMemoryMB).
 		Int64("max_memory_bytes", maxMemoryBytes).
-		Int("queue_size", config.Cfg.CommitterBlocksQueueSize).
 		Msg("Initialized committer with weighted semaphore memory limiting")
 
 	// streaming channels
-	blockDataChannel = make(chan *BlockDataWithSize, config.Cfg.CommitterBlocksQueueSize)
+	blockDataChannel = make(chan *BlockDataWithSize)
 	downloadedFilePathChannel = make(chan string, config.Cfg.StagingS3MaxParallelFileDownload)
 }
 
