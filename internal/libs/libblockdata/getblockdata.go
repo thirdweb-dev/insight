@@ -177,7 +177,7 @@ func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
 	semaphore := make(chan struct{}, maxConcurrentBatches)
 
 	// Process blocks in parallel batches with concurrency limit
-	for batchIndex := 0; batchIndex < numBatches; batchIndex++ {
+	for batchIndex := range numBatches {
 		wg.Add(1)
 		go func(batchIdx int) {
 			defer wg.Done()
@@ -214,31 +214,60 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 	var rpcResults []rpc.GetFullBlockResult
 	var fetchErr error
 
-	for retry := range 3 {
-		rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
+	// Initial fetch
+	rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
 
-		// Check if all blocks were fetched successfully
-		allSuccess := true
-		for _, result := range rpcResults {
+	// Create array of failed block numbers for retry
+	failedBlockNumbers := make([]uint64, 0)
+	for i, result := range rpcResults {
+		if result.Error != nil {
+			failedBlockNumbers = append(failedBlockNumbers, blockNumbers[i])
+		}
+	}
+
+	// Retry only failed blocks up to 3 times
+	for retry := range 3 {
+		if len(failedBlockNumbers) == 0 {
+			break // All blocks succeeded
+		}
+
+		log.Warn().
+			Int("retry", retry+1).
+			Int("failed_count", len(failedBlockNumbers)).
+			Msg("Retrying failed block fetches...")
+
+		// Retry only the failed blocks
+		retryResults := libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(failedBlockNumbers))
+
+		// Update rpcResults with successful ones and create new failed array
+		newFailedBlockNumbers := make([]uint64, 0)
+		retryIndex := 0
+
+		for i, result := range rpcResults {
 			if result.Error != nil {
-				allSuccess = false
-				break
+				// This was a failed block, check if retry succeeded
+				if retryIndex < len(retryResults) && retryResults[retryIndex].Error == nil {
+					// Retry succeeded - update the result
+					rpcResults[i] = retryResults[retryIndex]
+				} else {
+					// Still failed - add to new failed array
+					newFailedBlockNumbers = append(newFailedBlockNumbers, blockNumbers[i])
+				}
+				retryIndex++
 			}
 		}
 
-		if allSuccess {
-			break
-		}
+		failedBlockNumbers = newFailedBlockNumbers
 
-		if retry < 2 {
-			log.Warn().
-				Int("retry", retry+1).
-				Int("batch_size", len(blockNumbers)).
-				Msg("Batch fetch failed, retrying...")
+		// Add delay between retries
+		if len(failedBlockNumbers) > 0 && retry < 2 {
 			time.Sleep(time.Duration(retry+1) * 100 * time.Millisecond)
-		} else {
-			fetchErr = fmt.Errorf("failed to fetch block data from RPC after 3 retries")
 		}
+	}
+
+	// Check if any blocks still failed after all retries
+	if len(failedBlockNumbers) > 0 {
+		fetchErr = fmt.Errorf("failed to fetch %d block(s) from RPC after 3 retries", len(failedBlockNumbers))
 	}
 
 	if fetchErr != nil {
