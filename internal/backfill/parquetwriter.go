@@ -52,7 +52,7 @@ func SaveToParquet(blockData []*common.BlockData, avgMemoryPerBlockChannel chan 
 		return fmt.Errorf("failed to init parquet writer: %w", err)
 	}
 
-	parquetData, err := getParquetData(blockData, avgMemoryPerBlockChannel)
+	parquetData, lastTrackedBn, err := getParquetData(blockData, avgMemoryPerBlockChannel)
 	if err != nil {
 		return fmt.Errorf("failed to get parquet data: %w", err)
 	}
@@ -69,6 +69,8 @@ func SaveToParquet(blockData []*common.BlockData, avgMemoryPerBlockChannel chan 
 	if _, err := parquetWriter.Write(parquetData); err != nil {
 		return fmt.Errorf("failed to write parquet data: %w", err)
 	}
+	// update last tracked block number after writing to parquet
+	lastTrackedBlockNumber = lastTrackedBn
 
 	// flush parquet buffer if it exceeds the max temp buffer size
 	if err := maybeFlushParquetBuffer(false); err != nil {
@@ -112,22 +114,24 @@ func maybeInitParquetWriter(timestamp time.Time, startBlockNumber string, endBlo
 	return nil
 }
 
-func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan int) ([]types.ParquetBlockData, error) {
+func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan int) ([]types.ParquetBlockData, int64, error) {
 	totalMemoryInBatchBytes := 0
 	parquetData := make([]types.ParquetBlockData, 0, len(blockData))
+
+	lastTrackedBn := lastTrackedBlockNumber
 	for _, d := range blockData {
-		if lastTrackedBlockNumber == -1 {
-			lastTrackedBlockNumber = d.Block.Number.Int64() - 1
+		if lastTrackedBn == -1 {
+			lastTrackedBn = d.Block.Number.Int64() - 1
 		}
 
 		// sanity check for block ordering
-		if d.Block.Number.Int64() != lastTrackedBlockNumber+1 {
-			return nil, fmt.Errorf("block number is not consecutive: %d", d.Block.Number.Int64())
+		if d.Block.Number.Int64() != lastTrackedBn+1 {
+			return nil, -1, fmt.Errorf("block number is not consecutive: %d", d.Block.Number.Int64())
 		}
 
 		blockJSON, err := json.Marshal(d.Block)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal block: %w", err)
+			return nil, -1, fmt.Errorf("failed to marshal block: %w", err)
 		}
 
 		txs := d.Transactions
@@ -136,7 +140,7 @@ func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan
 		}
 		txJSON, err := json.Marshal(txs)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal transactions: %w", err)
+			return nil, -1, fmt.Errorf("failed to marshal transactions: %w", err)
 		}
 
 		logs := d.Logs
@@ -145,7 +149,7 @@ func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan
 		}
 		logsJSON, err := json.Marshal(logs)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal logs: %w", err)
+			return nil, -1, fmt.Errorf("failed to marshal logs: %w", err)
 		}
 
 		traces := d.Traces
@@ -154,7 +158,7 @@ func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan
 		}
 		tracesJSON, err := json.Marshal(traces)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal traces: %w", err)
+			return nil, -1, fmt.Errorf("failed to marshal traces: %w", err)
 		}
 
 		pd := types.ParquetBlockData{
@@ -170,13 +174,13 @@ func getParquetData(blockData []*common.BlockData, avgMemoryPerBlockChannel chan
 		parquetData = append(parquetData, pd)
 		totalMemoryInBatchBytes += len(blockJSON) + len(txJSON) + len(logsJSON) + len(tracesJSON)
 		parquetEndBlockNumber = d.Block.Number.String()
-		lastTrackedBlockNumber = d.Block.Number.Int64()
+		lastTrackedBn = d.Block.Number.Int64()
 
 	}
 	parquetTempBufferBytes += totalMemoryInBatchBytes
 	sendAvgMemoryPerBlock(avgMemoryPerBlockChannel, totalMemoryInBatchBytes/len(blockData))
 
-	return parquetData, nil
+	return parquetData, lastTrackedBn, nil
 }
 
 func FlushParquet() error {

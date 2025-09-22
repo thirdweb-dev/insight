@@ -39,6 +39,26 @@ func RunBackfill() {
 }
 
 func saveBlockDataToS3(wg *sync.WaitGroup) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Interface("panic", r).
+				Msg("Panic occurred in saveBlockDataToS3, attempting to save existing parquet file to S3")
+
+			// Attempt to save the existing parquet file to S3 if it exists
+			if err := FlushParquet(); err != nil {
+				log.Error().
+					Err(err).
+					Msg("Failed to flush parquet file to S3 during panic recovery")
+			} else {
+				log.Info().Msg("Successfully saved parquet file to S3 during panic recovery")
+			}
+
+			// Re-panic to propagate the original panic
+			panic(r)
+		}
+	}()
+
 	wg.Add(1)
 	defer wg.Done()
 
