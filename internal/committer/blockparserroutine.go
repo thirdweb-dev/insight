@@ -72,16 +72,22 @@ func channelParseBlocksFromFile() error {
 					if blockData.Block.Number.Uint64() < nextBlockNumber {
 						continue
 					}
+
 					if err != nil {
 						log.Panic().Err(err).Msg("Failed to parse block data. Should never happen.")
+					}
+
+					// Check if we need to acquire semaphore based on channel state
+					acquired, err := acquireMemoryPermit(byteSize)
+					if err != nil {
+						log.Panic().Err(err).Msg("Failed to acquire memory permit")
 					}
 
 					blockDataChannel <- &BlockDataWithSize{
 						BlockData: &blockData,
 						ByteSize:  byteSize,
+						Acquired:  acquired,
 					}
-					// acquire lock after sending to channel to prevent blocks from being stuck trying to acquire lock
-					acquireMemoryPermit(byteSize)
 				}
 
 				// Handle EOF and other errors

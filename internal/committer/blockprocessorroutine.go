@@ -27,7 +27,10 @@ func processBlocks() {
 		}
 
 		blockBatch = append(blockBatch, block.BlockData)
-		totalBytesInBatch += block.ByteSize
+		// Only count bytes for blocks that actually acquired the semaphore
+		if block.Acquired {
+			totalBytesInBatch += block.ByteSize
+		}
 		if len(blockBatch) == 500 {
 			if err := libs.KafkaPublisherV2.PublishBlockData(blockBatch); err != nil {
 				log.Panic().

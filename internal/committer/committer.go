@@ -11,18 +11,18 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/types"
-	"golang.org/x/sync/semaphore"
 )
 
 type BlockDataWithSize struct {
 	BlockData *common.BlockData
 	ByteSize  uint64
+	Acquired  bool // Whether semaphore was acquired for this block
 }
 
 var tempDir = filepath.Join(os.TempDir(), "committer")
 var blockDataChannel chan *BlockDataWithSize
 var downloadedFilePathChannel chan string
-var memorySemaphore *semaphore.Weighted // Weighted semaphore for memory-based flow control
+var memorySemaphore *SafeSemaphore // Safe semaphore for memory-based flow control
 var nextBlockNumber uint64 = 0
 
 func Init() {
@@ -33,14 +33,14 @@ func Init() {
 
 	tempDir = filepath.Join(os.TempDir(), "committer", fmt.Sprintf("chain_%d", libs.ChainId.Uint64()))
 
-	// Set up weighted semaphore for memory-based flow control (convert MB to bytes)
+	// Set up safe semaphore for memory-based flow control (convert MB to bytes)
 	maxMemoryBytes := int64(config.Cfg.CommitterMaxMemoryMB) * 1024 * 1024
-	memorySemaphore = semaphore.NewWeighted(maxMemoryBytes)
+	memorySemaphore = NewSafeSemaphore(maxMemoryBytes)
 
 	log.Info().
 		Int("max_memory_mb", config.Cfg.CommitterMaxMemoryMB).
 		Int64("max_memory_bytes", maxMemoryBytes).
-		Msg("Initialized committer with weighted semaphore memory limiting")
+		Msg("Initialized committer with safe semaphore memory limiting")
 
 	// streaming channels
 	blockDataChannel = make(chan *BlockDataWithSize)
@@ -125,9 +125,16 @@ func downloadFilesForBlockRange(blockRanges []types.BlockRange) {
 	log.Info().Msg("All downloads completed, closing download channel")
 }
 
-// Helper functions for weighted semaphore memory tracking
-func acquireMemoryPermit(size uint64) error {
-	return memorySemaphore.Acquire(context.Background(), int64(size))
+// Helper functions for safe semaphore memory tracking
+func acquireMemoryPermit(size uint64) (bool, error) {
+	// If channel is empty, processor is ready to handle immediately - skip semaphore
+	if len(blockDataChannel) == 0 {
+		return false, nil // false = didn't acquire semaphore
+	}
+
+	// If channel has data, processor is busy - apply semaphore locking
+	err := memorySemaphore.Acquire(context.Background(), int64(size))
+	return true, err // true = acquired semaphore
 }
 
 func releaseMemoryPermit(size uint64) {
