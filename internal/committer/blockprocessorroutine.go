@@ -38,7 +38,7 @@ func processBlocks() {
 				Int("batch_size", len(blockBatch)).
 				Uint64("start_block", blockBatch[0].Block.Number.Uint64()).
 				Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
-				Uint64("memory_released_mb", block.ByteSize/(1024*1024)).
+				Uint64("memory_released_bytes", block.ByteSize).
 				Msg("Successfully published batch to Kafka")
 
 			releaseMemoryPermit(totalBytesInBatch)
@@ -73,7 +73,7 @@ func processBlocks() {
 			Int("final_batch_size", len(blockBatch)).
 			Uint64("start_block", blockBatch[0].Block.Number.Uint64()).
 			Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
-			Uint64("memory_released_mb", totalBytesInBatch/(1024*1024)).
+			Uint64("memory_released_bytes", totalBytesInBatch).
 			Msg("Successfully published final batch to Kafka")
 	}
 }
