@@ -72,9 +72,6 @@ func channelParseBlocksFromFile() error {
 					if blockData.Block.Number.Uint64() < nextBlockNumber {
 						continue
 					}
-
-					acquireMemoryPermit(byteSize)
-
 					if err != nil {
 						log.Panic().Err(err).Msg("Failed to parse block data. Should never happen.")
 					}
@@ -83,6 +80,8 @@ func channelParseBlocksFromFile() error {
 						BlockData: &blockData,
 						ByteSize:  byteSize,
 					}
+					// acquire lock after sending to channel to prevent blocks from being stuck trying to acquire lock
+					acquireMemoryPermit(byteSize)
 				}
 
 				// Handle EOF and other errors

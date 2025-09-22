@@ -14,6 +14,10 @@ func blockProcessorRoutine(blockProcessorDone chan struct{}) {
 func processBlocks() {
 	totalBytesInBatch := uint64(0)
 	blockBatch := make([]*common.BlockData, 0, 500)
+	defer func() {
+		releaseMemoryPermit(totalBytesInBatch)
+	}()
+
 	for block := range blockDataChannel {
 		if block.BlockData.Block.Number.Uint64() != nextBlockNumber {
 			log.Panic().
@@ -38,13 +42,10 @@ func processBlocks() {
 				Int("batch_size", len(blockBatch)).
 				Uint64("start_block", blockBatch[0].Block.Number.Uint64()).
 				Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
-				Uint64("memory_released_bytes", block.ByteSize).
+				Uint64("memory_released_bytes", totalBytesInBatch).
 				Msg("Successfully published batch to Kafka")
 
-			releaseMemoryPermit(totalBytesInBatch)
 			blockBatch = make([]*common.BlockData, 0, 500)
-			totalBytesInBatch = 0
-
 		}
 
 		nextBlockNumber++
@@ -56,6 +57,7 @@ func processBlocks() {
 			Int("final_batch_size", len(blockBatch)).
 			Uint64("start_block", blockBatch[0].Block.Number.Uint64()).
 			Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
+			Uint64("memory_released_bytes", totalBytesInBatch).
 			Msg("Publishing final batch to Kafka")
 
 		if err := libs.KafkaPublisherV2.PublishBlockData(blockBatch); err != nil {
@@ -66,8 +68,6 @@ func processBlocks() {
 				Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
 				Msg("Failed to publish final batch to Kafka")
 		}
-
-		releaseMemoryPermit(totalBytesInBatch)
 
 		log.Debug().
 			Int("final_batch_size", len(blockBatch)).
