@@ -104,6 +104,9 @@ func channelParseBlocksFromFile() error {
 						log.Panic().Err(err).Msg("Failed to acquire memory permit")
 					}
 
+					metrics.CommitterBlockDataChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockDataChannel)))
+					metrics.CommitterMemoryPermitBytes.WithLabelValues(indexerName, chainIdStr).Set(float64(memorySemaphore.held))
+
 					blockDataChannel <- &BlockDataWithSize{
 						BlockData: &blockData,
 						ByteSize:  byteSize,
@@ -125,12 +128,6 @@ func channelParseBlocksFromFile() error {
 			}
 		}
 
-		// Calculate and record average parsing time per row
-		if parsedRowCount > 0 {
-			avgParseTimePerRow := totalParseTime / time.Duration(parsedRowCount)
-			metrics.CommitterBlockDataParseDuration.WithLabelValues(indexerName, chainIdStr).Observe(avgParseTimePerRow.Seconds())
-		}
-
 		log.Debug().
 			Str("file", filePath).
 			Int("parsed_rows", parsedRowCount).
@@ -149,9 +146,6 @@ func channelParseBlocksFromFile() error {
 		} else {
 			log.Debug().Str("file", filePath).Msg("Cleaned up local file")
 		}
-
-		// Update committer metrics
-		updateCommitterMetrics()
 	}
 
 	return nil

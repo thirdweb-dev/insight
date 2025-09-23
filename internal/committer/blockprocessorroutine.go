@@ -1,8 +1,6 @@
 package committer
 
 import (
-	"time"
-
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -40,8 +38,6 @@ func processBlocks() {
 			totalBytesInBatch += block.ByteSize
 		}
 		if len(blockBatch) == 500 {
-			// Track Kafka publish timing
-			start := time.Now()
 			if err := libs.KafkaPublisherV2.PublishBlockData(blockBatch); err != nil {
 				log.Panic().
 					Err(err).
@@ -50,10 +46,7 @@ func processBlocks() {
 					Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
 					Msg("Failed to publish batch to Kafka")
 			}
-			publishDuration := time.Since(start)
 
-			// Update metrics
-			metrics.CommitterKafkaPublishDuration.WithLabelValues(indexerName, chainIdStr).Observe(publishDuration.Seconds())
 			metrics.CommitterLastPublishedBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(blockBatch[len(blockBatch)-1].Block.Number.Uint64()))
 
 			log.Debug().
@@ -67,9 +60,7 @@ func processBlocks() {
 		}
 
 		nextBlockNumber++
-
-		// Update committer metrics
-		updateCommitterMetrics()
+		metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 	}
 
 	// Publish any remaining blocks in the batch
@@ -81,8 +72,6 @@ func processBlocks() {
 			Uint64("memory_released_bytes", totalBytesInBatch).
 			Msg("Publishing final batch to Kafka")
 
-		// Track Kafka publish timing for final batch
-		start := time.Now()
 		if err := libs.KafkaPublisherV2.PublishBlockData(blockBatch); err != nil {
 			log.Panic().
 				Err(err).
@@ -91,10 +80,8 @@ func processBlocks() {
 				Uint64("end_block", blockBatch[len(blockBatch)-1].Block.Number.Uint64()).
 				Msg("Failed to publish final batch to Kafka")
 		}
-		publishDuration := time.Since(start)
 
 		// Update metrics
-		metrics.CommitterKafkaPublishDuration.WithLabelValues(indexerName, chainIdStr).Observe(publishDuration.Seconds())
 		metrics.CommitterLastPublishedBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(blockBatch[len(blockBatch)-1].Block.Number.Uint64()))
 
 		log.Debug().

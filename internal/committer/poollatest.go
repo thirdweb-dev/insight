@@ -20,14 +20,10 @@ func pollLatest() error {
 	indexerName := config.Cfg.ZeetProjectName
 
 	for {
-		// Track RPC download timing
-		start := time.Now()
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
-		rpcDuration := time.Since(start)
 
 		// Update latest block number metric
 		metrics.CommitterLatestBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(latestBlock.Uint64()))
-		metrics.CommitterRPCDownloadDuration.WithLabelValues(indexerName, chainIdStr).Observe(rpcDuration.Seconds())
 
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to get latest block number, retrying...")
@@ -39,13 +35,8 @@ func pollLatest() error {
 			continue
 		}
 
-		// Track RPC block data fetch timing
-		start = time.Now()
 		// will panic if any block is invalid
 		blockDataArray := libblockdata.GetValidBlockDataInBatch(latestBlock.Uint64(), nextBlockNumber)
-		rpcDataDuration := time.Since(start)
-
-		metrics.CommitterRPCDownloadDuration.WithLabelValues(indexerName, chainIdStr).Observe(rpcDataDuration.Seconds())
 
 		// Validate that all blocks are sequential and nothing is missing
 		expectedBlockNumber := nextBlockNumber
@@ -74,18 +65,13 @@ func pollLatest() error {
 			blockDataPointers[i] = &block
 		}
 
-		// Track Kafka publish timing
-		start = time.Now()
 		if err := libs.KafkaPublisherV2.PublishBlockData(blockDataPointers); err != nil {
 			log.Panic().
 				Err(err).
 				Int("blocks_count", len(blockDataArray)).
 				Msg("Failed to publish blocks to Kafka")
 		}
-		publishDuration := time.Since(start)
 
-		// Update metrics
-		metrics.CommitterKafkaPublishDuration.WithLabelValues(indexerName, chainIdStr).Observe(publishDuration.Seconds())
 		metrics.CommitterLastPublishedBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(expectedBlockNumber - 1))
 
 		log.Debug().
@@ -95,8 +81,6 @@ func pollLatest() error {
 
 		// Update nextCommitBlockNumber for next iteration
 		nextBlockNumber = expectedBlockNumber
-
-		// Update committer metrics
-		updateCommitterMetrics()
+		metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 	}
 }

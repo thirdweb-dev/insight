@@ -75,7 +75,7 @@ func SaveToParquet(blockData []*common.BlockData, avgMemoryPerBlockChannel chan 
 	// Track bytes written metric
 	chainIdStr := libs.ChainIdStr
 	indexerName := config.Cfg.ZeetProjectName
-	metrics.BackfillParquetBytesWritten.WithLabelValues(indexerName, chainIdStr).Add(float64(bytesWritten))
+	metrics.BackfillParquetBytesWritten.WithLabelValues(indexerName, chainIdStr).Set(float64(parquetTempBufferBytes))
 	// update last tracked block number after writing to parquet
 	lastTrackedBlockNumber = lastTrackedBn
 
@@ -207,12 +207,8 @@ func FlushParquet() error {
 	chainIdStr := libs.ChainIdStr
 	indexerName := config.Cfg.ZeetProjectName
 	// Convert string block numbers to float64 for metrics
-	startBlockFloat, _ := strconv.ParseFloat(parquetStartBlockNumber, 64)
 	endBlockFloat, _ := strconv.ParseFloat(parquetEndBlockNumber, 64)
-	metrics.BackfillFlushStartBlock.WithLabelValues(indexerName, chainIdStr).Set(startBlockFloat)
 	metrics.BackfillFlushEndBlock.WithLabelValues(indexerName, chainIdStr).Set(endBlockFloat)
-	metrics.BackfillFlushBlockTimestamp.WithLabelValues(indexerName, chainIdStr).Set(float64(parquetBlockTimestamp.Unix()))
-	metrics.BackfillFlushCurrentTime.WithLabelValues(indexerName, chainIdStr).Set(float64(time.Now().Unix()))
 
 	// upload the parquet file to s3 (checksum is calculated inside UploadParquetToS3)
 	if err := libs.UploadParquetToS3(

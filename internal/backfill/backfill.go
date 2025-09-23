@@ -33,8 +33,6 @@ func RunBackfill() {
 	chainIdStr := libs.ChainIdStr
 
 	// Set static metrics
-	metrics.BackfillIndexerName.WithLabelValues(indexerName, chainIdStr, indexerName).Set(1)
-	metrics.BackfillChainId.WithLabelValues(indexerName, chainIdStr).Set(float64(libs.ChainId.Uint64()))
 	metrics.BackfillStartBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(startBlockNumber))
 	metrics.BackfillEndBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(endBlockNumber))
 
@@ -100,7 +98,6 @@ func channelValidBlockData(startBlockNumber uint64, endBlockNumber uint64) {
 		metrics.BackfillComputedBatchSize.WithLabelValues(indexerName, chainIdStr).Set(float64(batchSize))
 		metrics.BackfillCurrentStartBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(startBlock))
 		metrics.BackfillCurrentEndBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(endBlock))
-		metrics.BackfillBlockdataChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockdataChannel)))
 
 		log.Debug().
 			Any("start_block", startBlock).
@@ -118,6 +115,8 @@ func channelValidBlockData(startBlockNumber uint64, endBlockNumber uint64) {
 				Uint64("batch_size", batchSize).
 				Msg("Blockdata length does not match expected length")
 		}
+
+		metrics.BackfillBlockdataChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockdataChannel)))
 		blockdataChannel <- blockdata
 		bn = endBlock + 1
 	}

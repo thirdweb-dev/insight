@@ -183,16 +183,6 @@ var (
 
 // Backfill Metrics
 var (
-	BackfillIndexerName = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "backfill_indexer_name",
-		Help: "The name of the indexer running backfill",
-	}, []string{"project_name", "chain_id", "indexer_name"})
-
-	BackfillChainId = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "backfill_chain_id",
-		Help: "The chain ID being backfilled",
-	}, []string{"project_name", "chain_id"})
-
 	BackfillStartBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "backfill_start_block",
 		Help: "The starting block number for backfill",
@@ -223,44 +213,14 @@ var (
 		Help: "The average memory usage per block in bytes",
 	}, []string{"project_name", "chain_id"})
 
-	BackfillClickHouseRowsFetched = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "backfill_clickhouse_rows_fetched_total",
-		Help: "The total number of rows fetched from ClickHouse during backfill",
-	}, []string{"project_name", "chain_id"})
-
-	BackfillRPCRowsFetched = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "backfill_rpc_rows_fetched_total",
-		Help: "The total number of rows fetched from RPC during backfill",
-	}, []string{"project_name", "chain_id"})
-
-	BackfillRPCRetries = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "backfill_rpc_retries_total",
-		Help: "The total number of RPC retries with block numbers during backfill",
-	}, []string{"project_name", "chain_id"})
-
-	BackfillParquetBytesWritten = promauto.NewCounterVec(prometheus.CounterOpts{
+	BackfillParquetBytesWritten = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "backfill_parquet_bytes_written_total",
 		Help: "The total number of bytes written to parquet files during backfill",
-	}, []string{"project_name", "chain_id"})
-
-	BackfillFlushStartBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "backfill_flush_start_block",
-		Help: "The start block number of the last flush operation",
 	}, []string{"project_name", "chain_id"})
 
 	BackfillFlushEndBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "backfill_flush_end_block",
 		Help: "The end block number of the last flush operation",
-	}, []string{"project_name", "chain_id"})
-
-	BackfillFlushBlockTimestamp = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "backfill_flush_block_timestamp",
-		Help: "The block timestamp of the last flush operation",
-	}, []string{"project_name", "chain_id"})
-
-	BackfillFlushCurrentTime = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "backfill_flush_current_time",
-		Help: "The current time when the last flush operation occurred",
 	}, []string{"project_name", "chain_id"})
 
 	BackfillBlockdataChannelLength = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -271,16 +231,6 @@ var (
 
 // Committer Streaming Metrics
 var (
-	CommitterIndexerName = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "committer_indexer_name",
-		Help: "The name of the indexer running committer",
-	}, []string{"project_name", "chain_id", "indexer_name"})
-
-	CommitterChainId = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "committer_chain_id",
-		Help: "The chain ID being processed by committer",
-	}, []string{"project_name", "chain_id"})
-
 	CommitterNextBlockNumber = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "committer_next_block_number",
 		Help: "The next block number to be processed",
@@ -289,11 +239,6 @@ var (
 	CommitterLatestBlockNumber = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "committer_latest_block_number",
 		Help: "The latest block number from RPC",
-	}, []string{"project_name", "chain_id"})
-
-	CommitterDownloadedFilePathChannelLength = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "committer_downloaded_file_path_channel_length",
-		Help: "The current length of the downloaded file path channel",
 	}, []string{"project_name", "chain_id"})
 
 	CommitterBlockDataChannelLength = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -311,32 +256,13 @@ var (
 		Help: "The last published block number to Kafka",
 	}, []string{"project_name", "chain_id"})
 
-	CommitterBlockDataParseDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "committer_block_data_parse_duration_seconds",
-		Help:    "Average time taken to parse individual block data rows from parquet files",
-		Buckets: prometheus.DefBuckets,
+	CommitterRPCRowsToFetch = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_rpc_rows_to_fetch",
+		Help: "The total number of rows to fetch from RPC",
 	}, []string{"project_name", "chain_id"})
 
-	CommitterKafkaPublishDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "committer_kafka_publish_duration_seconds",
-		Help:    "Time taken to publish Kafka batch",
-		Buckets: prometheus.DefBuckets,
-	}, []string{"project_name", "chain_id"})
-
-	CommitterS3DownloadDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "committer_s3_download_duration_seconds",
-		Help:    "Time taken to download S3 file",
-		Buckets: prometheus.DefBuckets,
-	}, []string{"project_name", "chain_id"})
-
-	CommitterRPCRetries = promauto.NewCounterVec(prometheus.CounterOpts{
+	CommitterRPCRetries = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "committer_rpc_retries_total",
 		Help: "The total number of RPC retries",
-	}, []string{"project_name", "chain_id"})
-
-	CommitterRPCDownloadDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "committer_rpc_download_duration_seconds",
-		Help:    "Time taken to download from RPC",
-		Buckets: prometheus.DefBuckets,
 	}, []string{"project_name", "chain_id"})
 )

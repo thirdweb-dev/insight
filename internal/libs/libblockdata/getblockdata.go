@@ -157,11 +157,6 @@ func getValidBlockDataFromClickhouseV1(startBlockNumber uint64, endBlockNumber u
 		log.Panic().Err(err).Msg("Failed to get block data from ClickHouseV1")
 	}
 
-	// Track ClickHouse rows fetched
-	chainIdStr := libs.ChainIdStr
-	indexerName := config.Cfg.ZeetProjectName
-	metrics.BackfillClickHouseRowsFetched.WithLabelValues(indexerName, chainIdStr).Add(float64(len(blockData)))
-
 	for i, block := range blockData {
 		if isValid, _ := Validate(block); !isValid {
 			blockData[i] = nil
@@ -225,8 +220,7 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 	// Initial fetch
 	rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
 
-	// Track initial RPC rows fetched
-	metrics.BackfillRPCRowsFetched.WithLabelValues(indexerName, chainIdStr).Add(float64(len(rpcResults)))
+	metrics.CommitterRPCRowsToFetch.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockNumbers)))
 
 	// Create array of failed block numbers for retry
 	failedBlockNumbers := make([]uint64, 0)
@@ -243,8 +237,7 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 		}
 
 		// Track retry metric
-		metrics.BackfillRPCRetries.WithLabelValues(indexerName, chainIdStr).Add(float64(len(failedBlockNumbers)))
-		metrics.CommitterRPCRetries.WithLabelValues(indexerName, chainIdStr).Add(float64(len(failedBlockNumbers)))
+		metrics.CommitterRPCRetries.WithLabelValues(indexerName, chainIdStr).Set(float64(len(failedBlockNumbers)))
 
 		log.Warn().
 			Int("retry", retry+1).
@@ -253,9 +246,6 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 
 		// Retry only the failed blocks
 		retryResults := libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(failedBlockNumbers))
-
-		// Track retry RPC rows fetched
-		metrics.BackfillRPCRowsFetched.WithLabelValues(indexerName, chainIdStr).Add(float64(len(retryResults)))
 
 		// Update rpcResults with successful ones and create new failed array
 		newFailedBlockNumbers := make([]uint64, 0)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
@@ -47,14 +46,6 @@ func Init() {
 	// streaming channels
 	blockDataChannel = make(chan *BlockDataWithSize)
 	downloadedFilePathChannel = make(chan string, config.Cfg.StagingS3MaxParallelFileDownload)
-
-	// Initialize committer metrics
-	chainIdStr := libs.ChainIdStr
-	indexerName := config.Cfg.ZeetProjectName
-
-	// Set static metrics
-	metrics.CommitterIndexerName.WithLabelValues(indexerName, chainIdStr, indexerName).Set(1)
-	metrics.CommitterChainId.WithLabelValues(indexerName, chainIdStr).Set(float64(libs.ChainId.Uint64()))
 }
 
 func CommitStreaming() error {
@@ -124,10 +115,6 @@ func getLastTrackedBlockNumberAndBlockRangesFromS3() (int64, []types.BlockRange,
 }
 
 func downloadFilesForBlockRange(blockRanges []types.BlockRange) {
-	// Initialize metrics labels
-	chainIdStr := libs.ChainIdStr
-	indexerName := config.Cfg.ZeetProjectName
-
 	for i, blockRange := range blockRanges {
 		log.Info().
 			Int("processing", i+1).
@@ -137,22 +124,13 @@ func downloadFilesForBlockRange(blockRanges []types.BlockRange) {
 			Uint64("end_block", blockRange.EndBlock).
 			Msg("Starting download")
 
-		// Track S3 download timing
-		start := time.Now()
 		filePath, err := libs.DownloadFile(tempDir, &blockRange)
-		downloadDuration := time.Since(start)
-
-		// Update S3 download timing metric
-		metrics.CommitterS3DownloadDuration.WithLabelValues(indexerName, chainIdStr).Observe(downloadDuration.Seconds())
 
 		if err != nil {
 			log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
 		}
 
 		downloadedFilePathChannel <- filePath
-
-		// Update committer metrics
-		updateCommitterMetrics()
 	}
 	log.Info().Msg("All downloads completed, closing download channel")
 }
@@ -171,20 +149,4 @@ func acquireMemoryPermit(size uint64) (bool, error) {
 
 func releaseMemoryPermit(size uint64) {
 	memorySemaphore.Release(int64(size))
-}
-
-// Helper function to update committer metrics
-func updateCommitterMetrics() {
-	chainIdStr := libs.ChainIdStr
-	indexerName := config.Cfg.ZeetProjectName
-
-	// Update channel lengths
-	metrics.CommitterDownloadedFilePathChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(downloadedFilePathChannel)))
-	metrics.CommitterBlockDataChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockDataChannel)))
-
-	// Update memory permit bytes (current held memory)
-	metrics.CommitterMemoryPermitBytes.WithLabelValues(indexerName, chainIdStr).Set(float64(memorySemaphore.held))
-
-	// Update next block number
-	metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 }
