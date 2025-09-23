@@ -3,9 +3,13 @@ package committer
 import (
 	"io"
 	"os"
+	"time"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/rs/zerolog/log"
+	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/libs"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
 func blockParserRoutine(blockParserDone chan struct{}) {
@@ -16,6 +20,10 @@ func blockParserRoutine(blockParserDone chan struct{}) {
 }
 
 func channelParseBlocksFromFile() error {
+	// Initialize metrics labels
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+
 	for filePath := range downloadedFilePathChannel {
 		log.Debug().Str("file", filePath).Msg("Starting to parse parquet file")
 
@@ -45,6 +53,10 @@ func channelParseBlocksFromFile() error {
 			Int("row_groups", len(pFile.RowGroups())).
 			Msg("Starting streaming parquet file parsing")
 
+		// Track parsing metrics
+		var totalParseTime time.Duration
+		var parsedRowCount int
+
 		// Stream through each row group
 		for _, rg := range pFile.RowGroups() {
 			reader := parquet.NewRowGroupReader(rg)
@@ -66,7 +78,16 @@ func channelParseBlocksFromFile() error {
 						continue // Not enough columns, try again
 					}
 
+					// Track individual row parsing time
+					parseStart := time.Now()
 					byteSize, blockData, err := ParseParquetRow(row[0])
+					parseDuration := time.Since(parseStart)
+
+					// Only count parsing time for rows that will be processed
+					if blockData.Block.Number.Uint64() >= nextBlockNumber {
+						totalParseTime += parseDuration
+						parsedRowCount++
+					}
 
 					// skip to nextBlockNumber. happens on the first run.
 					if blockData.Block.Number.Uint64() < nextBlockNumber {
@@ -104,8 +125,17 @@ func channelParseBlocksFromFile() error {
 			}
 		}
 
+		// Calculate and record average parsing time per row
+		if parsedRowCount > 0 {
+			avgParseTimePerRow := totalParseTime / time.Duration(parsedRowCount)
+			metrics.CommitterBlockDataParseDuration.WithLabelValues(indexerName, chainIdStr).Observe(avgParseTimePerRow.Seconds())
+		}
+
 		log.Debug().
 			Str("file", filePath).
+			Int("parsed_rows", parsedRowCount).
+			Dur("total_parse_time", totalParseTime).
+			Dur("avg_parse_time_per_row", totalParseTime/time.Duration(maxInt(parsedRowCount, 1))).
 			Msg("Completed streaming parquet file parsing")
 
 		file.Close()
@@ -119,7 +149,18 @@ func channelParseBlocksFromFile() error {
 		} else {
 			log.Debug().Str("file", filePath).Msg("Cleaned up local file")
 		}
+
+		// Update committer metrics
+		updateCommitterMetrics()
 	}
 
 	return nil
+}
+
+// Helper function to get maximum of two integers
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

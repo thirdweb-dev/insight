@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/types"
 )
 
@@ -45,10 +47,22 @@ func Init() {
 	// streaming channels
 	blockDataChannel = make(chan *BlockDataWithSize)
 	downloadedFilePathChannel = make(chan string, config.Cfg.StagingS3MaxParallelFileDownload)
+
+	// Initialize committer metrics
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+
+	// Set static metrics
+	metrics.CommitterIndexerName.WithLabelValues(indexerName, chainIdStr, indexerName).Set(1)
+	metrics.CommitterChainId.WithLabelValues(indexerName, chainIdStr).Set(float64(libs.ChainId.Uint64()))
 }
 
 func CommitStreaming() error {
 	log.Info().Str("chain_id", libs.ChainIdStr).Msg("Starting streaming commit process")
+
+	// Initialize metrics labels
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
 
 	maxBlockNumber, blockRanges, err := getLastTrackedBlockNumberAndBlockRangesFromS3()
 	if err != nil {
@@ -63,6 +77,10 @@ func CommitStreaming() error {
 		Msg("No files to process - all blocks are up to date from S3")
 
 	nextBlockNumber = uint64(maxBlockNumber + 1)
+
+	// Update next block number metric
+	metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
+
 	if len(blockRanges) != 0 {
 		log.Info().Uint64("next_commit_block", nextBlockNumber).Msg("Streaming data from s3")
 
@@ -106,6 +124,10 @@ func getLastTrackedBlockNumberAndBlockRangesFromS3() (int64, []types.BlockRange,
 }
 
 func downloadFilesForBlockRange(blockRanges []types.BlockRange) {
+	// Initialize metrics labels
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+
 	for i, blockRange := range blockRanges {
 		log.Info().
 			Int("processing", i+1).
@@ -115,12 +137,22 @@ func downloadFilesForBlockRange(blockRanges []types.BlockRange) {
 			Uint64("end_block", blockRange.EndBlock).
 			Msg("Starting download")
 
+		// Track S3 download timing
+		start := time.Now()
 		filePath, err := libs.DownloadFile(tempDir, &blockRange)
+		downloadDuration := time.Since(start)
+
+		// Update S3 download timing metric
+		metrics.CommitterS3DownloadDuration.WithLabelValues(indexerName, chainIdStr).Observe(downloadDuration.Seconds())
+
 		if err != nil {
 			log.Panic().Err(err).Str("file", blockRange.S3Key).Msg("Failed to download file")
 		}
 
 		downloadedFilePathChannel <- filePath
+
+		// Update committer metrics
+		updateCommitterMetrics()
 	}
 	log.Info().Msg("All downloads completed, closing download channel")
 }
@@ -139,4 +171,20 @@ func acquireMemoryPermit(size uint64) (bool, error) {
 
 func releaseMemoryPermit(size uint64) {
 	memorySemaphore.Release(int64(size))
+}
+
+// Helper function to update committer metrics
+func updateCommitterMetrics() {
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+
+	// Update channel lengths
+	metrics.CommitterDownloadedFilePathChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(downloadedFilePathChannel)))
+	metrics.CommitterBlockDataChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockDataChannel)))
+
+	// Update memory permit bytes (current held memory)
+	metrics.CommitterMemoryPermitBytes.WithLabelValues(indexerName, chainIdStr).Set(float64(memorySemaphore.held))
+
+	// Update next block number
+	metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 }

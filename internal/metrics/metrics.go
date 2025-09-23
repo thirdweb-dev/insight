@@ -268,3 +268,75 @@ var (
 		Help: "The current length of the blockdata channel",
 	}, []string{"project_name", "chain_id"})
 )
+
+// Committer Streaming Metrics
+var (
+	CommitterIndexerName = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_indexer_name",
+		Help: "The name of the indexer running committer",
+	}, []string{"project_name", "chain_id", "indexer_name"})
+
+	CommitterChainId = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_chain_id",
+		Help: "The chain ID being processed by committer",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterNextBlockNumber = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_next_block_number",
+		Help: "The next block number to be processed",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterLatestBlockNumber = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_latest_block_number",
+		Help: "The latest block number from RPC",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterDownloadedFilePathChannelLength = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_downloaded_file_path_channel_length",
+		Help: "The current length of the downloaded file path channel",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterBlockDataChannelLength = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_block_data_channel_length",
+		Help: "The current length of the block data channel",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterMemoryPermitBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_memory_permit_bytes",
+		Help: "The current memory permit value (bytes in block data channel)",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterLastPublishedBlockNumber = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_last_published_block_number",
+		Help: "The last published block number to Kafka",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterBlockDataParseDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "committer_block_data_parse_duration_seconds",
+		Help:    "Average time taken to parse individual block data rows from parquet files",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"project_name", "chain_id"})
+
+	CommitterKafkaPublishDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "committer_kafka_publish_duration_seconds",
+		Help:    "Time taken to publish Kafka batch",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"project_name", "chain_id"})
+
+	CommitterS3DownloadDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "committer_s3_download_duration_seconds",
+		Help:    "Time taken to download S3 file",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"project_name", "chain_id"})
+
+	CommitterRPCRetries = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "committer_rpc_retries_total",
+		Help: "The total number of RPC retries",
+	}, []string{"project_name", "chain_id"})
+
+	CommitterRPCDownloadDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "committer_rpc_download_duration_seconds",
+		Help:    "Time taken to download from RPC",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"project_name", "chain_id"})
+)

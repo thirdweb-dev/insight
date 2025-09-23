@@ -244,6 +244,7 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 
 		// Track retry metric
 		metrics.BackfillRPCRetries.WithLabelValues(indexerName, chainIdStr).Add(float64(len(failedBlockNumbers)))
+		metrics.CommitterRPCRetries.WithLabelValues(indexerName, chainIdStr).Add(float64(len(failedBlockNumbers)))
 
 		log.Warn().
 			Int("retry", retry+1).
