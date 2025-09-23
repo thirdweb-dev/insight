@@ -180,3 +180,91 @@ var (
 		Help: "The total number of traces inserted into ClickHouse",
 	})
 )
+
+// Backfill Metrics
+var (
+	BackfillIndexerName = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_indexer_name",
+		Help: "The name of the indexer running backfill",
+	}, []string{"project_name", "chain_id", "indexer_name"})
+
+	BackfillChainId = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_chain_id",
+		Help: "The chain ID being backfilled",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillStartBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_start_block",
+		Help: "The starting block number for backfill",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillEndBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_end_block",
+		Help: "The ending block number for backfill",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillComputedBatchSize = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_computed_batch_size",
+		Help: "The computed batch size for backfill processing",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillCurrentStartBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_current_start_block",
+		Help: "The current start block number being processed",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillCurrentEndBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_current_end_block",
+		Help: "The current end block number being processed",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillAvgMemoryPerBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_avg_memory_per_block_bytes",
+		Help: "The average memory usage per block in bytes",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillClickHouseRowsFetched = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "backfill_clickhouse_rows_fetched_total",
+		Help: "The total number of rows fetched from ClickHouse during backfill",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillRPCRowsFetched = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "backfill_rpc_rows_fetched_total",
+		Help: "The total number of rows fetched from RPC during backfill",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillRPCRetries = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "backfill_rpc_retries_total",
+		Help: "The total number of RPC retries with block numbers during backfill",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillParquetBytesWritten = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "backfill_parquet_bytes_written_total",
+		Help: "The total number of bytes written to parquet files during backfill",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillFlushStartBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_flush_start_block",
+		Help: "The start block number of the last flush operation",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillFlushEndBlock = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_flush_end_block",
+		Help: "The end block number of the last flush operation",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillFlushBlockTimestamp = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_flush_block_timestamp",
+		Help: "The block timestamp of the last flush operation",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillFlushCurrentTime = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_flush_current_time",
+		Help: "The current time when the last flush operation occurred",
+	}, []string{"project_name", "chain_id"})
+
+	BackfillBlockdataChannelLength = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "backfill_blockdata_channel_length",
+		Help: "The current length of the blockdata channel",
+	}, []string{"project_name", "chain_id"})
+)

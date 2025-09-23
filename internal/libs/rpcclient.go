@@ -9,6 +9,7 @@ import (
 
 var RpcClient rpc.IRPCClient
 var ChainId *big.Int
+var ChainIdStr string
 
 func InitRPCClient() {
 	var err error
@@ -18,4 +19,5 @@ func InitRPCClient() {
 	}
 
 	ChainId = RpcClient.GetChainID()
+	ChainIdStr = ChainId.String()
 }

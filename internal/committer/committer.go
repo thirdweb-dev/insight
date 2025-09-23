@@ -48,7 +48,7 @@ func Init() {
 }
 
 func CommitStreaming() error {
-	log.Info().Str("chain_id", libs.ChainId.String()).Msg("Starting streaming commit process")
+	log.Info().Str("chain_id", libs.ChainIdStr).Msg("Starting streaming commit process")
 
 	maxBlockNumber, blockRanges, err := getLastTrackedBlockNumberAndBlockRangesFromS3()
 	if err != nil {
@@ -86,7 +86,7 @@ func CommitStreaming() error {
 }
 
 func getLastTrackedBlockNumberAndBlockRangesFromS3() (int64, []types.BlockRange, error) {
-	log.Info().Str("chain_id", libs.ChainId.String()).Msg("Starting streaming commit process")
+	log.Info().Str("chain_id", libs.ChainIdStr).Msg("Starting streaming commit process")
 
 	maxBlockNumber, err := libs.GetMaxBlockNumberFromClickHouseV2(libs.ChainId)
 	if err != nil {

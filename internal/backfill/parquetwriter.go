@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
@@ -11,6 +12,7 @@ import (
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 	"github.com/thirdweb-dev/indexer/internal/types"
 )
 
@@ -69,6 +71,11 @@ func SaveToParquet(blockData []*common.BlockData, avgMemoryPerBlockChannel chan 
 	if _, err := parquetWriter.Write(parquetData); err != nil {
 		return fmt.Errorf("failed to write parquet data: %w", err)
 	}
+
+	// Track bytes written metric
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+	metrics.BackfillParquetBytesWritten.WithLabelValues(indexerName, chainIdStr).Add(float64(bytesWritten))
 	// update last tracked block number after writing to parquet
 	lastTrackedBlockNumber = lastTrackedBn
 
@@ -195,6 +202,18 @@ func FlushParquet() error {
 	parquetWriter = nil
 
 	log.Debug().Msg("Flushing parquet file")
+
+	// Track flush metrics
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+	// Convert string block numbers to float64 for metrics
+	startBlockFloat, _ := strconv.ParseFloat(parquetStartBlockNumber, 64)
+	endBlockFloat, _ := strconv.ParseFloat(parquetEndBlockNumber, 64)
+	metrics.BackfillFlushStartBlock.WithLabelValues(indexerName, chainIdStr).Set(startBlockFloat)
+	metrics.BackfillFlushEndBlock.WithLabelValues(indexerName, chainIdStr).Set(endBlockFloat)
+	metrics.BackfillFlushBlockTimestamp.WithLabelValues(indexerName, chainIdStr).Set(float64(parquetBlockTimestamp.Unix()))
+	metrics.BackfillFlushCurrentTime.WithLabelValues(indexerName, chainIdStr).Set(float64(time.Now().Unix()))
+
 	// upload the parquet file to s3 (checksum is calculated inside UploadParquetToS3)
 	if err := libs.UploadParquetToS3(
 		parquetFile,

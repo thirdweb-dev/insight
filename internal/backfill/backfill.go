@@ -8,6 +8,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
+	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
 var blockdataChannel = make(chan []*common.BlockData, config.Cfg.RPCNumParallelCalls)
@@ -26,6 +27,16 @@ func RunBackfill() {
 		Uint64("start_block", startBlockNumber).
 		Uint64("end_block", endBlockNumber).
 		Msg("Backfilling with boundries")
+
+	// Initialize metrics
+	indexerName := config.Cfg.ZeetProjectName
+	chainIdStr := libs.ChainIdStr
+
+	// Set static metrics
+	metrics.BackfillIndexerName.WithLabelValues(indexerName, chainIdStr, indexerName).Set(1)
+	metrics.BackfillChainId.WithLabelValues(indexerName, chainIdStr).Set(float64(libs.ChainId.Uint64()))
+	metrics.BackfillStartBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(startBlockNumber))
+	metrics.BackfillEndBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(endBlockNumber))
 
 	wg := sync.WaitGroup{}
 	go saveBlockDataToS3(&wg)
@@ -75,6 +86,8 @@ func saveBlockDataToS3(wg *sync.WaitGroup) {
 func channelValidBlockData(startBlockNumber uint64, endBlockNumber uint64) {
 	defer close(blockdataChannel)
 
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
 	batchSize := uint64(config.Cfg.RPCBatchSize)
 	for bn := startBlockNumber; bn <= endBlockNumber; {
 		// dynamic batch size
@@ -82,6 +95,12 @@ func channelValidBlockData(startBlockNumber uint64, endBlockNumber uint64) {
 
 		startBlock := bn
 		endBlock := min(bn+batchSize-1, endBlockNumber)
+
+		// Update metrics for current batch
+		metrics.BackfillComputedBatchSize.WithLabelValues(indexerName, chainIdStr).Set(float64(batchSize))
+		metrics.BackfillCurrentStartBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(startBlock))
+		metrics.BackfillCurrentEndBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(endBlock))
+		metrics.BackfillBlockdataChannelLength.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockdataChannel)))
 
 		log.Debug().
 			Any("start_block", startBlock).
@@ -118,6 +137,11 @@ func computeBatchSize(currentBatchSize uint64) uint64 {
 	select {
 	case avgBytes := <-avgMemoryPerBlockChannel:
 		if avgBytes > 0 {
+			// Update metrics
+			chainIdStr := libs.ChainIdStr
+			indexerName := config.Cfg.ZeetProjectName
+			metrics.BackfillAvgMemoryPerBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(avgBytes))
+
 			// Compute new batch
 			targetBatchSize := max(min(targetMemBytes/uint64(avgBytes), maxBatchSize), minBatchSize)
 
