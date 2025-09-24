@@ -305,6 +305,8 @@ type Config struct {
 	RPCBatchSize                     uint64 `env:"RPC_BATCH_SIZE" envDefault:"10"`
 	RPCBatchMaxMemoryUsageMB         uint64 `env:"RPC_BATCH_MAX_MEMORY_USAGE_MB" envDefault:"32"`
 	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
+	InsightServiceUrl                string `env:"INSIGHT_SERVICE_URL" envDefault:"https://insight.thirdweb.com"`
+	InsightServiceApiKey             string `env:"INSIGHT_SERVICE_API_KEY"`
 }
 
 var Cfg Config

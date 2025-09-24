@@ -21,6 +21,9 @@ func GetBackfillBoundaries() (uint64, uint64) {
 	}
 
 	if startBlock > endBlock {
+		// since indexing is done, we call insight service to disable the indexer
+		DisableIndexerMaybeStartCommitter()
+		// most likely this will not be called as this service will be paused. but a panic just incase
 		log.Panic().
 			Uint64("start_block", startBlock).
 			Uint64("end_block", endBlock).
