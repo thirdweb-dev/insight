@@ -337,10 +337,11 @@ func (rpc *Client) needsChain296SpecialHandling(blockNumbers []*big.Int) bool {
 		return false
 	}
 
-	// Check if any block number is <= 5780915
-	threshold := big.NewInt(5780915)
+	// Check if any block number is <= 5780915 and >= 3853944
+	threshold2 := big.NewInt(5780915)
+	threshold1 := big.NewInt(3853944)
 	for _, blockNum := range blockNumbers {
-		if blockNum.Cmp(threshold) <= 0 {
+		if blockNum.Cmp(threshold1) > 0 && blockNum.Cmp(threshold2) <= 0 {
 			return true
 		}
 	}
