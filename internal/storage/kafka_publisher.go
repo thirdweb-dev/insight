@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DataDog/zstd"
+	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -308,10 +308,13 @@ func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber ui
 
 func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, msgJson []byte) (*kgo.Record, error) {
 	// Compress the JSON data using zstd
-	compressedData, err := zstd.Compress(nil, msgJson)
+	encoder, err := zstd.NewWriter(nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compress message data: %v", err)
+		return nil, fmt.Errorf("failed to create zstd encoder: %v", err)
 	}
+	defer encoder.Close()
+
+	compressedData := encoder.EncodeAll(msgJson, nil)
 
 	// Create headers with metadata including compression info
 	headers := []kgo.RecordHeader{
