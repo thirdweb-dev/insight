@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/common"
@@ -306,6 +307,14 @@ func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber ui
 }
 
 func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, msgJson []byte) (*kgo.Record, error) {
+	encoder, err := zstd.NewWriter(nil)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create zstd encoder")
+	}
+	defer encoder.Close()
+
+	compressed := encoder.EncodeAll([]byte(msgJson), nil)
+
 	// Create headers with metadata
 	headers := []kgo.RecordHeader{
 		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", chainId))},
@@ -313,12 +322,13 @@ func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, block
 		{Key: "type", Value: []byte(fmt.Sprintf("%s", msgType))},
 		{Key: "timestamp", Value: []byte(timestamp.Format(time.RFC3339Nano))},
 		{Key: "schema_version", Value: []byte("1")},
+		{Key: "content-type", Value: []byte("zstd")},
 	}
 
 	return &kgo.Record{
 		Topic:     fmt.Sprintf("insight.commit.blocks.%d", chainId),
 		Key:       []byte(fmt.Sprintf("%d:%s:%d", chainId, msgType, blockNumber)),
-		Value:     msgJson,
+		Value:     compressed,
 		Headers:   headers,
 		Partition: 0,
 	}, nil
