@@ -39,7 +39,7 @@ type PublishableMessageBlockData struct {
 	*common.BlockData
 	ChainId         uint64    `json:"chain_id"`
 	IsDeleted       int8      `json:"is_deleted"` // deprecated
-	IsReorg         int8      `json:"is_reorg"`
+	IsReorg         bool      `json:"is_reorg"`
 	InsertTimestamp time.Time `json:"insert_timestamp"`
 }
 
@@ -270,7 +270,7 @@ func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isReorg
 		InsertTimestamp: timestamp,
 	}
 	if isReorg {
-		data.IsReorg = 1
+		data.IsReorg = true
 	}
 
 	msg := PublishableMessagePayload{
@@ -322,12 +322,12 @@ func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, block
 
 	// Create headers with metadata
 	headers := []kgo.RecordHeader{
-		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", chainId))},
-		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", blockNumber))},
+		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", chainId))},         // order is important. always 0
+		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", blockNumber))}, // order is important. always 1
+		{Key: "is_reorg", Value: []byte(fmt.Sprintf("%t", isReorg))},         // order is important. always 2
 		{Key: "type", Value: []byte(fmt.Sprintf("%s", msgType))},
 		{Key: "timestamp", Value: []byte(timestamp.Format(time.RFC3339Nano))},
 		{Key: "schema_version", Value: []byte("1")},
-		{Key: "is_reorg", Value: []byte(fmt.Sprintf("%t", isReorg))},
 		{Key: "content-type", Value: []byte("zstd")},
 	}
 
