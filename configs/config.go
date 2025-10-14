@@ -307,6 +307,11 @@ type Config struct {
 	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
 	InsightServiceUrl                string `env:"INSIGHT_SERVICE_URL" envDefault:"https://insight.thirdweb.com"`
 	InsightServiceApiKey             string `env:"INSIGHT_SERVICE_API_KEY"`
+	RedisAddr                        string `env:"REDIS_ADDR"`
+	RedisUsername                    string `env:"REDIS_USERNAME"`
+	RedisPassword                    string `env:"REDIS_PASSWORD"`
+	RedisDB                          int    `env:"REDIS_DB"`
+	RedisEnableTLS                   bool   `env:"REDIS_ENABLE_TLS" envDefault:"true"`
 }
 
 var Cfg Config

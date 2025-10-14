@@ -15,7 +15,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/rpc"
 )
 
-func GetValidBlockDataInBatch(latestBlock uint64, nextCommitBlockNumber uint64) []common.BlockData {
+func GetValidBlockDataInBatch(latestBlock uint64, nextCommitBlockNumber uint64) []*common.BlockData {
 	rpcNumParallelCalls := config.Cfg.RPCNumParallelCalls
 	rpcBatchSize := config.Cfg.RPCBatchSize
 	maxBlocksPerFetch := rpcBatchSize * rpcNumParallelCalls
@@ -35,7 +35,7 @@ func GetValidBlockDataInBatch(latestBlock uint64, nextCommitBlockNumber uint64) 
 		Msg("Starting to fetch latest blocks")
 
 	// Precreate array of block data
-	blockDataArray := make([]common.BlockData, blocksToFetch)
+	blockDataArray := make([]*common.BlockData, blocksToFetch)
 
 	// Create batches and calculate number of parallel calls needed
 	numBatches := min((blocksToFetch+rpcBatchSize-1)/rpcBatchSize, rpcNumParallelCalls)
@@ -74,8 +74,8 @@ func GetValidBlockDataInBatch(latestBlock uint64, nextCommitBlockNumber uint64) 
 			for i, bd := range batchResults {
 				arrayIndex := batchIdx*rpcBatchSize + uint64(i)
 				if arrayIndex < uint64(len(blockDataArray)) {
-					blockDataArray[arrayIndex] = *bd // todo: update to use pointer, kafka is using normal block data
-					batchResults[i] = nil            // free memory
+					blockDataArray[arrayIndex] = bd
+					batchResults[i] = nil // free memory
 				}
 			}
 			mu.Unlock()

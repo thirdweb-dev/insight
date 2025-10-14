@@ -6,7 +6,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
-	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
@@ -59,13 +58,7 @@ func pollLatest() error {
 			Uint64("end_block", expectedBlockNumber-1).
 			Msg("All blocks validated successfully. Publishing blocks to Kafka")
 
-		// Convert slice of BlockData to slice of *BlockData for Kafka publisher
-		blockDataPointers := make([]*common.BlockData, len(blockDataArray))
-		for i, block := range blockDataArray {
-			blockDataPointers[i] = &block
-		}
-
-		if err := libs.KafkaPublisherV2.PublishBlockData(blockDataPointers); err != nil {
+		if err := libs.KafkaPublisherV2.PublishBlockData(blockDataArray); err != nil {
 			log.Panic().
 				Err(err).
 				Int("blocks_count", len(blockDataArray)).
