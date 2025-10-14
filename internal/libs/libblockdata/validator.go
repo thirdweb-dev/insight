@@ -24,6 +24,11 @@ func Validate(blockData *common.BlockData) (valid bool, err error) {
 		return false, nil
 	}
 
+	if blockData.Block.LogsBloom == "" {
+		log.Error().Msgf("Block verification failed for block %s: logsBloom is empty string. It should be 0x", blockData.Block.Number)
+		return false, nil
+	}
+
 	// check that logs exist if logsBloom is not empty
 	logsBloomAsNumber := new(big.Int)
 	logsBloomAsNumber.SetString(blockData.Block.LogsBloom[2:], 16)
