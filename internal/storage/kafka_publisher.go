@@ -307,13 +307,24 @@ func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber ui
 }
 
 func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, msgJson []byte) (*kgo.Record, error) {
-	encoder, err := zstd.NewWriter(nil)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to create zstd encoder")
-	}
-	defer encoder.Close()
+	compressionThreshold := config.Cfg.CommitterCompressionThresholdMB * 1024 * 1024
 
-	compressed := encoder.EncodeAll([]byte(msgJson), nil)
+	var value []byte
+	var contentType string
+
+	if len(msgJson) >= compressionThreshold {
+		encoder, err := zstd.NewWriter(nil)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to create zstd encoder")
+		}
+		defer encoder.Close()
+
+		value = encoder.EncodeAll([]byte(msgJson), nil)
+		contentType = "zstd"
+	} else {
+		value = msgJson
+		contentType = "json"
+	}
 
 	// Create headers with metadata
 	headers := []kgo.RecordHeader{
@@ -322,13 +333,13 @@ func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, block
 		{Key: "type", Value: []byte(fmt.Sprintf("%s", msgType))},
 		{Key: "timestamp", Value: []byte(timestamp.Format(time.RFC3339Nano))},
 		{Key: "schema_version", Value: []byte("1")},
-		{Key: "content-type", Value: []byte("zstd")},
+		{Key: "content-type", Value: []byte(contentType)},
 	}
 
 	return &kgo.Record{
 		Topic:     fmt.Sprintf("insight.commit.blocks.%d", chainId),
 		Key:       []byte(fmt.Sprintf("%d:%s:%d", chainId, msgType, blockNumber)),
-		Value:     compressed,
+		Value:     value,
 		Headers:   headers,
 		Partition: 0,
 	}, nil
