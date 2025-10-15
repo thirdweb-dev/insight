@@ -173,7 +173,15 @@ func GetBlockReorgDataFromClickHouseV2(chainId *big.Int, startBlockNumber int64,
 	return blocks, nil
 }
 
+func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
+	return getBlockDataFromClickhouse(ClickhouseConnV2, chainId, startBlockNumber, endBlockNumber)
+}
+
 func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
+	return getBlockDataFromClickhouse(ClickhouseConnV1, chainId, startBlockNumber, endBlockNumber)
+}
+
+func getBlockDataFromClickhouse(clickhouseConn clickhouse.Conn, chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
 	length := endBlockNumber - startBlockNumber + 1
 
 	blockData := make([]*common.BlockData, length)
@@ -186,22 +194,22 @@ func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBl
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		blocksRaw, _ = getBlocksFromV1(chainId, startBlockNumber, endBlockNumber)
+		blocksRaw, _ = getBlocksFrom(clickhouseConn, chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		transactionsRaw, _ = getTransactionsFromV1(chainId, startBlockNumber, endBlockNumber)
+		transactionsRaw, _ = getTransactionsFrom(clickhouseConn, chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		logsRaw, _ = getLogsFromV1(chainId, startBlockNumber, endBlockNumber)
+		logsRaw, _ = getLogsFrom(clickhouseConn, chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		tracesRaw, _ = getTracesFromV1(chainId, startBlockNumber, endBlockNumber)
+		tracesRaw, _ = getTracesFrom(clickhouseConn, chainId, startBlockNumber, endBlockNumber)
 	}()
 	wg.Wait()
 
@@ -236,7 +244,7 @@ func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBl
 	return blockData, nil
 }
 
-func getBlocksFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {
+func getBlocksFrom(clickhouseConn clickhouse.Conn, chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	blocksRaw := make([]common.Block, length)
@@ -248,7 +256,7 @@ func getBlocksFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 		startBlockNumber,
 		endBlockNumber,
 	)
-	blocks, err := execQueryV1[common.Block](query)
+	blocks, err := execQuery[common.Block](clickhouseConn, query)
 	if err != nil {
 		return blocksRaw, err
 	}
@@ -265,7 +273,7 @@ func getBlocksFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 	return blocksRaw, nil
 }
 
-func getTransactionsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Transaction, error) {
+func getTransactionsFrom(clickhouseConn clickhouse.Conn, chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Transaction, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	transactionsRaw := make([][]common.Transaction, length)
@@ -277,7 +285,7 @@ func getTransactionsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumb
 		startBlockNumber,
 		endBlockNumber,
 	)
-	transactions, err := execQueryV1[common.Transaction](query)
+	transactions, err := execQuery[common.Transaction](clickhouseConn, query)
 	if err != nil {
 		return transactionsRaw, err
 	}
@@ -294,7 +302,7 @@ func getTransactionsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumb
 	return transactionsRaw, nil
 }
 
-func getLogsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Log, error) {
+func getLogsFrom(clickhouseConn clickhouse.Conn, chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Log, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	logsRaw := make([][]common.Log, length)
@@ -306,7 +314,7 @@ func getLogsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint6
 		startBlockNumber,
 		endBlockNumber,
 	)
-	logs, err := execQueryV1[common.Log](query)
+	logs, err := execQuery[common.Log](clickhouseConn, query)
 	if err != nil {
 		return logsRaw, err
 	}
@@ -323,7 +331,7 @@ func getLogsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint6
 	return logsRaw, nil
 }
 
-func getTracesFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Trace, error) {
+func getTracesFrom(clickhouseConn clickhouse.Conn, chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Trace, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	tracesRaw := make([][]common.Trace, length)
@@ -335,7 +343,7 @@ func getTracesFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 		startBlockNumber,
 		endBlockNumber,
 	)
-	traces, err := execQueryV1[common.Trace](query)
+	traces, err := execQuery[common.Trace](clickhouseConn, query)
 	if err != nil {
 		return tracesRaw, err
 	}
@@ -352,9 +360,9 @@ func getTracesFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 	return tracesRaw, nil
 }
 
-func execQueryV1[T any](query string) ([]T, error) {
+func execQuery[T any](clickhouseConn clickhouse.Conn, query string) ([]T, error) {
 	var out []T
-	if err := ClickhouseConnV1.Select(context.Background(), &out, query); err != nil {
+	if err := clickhouseConn.Select(context.Background(), &out, query); err != nil {
 		return nil, err
 	}
 	return out, nil
