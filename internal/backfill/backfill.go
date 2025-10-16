@@ -15,7 +15,6 @@ var blockdataChannel = make(chan []*common.BlockData, config.Cfg.RPCNumParallelC
 var avgMemoryPerBlockChannel = make(chan int, 1)
 
 func Init() {
-	libs.InitOldClickHouseV1()
 	libs.InitS3()
 	libs.InitRPCClient()
 	InitParquetWriter()
