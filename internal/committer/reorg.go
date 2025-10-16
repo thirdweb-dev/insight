@@ -2,6 +2,7 @@ package committer
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -106,6 +107,11 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 	reorgStartBlock := int64(-1)
 	reorgEndBlock := int64(-1)
 	for i := 1; i < len(blockHeaders); i++ {
+
+		if rand.Intn(10) < 5 {
+			blockHeaders[i].ParentHash = "0x123123"
+		}
+
 		if blockHeaders[i].Number.Int64() != blockHeaders[i-1].Number.Int64()+1 {
 			// non-sequential block numbers
 			reorgStartBlock = blockHeaders[i-1].Number.Int64()
