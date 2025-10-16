@@ -162,6 +162,34 @@ func GetBlockReorgDataFromClickHouseV2(chainId *big.Int, startBlockNumber int64,
 	return blocks, nil
 }
 
+func GetBlockHeadersForReorgCheck(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.Block, error) {
+	sb := startBlockNumber
+	length := endBlockNumber - startBlockNumber + 1
+	blocksRaw := make([]*common.Block, length)
+
+	query := fmt.Sprintf("SELECT block_number, hash, parent_hash FROM %s.blocks FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		startBlockNumber,
+		endBlockNumber,
+	)
+	blocks, err := execQueryV2[common.Block](query)
+	if err != nil {
+		return blocksRaw, err
+	}
+
+	// just to make sure the blocks are in the correct order
+	for _, block := range blocks {
+		idx := block.Number.Uint64() - sb
+		if idx >= length {
+			log.Error().Msgf("Block number %s is out of range", block.Number.String())
+			continue
+		}
+		blocksRaw[idx] = &block
+	}
+	return blocksRaw, nil
+}
+
 func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
 	length := endBlockNumber - startBlockNumber + 1
 

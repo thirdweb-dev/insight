@@ -6,7 +6,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
-	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 	"github.com/thirdweb-dev/indexer/internal/metrics"
@@ -76,36 +75,36 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 	log.Debug().Msgf("Checking for reorgs from block %d to %d", startBlock, endBlock)
 
 	// Fetch block headers for the range
-	blockData, err := libs.GetBlockDataFromClickHouseV2(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
+	blockHeaders, err := libs.GetBlockHeadersForReorgCheck(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
 	if err != nil {
-		return fmt.Errorf("detectAndHandleReorgs: failed to get block data: %w", err)
+		return fmt.Errorf("detectAndHandleReorgs: failed to get block headers: %w", err)
 	}
 
-	if len(blockData) == 0 {
-		log.Debug().Msg("detectAndHandleReorgs: No block data found in range")
+	if len(blockHeaders) == 0 {
+		log.Debug().Msg("detectAndHandleReorgs: No block headers found in range")
 		return nil
 	}
 
 	// finding the reorg start and end block
 	reorgStartBlock := int64(-1)
 	reorgEndBlock := int64(-1)
-	for i := 1; i < len(blockData); i++ {
-		if blockData[i].Block.Number.Int64() != blockData[i-1].Block.Number.Int64()+1 {
+	for i := 1; i < len(blockHeaders); i++ {
+		if blockHeaders[i].Number.Int64() != blockHeaders[i-1].Number.Int64()+1 {
 			// non-sequential block numbers
-			reorgStartBlock = blockData[i-1].Block.Number.Int64()
-			reorgEndBlock = blockData[i].Block.Number.Int64()
+			reorgStartBlock = blockHeaders[i-1].Number.Int64()
+			reorgEndBlock = blockHeaders[i].Number.Int64()
 			break
 		}
-		if blockData[i].Block.ParentHash != blockData[i-1].Block.Hash {
+		if blockHeaders[i].ParentHash != blockHeaders[i-1].Hash {
 			// hash mismatch start
 			if reorgStartBlock == -1 {
-				reorgStartBlock = blockData[i-1].Block.Number.Int64()
+				reorgStartBlock = blockHeaders[i-1].Number.Int64()
 			}
 			continue
 		} else {
 			// hash matches end
 			if reorgStartBlock != -1 {
-				reorgEndBlock = blockData[i].Block.Number.Int64()
+				reorgEndBlock = blockHeaders[i].Number.Int64()
 				break
 			}
 		}
@@ -113,11 +112,11 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 
 	// set end to the last block if not set
 	if reorgEndBlock == -1 {
-		reorgEndBlock = blockData[len(blockData)-1].Block.Number.Int64()
+		reorgEndBlock = blockHeaders[len(blockHeaders)-1].Number.Int64()
 	}
 
 	if reorgStartBlock > -1 {
-		if err := handleReorgForRange(blockData, uint64(reorgStartBlock), uint64(reorgEndBlock)); err != nil {
+		if err := handleReorgForRange(uint64(reorgStartBlock), uint64(reorgEndBlock)); err != nil {
 			return err
 		}
 	}
@@ -128,7 +127,7 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 	return nil
 }
 
-func handleReorgForRange(oldblockData []*common.BlockData, startBlock uint64, endBlock uint64) error {
+func handleReorgForRange(startBlock uint64, endBlock uint64) error {
 	// nothing to do
 	if startBlock == 0 {
 		return nil
@@ -150,15 +149,10 @@ func handleReorgForRange(oldblockData []*common.BlockData, startBlock uint64, en
 		expectedBlockNumber++
 	}
 
-	oldblockDataArray := make([]*common.BlockData, 0, len(oldblockData))
-	for _, bd := range oldblockData {
-		if bd.Block.Number.Uint64() < startBlock || bd.Block.Number.Uint64() > endBlock {
-			continue
-		}
-		oldblockDataArray = append(oldblockDataArray, bd)
+	oldblockDataArray, err := libs.GetBlockDataFromClickHouseV2(libs.ChainId.Uint64(), startBlock, endBlock)
+	if err != nil {
+		return fmt.Errorf("handleReorgForRange: failed to get old block data: %w", err)
 	}
-	// order of deletion is important
-	// need to first delete then add so list should contain old data first
 
 	if err := libs.KafkaPublisherV2.PublishBlockDataReorg(newblockDataArray, oldblockDataArray); err != nil {
 		log.Error().
