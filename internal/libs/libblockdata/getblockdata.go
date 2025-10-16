@@ -95,22 +95,10 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 	length := endBlockNumber - startBlockNumber + 1
 	validBlockData := make([]*common.BlockData, length)
 
-	clickhouseBlockData := getValidBlockDataFromClickhouseV1(startBlockNumber, endBlockNumber)
 	missingBlockNumbers := make([]uint64, 0)
 	for i := range validBlockData {
 		bn := startBlockNumber + uint64(i)
-		if clickhouseBlockData[i] == nil || bn != clickhouseBlockData[i].Block.Number.Uint64() {
-			missingBlockNumbers = append(missingBlockNumbers, bn)
-			log.Debug().
-				Uint64("start_block", startBlockNumber).
-				Uint64("end_block", endBlockNumber).
-				Uint64("block_number", bn).
-				Msg("Missing block data from clickhouse")
-			continue
-		}
-
-		validBlockData[i] = clickhouseBlockData[i]
-		clickhouseBlockData[i] = nil // clear out duplicate memory
+		missingBlockNumbers = append(missingBlockNumbers, bn)
 	}
 
 	if len(missingBlockNumbers) == 0 {
@@ -148,21 +136,6 @@ func GetValidBlockDataForRange(startBlockNumber uint64, endBlockNumber uint64) [
 	}
 
 	return validBlockData
-}
-
-func getValidBlockDataFromClickhouseV1(startBlockNumber uint64, endBlockNumber uint64) []*common.BlockData {
-	blockData, err := libs.GetBlockDataFromClickHouseV1(libs.ChainId.Uint64(), startBlockNumber, endBlockNumber)
-
-	if err != nil {
-		log.Panic().Err(err).Msg("Failed to get block data from ClickHouseV1")
-	}
-
-	for i, block := range blockData {
-		if isValid, _ := Validate(block); !isValid {
-			blockData[i] = nil
-		}
-	}
-	return blockData
 }
 
 func GetValidBlockDataFromRpc(blockNumbers []uint64) []*common.BlockData {
