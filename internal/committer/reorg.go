@@ -11,6 +11,10 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
+func InitReorg() {
+	libs.InitRedis()
+}
+
 func RunReorgValidator() {
 	for {
 		startBlock, endBlock, err := getReorgRange()

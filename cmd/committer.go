@@ -30,6 +30,7 @@ func RunCommitter(cmd *cobra.Command, args []string) {
 	}()
 
 	committer.Init()
+	committer.InitReorg()
 
 	committer.RunReorgValidator()
 	// todo: uncomment this when reorg handler is implemented
