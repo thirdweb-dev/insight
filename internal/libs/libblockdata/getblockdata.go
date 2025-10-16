@@ -21,7 +21,7 @@ func GetValidBlockDataInBatch(latestBlock uint64, nextCommitBlockNumber uint64) 
 	maxBlocksPerFetch := rpcBatchSize * rpcNumParallelCalls
 
 	// Calculate the range of blocks to fetch
-	blocksToFetch := latestBlock - nextCommitBlockNumber
+	blocksToFetch := latestBlock - nextCommitBlockNumber + 1
 	if blocksToFetch > maxBlocksPerFetch {
 		blocksToFetch = maxBlocksPerFetch
 	}
