@@ -27,8 +27,8 @@ func RunReorgValidator() {
 			continue
 		}
 
-		if endBlock == lastBlockCheck {
-			log.Debug().Msg("No new blocks to check. Sleeping for 1 minute.")
+		if endBlock == lastBlockCheck || endBlock-startBlock < 5 {
+			log.Debug().Msg("Not enough new blocks to check. Sleeping for 1 minute.")
 			time.Sleep(1 * time.Minute)
 			continue
 		}
