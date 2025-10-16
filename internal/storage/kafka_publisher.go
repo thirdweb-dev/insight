@@ -116,8 +116,16 @@ func (p *KafkaPublisher) PublishBlockData(blockData []*common.BlockData) error {
 }
 
 func (p *KafkaPublisher) PublishBlockDataReorg(newBlockData []*common.BlockData, oldBlockData []*common.BlockData) error {
-	log.Debug().Msgf("PublishBlockDataReorg: %d new blocks, %d old blocks", len(newBlockData), len(oldBlockData))
+	oldBlockNumbers := make([]uint64, len(oldBlockData))
+	for i, block := range oldBlockData {
+		oldBlockNumbers[i] = block.Block.Number.Uint64()
+	}
+	newBlockNumbers := make([]uint64, len(newBlockData))
+	for i, block := range newBlockData {
+		newBlockNumbers[i] = block.Block.Number.Uint64()
+	}
 
+	log.Debug().Any("old_block_numbers", oldBlockNumbers).Any("new_block_numbers", newBlockNumbers).Msg("PublishBlockDataReorg")
 	if err := p.publishBlockData(oldBlockData, true, true); err != nil {
 		return fmt.Errorf("failed to publish old block data: %v", err)
 	}
