@@ -146,7 +146,7 @@ func handleReorgForRange(startBlock uint64, endBlock uint64) error {
 	log.Debug().
 		Uint64("start_block", startBlock).
 		Uint64("end_block", endBlock).
-		Msg("handleReorgForRange")
+		Msg("handleReorgForRange:: needs reorg")
 
 	// will panic if any block is invalid
 	newblockDataArray := libblockdata.GetValidBlockDataInBatch(endBlock, startBlock)
