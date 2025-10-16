@@ -17,14 +17,20 @@ func InitReorg() {
 
 func RunReorgValidator() {
 	log.Debug().Msg("RunReorgValidator")
+	lastBlockCheck := int64(0)
 	for {
 		startBlock, endBlock, err := getReorgRange()
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get reorg range")
-			time.Sleep(2 * time.Second)
+			time.Sleep(10 * time.Second)
 			continue
 		}
 
+		if endBlock == lastBlockCheck {
+			log.Debug().Msg("No new blocks to check. Sleeping for 1 minute.")
+			time.Sleep(1 * time.Minute)
+			continue
+		}
 		log.Debug().
 			Int64("start_block", startBlock).
 			Int64("end_block", endBlock).
@@ -34,9 +40,10 @@ func RunReorgValidator() {
 		err = detectAndHandleReorgs(startBlock, endBlock)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to detect and handle reorgs")
-			time.Sleep(2 * time.Second)
+			time.Sleep(10 * time.Second)
 			continue
 		}
+		lastBlockCheck = endBlock
 	}
 }
 
