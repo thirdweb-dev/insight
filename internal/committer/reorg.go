@@ -133,6 +133,11 @@ func handleReorgForRange(startBlock uint64, endBlock uint64) error {
 		return nil
 	}
 
+	log.Debug().
+		Uint64("start_block", startBlock).
+		Uint64("end_block", endBlock).
+		Msg("handleReorgForRange")
+
 	// will panic if any block is invalid
 	newblockDataArray := libblockdata.GetValidBlockDataInBatch(endBlock, startBlock)
 	expectedBlockNumber := startBlock
