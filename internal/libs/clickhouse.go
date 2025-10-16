@@ -50,17 +50,6 @@ var ClickhouseConnV1 clickhouse.Conn
 // use this for new current states and query
 var ClickhouseConnV2 clickhouse.Conn
 
-func InitOldClickHouseV1() {
-	ClickhouseConnV1 = initClickhouse(
-		config.Cfg.OldClickhouseHostV1,
-		config.Cfg.OldClickhousePortV1,
-		config.Cfg.OldClickhouseUsernameV1,
-		config.Cfg.OldClickhousePasswordV1,
-		config.Cfg.OldClickhouseDatabaseV1,
-		config.Cfg.OldClickhouseEnableTLSV1,
-	)
-}
-
 // This is a new clickhouse where data will be inserted into.
 // All user queries will be done against this clickhouse.
 func InitNewClickHouseV2() {
@@ -126,7 +115,7 @@ func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (int64, error) {
 	return maxBlockNumber, nil
 }
 
-func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
+func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
 	length := endBlockNumber - startBlockNumber + 1
 
 	blockData := make([]*common.BlockData, length)
@@ -139,22 +128,22 @@ func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBl
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		blocksRaw, _ = getBlocksFromV1(chainId, startBlockNumber, endBlockNumber)
+		blocksRaw, _ = getBlocksFromV2(chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		transactionsRaw, _ = getTransactionsFromV1(chainId, startBlockNumber, endBlockNumber)
+		transactionsRaw, _ = getTransactionsFromV2(chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		logsRaw, _ = getLogsFromV1(chainId, startBlockNumber, endBlockNumber)
+		logsRaw, _ = getLogsFromV2(chainId, startBlockNumber, endBlockNumber)
 	}()
 
 	go func() {
 		defer wg.Done()
-		tracesRaw, _ = getTracesFromV1(chainId, startBlockNumber, endBlockNumber)
+		tracesRaw, _ = getTracesFromV2(chainId, startBlockNumber, endBlockNumber)
 	}()
 	wg.Wait()
 
@@ -189,19 +178,19 @@ func GetBlockDataFromClickHouseV1(chainId uint64, startBlockNumber uint64, endBl
 	return blockData, nil
 }
 
-func getBlocksFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {
+func getBlocksFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	blocksRaw := make([]common.Block, length)
 
 	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		strings.Join(defaultBlockFields, ", "),
-		config.Cfg.OldClickhouseDatabaseV1,
+		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
-	blocks, err := execQueryV1[common.Block](query)
+	blocks, err := execQueryV2[common.Block](query)
 	if err != nil {
 		return blocksRaw, err
 	}
@@ -218,19 +207,19 @@ func getBlocksFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 	return blocksRaw, nil
 }
 
-func getTransactionsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Transaction, error) {
+func getTransactionsFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Transaction, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	transactionsRaw := make([][]common.Transaction, length)
 
 	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, transaction_index",
 		strings.Join(defaultTransactionFields, ", "),
-		config.Cfg.OldClickhouseDatabaseV1,
+		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
-	transactions, err := execQueryV1[common.Transaction](query)
+	transactions, err := execQueryV2[common.Transaction](query)
 	if err != nil {
 		return transactionsRaw, err
 	}
@@ -247,19 +236,19 @@ func getTransactionsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumb
 	return transactionsRaw, nil
 }
 
-func getLogsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Log, error) {
+func getLogsFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Log, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	logsRaw := make([][]common.Log, length)
 
 	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, log_index",
 		strings.Join(defaultLogFields, ", "),
-		config.Cfg.OldClickhouseDatabaseV1,
+		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
-	logs, err := execQueryV1[common.Log](query)
+	logs, err := execQueryV2[common.Log](query)
 	if err != nil {
 		return logsRaw, err
 	}
@@ -276,19 +265,19 @@ func getLogsFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint6
 	return logsRaw, nil
 }
 
-func getTracesFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Trace, error) {
+func getTracesFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([][]common.Trace, error) {
 	sb := startBlockNumber
 	length := endBlockNumber - startBlockNumber + 1
 	tracesRaw := make([][]common.Trace, length)
 
 	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		strings.Join(defaultTraceFields, ", "),
-		config.Cfg.OldClickhouseDatabaseV1,
+		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
 		endBlockNumber,
 	)
-	traces, err := execQueryV1[common.Trace](query)
+	traces, err := execQueryV2[common.Trace](query)
 	if err != nil {
 		return tracesRaw, err
 	}
@@ -305,9 +294,9 @@ func getTracesFromV1(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 	return tracesRaw, nil
 }
 
-func execQueryV1[T any](query string) ([]T, error) {
+func execQueryV2[T any](query string) ([]T, error) {
 	var out []T
-	if err := ClickhouseConnV1.Select(context.Background(), &out, query); err != nil {
+	if err := ClickhouseConnV2.Select(context.Background(), &out, query); err != nil {
 		return nil, err
 	}
 	return out, nil
