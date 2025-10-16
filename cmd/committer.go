@@ -31,6 +31,8 @@ func RunCommitter(cmd *cobra.Command, args []string) {
 
 	committer.Init()
 
-	go committer.RunReorgValidator()
-	committer.CommitStreaming()
+	committer.RunReorgValidator()
+	// todo: uncomment this when reorg handler is implemented
+	// go committer.RunReorgValidator()
+	// committer.CommitStreaming()
 }

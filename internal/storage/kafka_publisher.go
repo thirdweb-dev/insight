@@ -157,6 +157,10 @@ func (p *KafkaPublisher) Close() error {
 }
 
 func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Record) error {
+	// todo: remove this test
+	log.Debug().Msgf("publishMessages")
+	return nil
+
 	if len(messages) == 0 {
 		return nil
 	}
@@ -349,6 +353,15 @@ func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, block
 		{Key: "schema_version", Value: []byte("1")},
 		{Key: "content-type", Value: []byte(contentType)},
 	}
+	log.Debug().
+		Uint64("chain_id", chainId).
+		Uint64("block_number", blockNumber).
+		Bool("is_reorg", isReorg).
+		Bool("is_deleted", isDeleted).
+		Str("msg_type", string(msgType)).
+		Time("timestamp", timestamp).
+		Str("content_type", contentType).
+		Msgf("createRecord")
 
 	return &kgo.Record{
 		Topic:     fmt.Sprintf("insight.commit.blocks.%d", chainId),
