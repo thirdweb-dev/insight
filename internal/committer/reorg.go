@@ -16,6 +16,7 @@ func InitReorg() {
 }
 
 func RunReorgValidator() {
+	log.Debug().Msg("RunReorgValidator")
 	for {
 		startBlock, endBlock, err := getReorgRange()
 		if err != nil {
@@ -23,6 +24,11 @@ func RunReorgValidator() {
 			time.Sleep(2 * time.Second)
 			continue
 		}
+
+		log.Debug().
+			Int64("start_block", startBlock).
+			Int64("end_block", endBlock).
+			Msg("getReorgRange")
 
 		// Detect reorgs and handle them
 		err = detectAndHandleReorgs(startBlock, endBlock)
@@ -40,7 +46,7 @@ func getReorgRange() (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to get last valid block: %w", err)
 	}
 
-	startBlock := min(lastValidBlock-1, 1)
+	startBlock := max(lastValidBlock-1, 1)
 	endBlock, err := libs.GetMaxBlockNumberFromClickHouseV2(libs.ChainId)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get max block number: %w", err)
