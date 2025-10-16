@@ -30,5 +30,7 @@ func RunCommitter(cmd *cobra.Command, args []string) {
 	}()
 
 	committer.Init()
+
+	go committer.RunReorgValidator()
 	committer.CommitStreaming()
 }

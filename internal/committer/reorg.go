@@ -1,7 +1,6 @@
 package committer
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 	"github.com/thirdweb-dev/indexer/internal/metrics"
 )
 
-func RunReorgValidator(ctx context.Context) error {
+func RunReorgValidator() {
 	for {
 		startBlock, endBlock, err := getReorgRange()
 		if err != nil {
@@ -44,7 +43,7 @@ func getReorgRange() (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to get max block number: %w", err)
 	}
 
-	endBlock = endBlock - 5 // lag by some blocks for safety
+	endBlock = min(endBlock-5, startBlock+100) // lag by some blocks for safety
 
 	if startBlock >= endBlock {
 		return 0, 0, fmt.Errorf("start block is greater than end block")
