@@ -44,8 +44,6 @@ func RunResendMissedWebhooks(cmd *cobra.Command, args []string) {
 				log.Error().Err(err).Msg("Failed to get block data")
 				continue
 			}
-			log.Info().Msgf("Block data: %+v", blockData)
-
 			kp.PublishBlockData(blockData)
 			log.Info().Msgf("Published block data for block %d on chain %d", blockNumber, chainId)
 		}
