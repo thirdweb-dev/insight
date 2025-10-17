@@ -46,6 +46,8 @@ func RunResendMissedWebhooks(cmd *cobra.Command, args []string) {
 			kp.PublishBlockData(blockData)
 		}
 	}
+
+	log.Info().Msg("Resend missed webhooks completed")
 }
 
 func getKafkaPublisher() *storage.KafkaPublisher {
