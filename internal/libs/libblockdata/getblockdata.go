@@ -199,6 +199,7 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 	failedBlockNumbers := make([]uint64, 0)
 	for i, result := range rpcResults {
 		if result.Error != nil {
+			log.Error().Uint64("block_number", blockNumbers[i]).Err(result.Error).Msg("Failed to fetch block data from RPC")
 			failedBlockNumbers = append(failedBlockNumbers, blockNumbers[i])
 		}
 	}
