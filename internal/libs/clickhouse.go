@@ -89,6 +89,32 @@ func initClickhouse(host string, port int, username string, password string, dat
 	return clickhouseConn
 }
 
+func GetBlockNumberFromClickHouseV2DaysAgo(chainId *big.Int, daysAgo int) (int64, error) {
+	query := fmt.Sprintf(`SELECT toString(max(block_number)) 
+	FROM default.blocks WHERE chain_id = %d AND block_timestamp <= now() - INTERVAL %d DAY ;`, chainId.Uint64(), daysAgo)
+	rows, err := ClickhouseConnV2.Query(context.Background(), query)
+	if err != nil {
+		return -1, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return -1, nil
+	}
+
+	var blockNumberStr string
+	if err := rows.Scan(&blockNumberStr); err != nil {
+		return -1, err
+	}
+
+	blockNumber, err := strconv.ParseInt(blockNumberStr, 10, 64)
+	if err != nil {
+		return -1, fmt.Errorf("failed to parse block number: %s", blockNumberStr)
+	}
+
+	return blockNumber, nil
+}
+
 func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (int64, error) {
 	// Use toString() to convert UInt256 to string, then parse to int64
 	query := fmt.Sprintf("SELECT toString(max(block_number)) FROM blocks WHERE chain_id = %d HAVING count() > 0", chainId.Uint64())
@@ -113,6 +139,55 @@ func GetMaxBlockNumberFromClickHouseV2(chainId *big.Int) (int64, error) {
 	}
 
 	return maxBlockNumber, nil
+}
+
+func GetBlockReorgDataFromClickHouseV2(chainId *big.Int, startBlockNumber int64, endBlockNumber int64) ([]*common.Block, error) {
+	query := fmt.Sprintf(`SELECT block_number, hash, parent_hash 
+	FROM default.blocks WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number`, chainId.Uint64(), startBlockNumber, endBlockNumber)
+	rows, err := ClickhouseConnV2.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	blocks := make([]*common.Block, 0)
+	for rows.Next() {
+		var block common.Block
+		err := rows.Scan(&block.Number, &block.Hash, &block.ParentHash)
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, &block)
+	}
+	return blocks, nil
+}
+
+func GetBlockHeadersForReorgCheck(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.Block, error) {
+	sb := startBlockNumber
+	length := endBlockNumber - startBlockNumber + 1
+	blocksRaw := make([]*common.Block, length)
+
+	query := fmt.Sprintf("SELECT block_number, hash, parent_hash FROM %s.blocks FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		startBlockNumber,
+		endBlockNumber,
+	)
+	blocks, err := execQueryV2[common.Block](query)
+	if err != nil {
+		return blocksRaw, err
+	}
+
+	// just to make sure the blocks are in the correct order
+	for _, block := range blocks {
+		idx := block.Number.Uint64() - sb
+		if idx >= length {
+			log.Error().Msgf("Block number %s is out of range", block.Number.String())
+			continue
+		}
+		blocksRaw[idx] = &block
+	}
+	return blocksRaw, nil
 }
 
 func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {

@@ -112,7 +112,19 @@ func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 }
 
 func (p *KafkaPublisher) PublishBlockData(blockData []*common.BlockData) error {
-	return p.publishBlockData(blockData, false)
+	return p.publishBlockData(blockData, false, false)
+}
+
+func (p *KafkaPublisher) PublishBlockDataReorg(newBlockData []*common.BlockData, oldBlockData []*common.BlockData) error {
+	if err := p.publishBlockData(oldBlockData, true, true); err != nil {
+		return fmt.Errorf("failed to publish old block data: %v", err)
+	}
+
+	if err := p.publishBlockData(newBlockData, false, true); err != nil {
+		return fmt.Errorf("failed to publish new block data: %v", err)
+	}
+
+	return nil
 }
 
 func (p *KafkaPublisher) PublishReorg(oldData []*common.BlockData, newData []*common.BlockData) error {
@@ -123,11 +135,11 @@ func (p *KafkaPublisher) PublishReorg(oldData []*common.BlockData, newData []*co
 		return fmt.Errorf("failed to revert: %v", err)
 	}
 
-	if err := p.publishBlockData(oldData, true); err != nil {
+	if err := p.publishBlockData(oldData, true, true); err != nil {
 		return fmt.Errorf("failed to publish old block data: %v", err)
 	}
 
-	if err := p.publishBlockData(newData, false); err != nil {
+	if err := p.publishBlockData(newData, false, true); err != nil {
 		return fmt.Errorf("failed to publish new block data: %v", err)
 	}
 	return nil
@@ -228,7 +240,7 @@ func (p *KafkaPublisher) publishBlockRevert(chainId uint64, blockNumber uint64) 
 	return nil
 }
 
-func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDeleted bool) error {
+func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDeleted bool, isReorg bool) error {
 	if len(blockData) == 0 {
 		return nil
 	}
@@ -240,7 +252,7 @@ func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDelet
 
 	for i, data := range blockData {
 		// Block message
-		if blockMsg, err := p.createBlockDataMessage(data, isDeleted); err == nil {
+		if blockMsg, err := p.createBlockDataMessage(data, isDeleted, isReorg); err == nil {
 			blockMessages[i] = blockMsg
 		} else {
 			return fmt.Errorf("failed to create block message: %v", err)
@@ -255,7 +267,7 @@ func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDelet
 	return nil
 }
 
-func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDeleted bool) (*kgo.Record, error) {
+func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDeleted bool, isReorg bool) (*kgo.Record, error) {
 	timestamp := time.Now()
 
 	data := PublishableMessageBlockData{
@@ -279,7 +291,7 @@ func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDelet
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
 
-	return p.createRecord(data.GetType(), data.ChainId, block.Block.Number.Uint64(), timestamp, msgJson)
+	return p.createRecord(data.GetType(), data.ChainId, block.Block.Number.Uint64(), timestamp, isDeleted, isReorg, msgJson)
 }
 
 func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber uint64) (*kgo.Record, error) {
@@ -303,10 +315,10 @@ func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber ui
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
 
-	return p.createRecord(data.GetType(), chainId, blockNumber, timestamp, msgJson)
+	return p.createRecord(data.GetType(), chainId, blockNumber, timestamp, false, false, msgJson)
 }
 
-func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, msgJson []byte) (*kgo.Record, error) {
+func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, isDeleted bool, isReorg bool, msgJson []byte) (*kgo.Record, error) {
 	compressionThreshold := config.Cfg.CommitterCompressionThresholdMB * 1024 * 1024
 
 	var value []byte
@@ -328,8 +340,10 @@ func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, block
 
 	// Create headers with metadata
 	headers := []kgo.RecordHeader{
-		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", chainId))},
-		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", blockNumber))},
+		{Key: "chain_id", Value: []byte(fmt.Sprintf("%d", chainId))},         // order is important. always 0
+		{Key: "block_number", Value: []byte(fmt.Sprintf("%d", blockNumber))}, // order is important. always 1
+		{Key: "is_reorg", Value: []byte(fmt.Sprintf("%t", isReorg))},         // order is important. always 2
+		{Key: "is_deleted", Value: []byte(fmt.Sprintf("%t", isDeleted))},     // order is important. always 3
 		{Key: "type", Value: []byte(fmt.Sprintf("%s", msgType))},
 		{Key: "timestamp", Value: []byte(timestamp.Format(time.RFC3339Nano))},
 		{Key: "schema_version", Value: []byte("1")},

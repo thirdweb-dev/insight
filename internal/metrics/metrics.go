@@ -256,6 +256,11 @@ var (
 		Help: "The last published block number to Kafka",
 	}, []string{"project_name", "chain_id"})
 
+	CommitterLastPublishedReorgBlockNumber = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_last_published_reorg_block_number",
+		Help: "The last published reorg block number to Kafka",
+	}, []string{"project_name", "chain_id"})
+
 	CommitterRPCRowsToFetch = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "committer_rpc_rows_to_fetch",
 		Help: "The total number of rows to fetch from RPC",
