@@ -191,7 +191,7 @@ func GetBlockHeadersForReorgCheck(chainId uint64, startBlockNumber uint64, endBl
 }
 
 func GetBlockRangeForTimestampClickHouseV2(chainId uint64, startTimestamp string, endTimestamp string) (uint64, uint64, error) {
-	query := fmt.Sprintf("SELECT min(block_number), max(block_number) FROM %s.blocks WHERE chain_id = %d AND block_timestamp BETWEEN parseDateTimeBestEffort('%s') AND parseDateTimeBestEffort('%s')",
+	query := fmt.Sprintf("SELECT CAST(min(block_number) AS UInt64), CAST(max(block_number) AS UInt64) FROM %s.blocks WHERE chain_id = %d AND block_timestamp BETWEEN parseDateTimeBestEffort('%s') AND parseDateTimeBestEffort('%s')",
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startTimestamp,
