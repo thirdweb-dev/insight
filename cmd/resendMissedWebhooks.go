@@ -35,6 +35,8 @@ func RunResendMissedWebhooks(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		log.Info().Msgf("Resending webhooks for chain %d from block %d to %d", chainId, startBlockNumber, endBlockNumber)
+
 		for blockNumber := startBlockNumber; blockNumber <= endBlockNumber; blockNumber += 100 {
 			blockData, err := libs.GetBlockDataFromClickHouseV2(chainId, blockNumber, min(blockNumber+99, endBlockNumber))
 			if err != nil {
@@ -44,6 +46,7 @@ func RunResendMissedWebhooks(cmd *cobra.Command, args []string) {
 			log.Info().Msgf("Block data: %+v", blockData)
 
 			kp.PublishBlockData(blockData)
+			log.Info().Msgf("Published block data for block %d on chain %d", blockNumber, chainId)
 		}
 	}
 
