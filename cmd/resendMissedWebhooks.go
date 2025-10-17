@@ -26,6 +26,7 @@ func RunResendMissedWebhooks(cmd *cobra.Command, args []string) {
 	endTimestamp := "2025-10-16T21:37:17Z"   // utc timestamp
 	chainIds := config.Cfg.ResubmitWebhooksChainIds
 
+	libs.InitNewClickHouseV2()
 	kp := getKafkaPublisher()
 
 	for _, chainId := range chainIds {
