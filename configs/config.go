@@ -274,38 +274,43 @@ type Config struct {
 	Validation   ValidationConfig   `mapstructure:"validation"`
 	Migrator     MigratorConfig     `mapstructure:"migrator"`
 
-	ZeetProjectName                  string `env:"ZEET_PROJECT_NAME" envDefault:"insight-indexer"`
-	ZeetDeploymentId                 string `env:"ZEET_DEPLOYMENT_ID"`
-	ZeetClusterId                    string `env:"ZEET_CLUSTER_ID"`
-	CommitterClickhouseDatabase      string `env:"COMMITTER_CLICKHOUSE_DATABASE"`
-	CommitterClickhouseHost          string `env:"COMMITTER_CLICKHOUSE_HOST"`
-	CommitterClickhousePort          int    `env:"COMMITTER_CLICKHOUSE_PORT"`
-	CommitterClickhouseUsername      string `env:"COMMITTER_CLICKHOUSE_USERNAME"`
-	CommitterClickhousePassword      string `env:"COMMITTER_CLICKHOUSE_PASSWORD"`
-	CommitterClickhouseEnableTLS     bool   `env:"COMMITTER_CLICKHOUSE_ENABLE_TLS" envDefault:"true"`
-	CommitterKafkaBrokers            string `env:"COMMITTER_KAFKA_BROKERS"`
-	CommitterKafkaUsername           string `env:"COMMITTER_KAFKA_USERNAME"`
-	CommitterKafkaPassword           string `env:"COMMITTER_KAFKA_PASSWORD"`
-	CommitterKafkaEnableTLS          bool   `env:"COMMITTER_KAFKA_ENABLE_TLS" envDefault:"true"`
-	CommitterMaxMemoryMB             int    `env:"COMMITTER_MAX_MEMORY_MB" envDefault:"512"`
-	CommitterCompressionThresholdMB  int    `env:"COMMITTER_COMPRESSION_THRESHOLD_MB" envDefault:"50"`
-	StagingS3Bucket                  string `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
-	StagingS3Region                  string `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
-	StagingS3AccessKeyID             string `env:"STAGING_S3_ACCESS_KEY_ID"`
-	StagingS3SecretAccessKey         string `env:"STAGING_S3_SECRET_ACCESS_KEY"`
-	StagingS3MaxParallelFileDownload int    `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
-	BackfillStartBlock               uint64 `env:"BACKFILL_START_BLOCK"`
-	BackfillEndBlock                 uint64 `env:"BACKFILL_END_BLOCK"`
-	RPCNumParallelCalls              uint64 `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"20"`
-	RPCBatchSize                     uint64 `env:"RPC_BATCH_SIZE" envDefault:"10"`
-	RPCBatchMaxMemoryUsageMB         uint64 `env:"RPC_BATCH_MAX_MEMORY_USAGE_MB" envDefault:"32"`
-	ParquetMaxFileSizeMB             int64  `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
-	InsightServiceUrl                string `env:"INSIGHT_SERVICE_URL" envDefault:"https://insight.thirdweb.com"`
-	InsightServiceApiKey             string `env:"INSIGHT_SERVICE_API_KEY"`
-	RedisAddr                        string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
-	RedisUsername                    string `env:"REDIS_USERNAME"`
-	RedisPassword                    string `env:"REDIS_PASSWORD"`
-	RedisDB                          int    `env:"REDIS_DB" envDefault:"0"`
+	ZeetProjectName                  string   `env:"ZEET_PROJECT_NAME" envDefault:"insight-indexer"`
+	ZeetDeploymentId                 string   `env:"ZEET_DEPLOYMENT_ID"`
+	ZeetClusterId                    string   `env:"ZEET_CLUSTER_ID"`
+	CommitterClickhouseDatabase      string   `env:"COMMITTER_CLICKHOUSE_DATABASE"`
+	CommitterClickhouseHost          string   `env:"COMMITTER_CLICKHOUSE_HOST"`
+	CommitterClickhousePort          int      `env:"COMMITTER_CLICKHOUSE_PORT"`
+	CommitterClickhouseUsername      string   `env:"COMMITTER_CLICKHOUSE_USERNAME"`
+	CommitterClickhousePassword      string   `env:"COMMITTER_CLICKHOUSE_PASSWORD"`
+	CommitterClickhouseEnableTLS     bool     `env:"COMMITTER_CLICKHOUSE_ENABLE_TLS" envDefault:"true"`
+	CommitterKafkaBrokers            string   `env:"COMMITTER_KAFKA_BROKERS"`
+	CommitterKafkaUsername           string   `env:"COMMITTER_KAFKA_USERNAME"`
+	CommitterKafkaPassword           string   `env:"COMMITTER_KAFKA_PASSWORD"`
+	CommitterKafkaEnableTLS          bool     `env:"COMMITTER_KAFKA_ENABLE_TLS" envDefault:"true"`
+	CommitterMaxMemoryMB             int      `env:"COMMITTER_MAX_MEMORY_MB" envDefault:"512"`
+	CommitterCompressionThresholdMB  int      `env:"COMMITTER_COMPRESSION_THRESHOLD_MB" envDefault:"50"`
+	StagingS3Bucket                  string   `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
+	StagingS3Region                  string   `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
+	StagingS3AccessKeyID             string   `env:"STAGING_S3_ACCESS_KEY_ID"`
+	StagingS3SecretAccessKey         string   `env:"STAGING_S3_SECRET_ACCESS_KEY"`
+	StagingS3MaxParallelFileDownload int      `env:"STAGING_S3_MAX_PARALLEL_FILE_DOWNLOAD" envDefault:"2"`
+	BackfillStartBlock               uint64   `env:"BACKFILL_START_BLOCK"`
+	BackfillEndBlock                 uint64   `env:"BACKFILL_END_BLOCK"`
+	RPCNumParallelCalls              uint64   `env:"RPC_NUM_PARALLEL_CALLS" envDefault:"20"`
+	RPCBatchSize                     uint64   `env:"RPC_BATCH_SIZE" envDefault:"10"`
+	RPCBatchMaxMemoryUsageMB         uint64   `env:"RPC_BATCH_MAX_MEMORY_USAGE_MB" envDefault:"32"`
+	ParquetMaxFileSizeMB             int64    `env:"PARQUET_MAX_FILE_SIZE_MB" envDefault:"512"`
+	InsightServiceUrl                string   `env:"INSIGHT_SERVICE_URL" envDefault:"https://insight.thirdweb.com"`
+	InsightServiceApiKey             string   `env:"INSIGHT_SERVICE_API_KEY"`
+	RedisAddr                        string   `env:"REDIS_ADDR" envDefault:"localhost:6379"`
+	RedisUsername                    string   `env:"REDIS_USERNAME"`
+	RedisPassword                    string   `env:"REDIS_PASSWORD"`
+	RedisDB                          int      `env:"REDIS_DB" envDefault:"0"`
+	ResubmitWebhooksChainIds         []uint64 `env:"RESUBMIT_WEBHOOKS_CHAIN_IDS"`
+	ResubmitWebhooksKafkaBrokers     string   `env:"RESUBMIT_WEBHOOKS_KAFKA_BROKERS"`
+	ResubmitWebhooksKafkaUsername    string   `env:"RESUBMIT_WEBHOOKS_KAFKA_USERNAME"`
+	ResubmitWebhooksKafkaPassword    string   `env:"RESUBMIT_WEBHOOKS_KAFKA_PASSWORD"`
+	ResubmitWebhooksKafkaEnableTLS   bool     `env:"RESUBMIT_WEBHOOKS_KAFKA_ENABLE_TLS" envDefault:"true"`
 }
 
 var Cfg Config

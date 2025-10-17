@@ -190,6 +190,31 @@ func GetBlockHeadersForReorgCheck(chainId uint64, startBlockNumber uint64, endBl
 	return blocksRaw, nil
 }
 
+func GetBlockRangeForTimestampClickHouseV2(chainId uint64, startTimestamp string, endTimestamp string) (uint64, uint64, error) {
+	query := fmt.Sprintf("SELECT min(block_number), max(block_number) FROM %s.blocks WHERE chain_id = %d AND block_timestamp BETWEEN parseDateTimeBestEffort('%s') AND parseDateTimeBestEffort('%s')",
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		startTimestamp,
+		endTimestamp,
+	)
+	rows, err := ClickhouseConnV2.Query(context.Background(), query)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return 0, 0, nil
+	}
+
+	var minBlockNumber, maxBlockNumber uint64
+	if err := rows.Scan(&minBlockNumber, &maxBlockNumber); err != nil {
+		return 0, 0, err
+	}
+
+	return minBlockNumber, maxBlockNumber, nil
+}
+
 func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]*common.BlockData, error) {
 	length := endBlockNumber - startBlockNumber + 1
 
