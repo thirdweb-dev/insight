@@ -33,3 +33,4 @@ configs/secrets*
 
 indexer
 main
+*.parquet 
