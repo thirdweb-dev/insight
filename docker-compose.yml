@@ -6,8 +6,6 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
-    profiles:
-      - redis
 
   # PostgreSQL database
   postgres:
