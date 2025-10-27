@@ -14,7 +14,7 @@ func Validate(blockData *common.BlockData) (valid bool, err error) {
 	if blockData == nil {
 		return false, nil
 	}
-	if config.Cfg.Validation.Mode == "disabled" {
+	if config.Cfg.ValidationMode == "disabled" {
 		return true, nil
 	}
 
@@ -38,7 +38,7 @@ func Validate(blockData *common.BlockData) (valid bool, err error) {
 	}
 
 	// strict mode also validates logsBloom and transactionsRoot
-	if config.Cfg.Validation.Mode == "strict" {
+	if config.Cfg.ValidationMode == "strict" {
 		// Calculate logsBloom from logs
 		calculatedLogsBloom := validation.CalculateLogsBloom(blockData.Logs)
 		// Compare calculated logsBloom with block's logsBloom
