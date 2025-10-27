@@ -1,8 +1,7 @@
 -- ERC20
-CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc20_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc20_from_mv
 TO token_balances
 AS
--- FROM side (outgoing, negative delta)
 SELECT
   chain_id,
   token_type,
@@ -19,8 +18,11 @@ SELECT
   insert_timestamp,
   is_deleted
 FROM token_transfers 
-WHERE token_type = 'erc20'
-UNION ALL
+WHERE token_type = 'erc20';
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc20_to_mv
+TO token_balances
+AS
 -- TO side (incoming, positive delta)
 SELECT
   chain_id,
@@ -41,7 +43,7 @@ FROM token_transfers
 WHERE token_type = 'erc20';
 
 -- ERC721
-CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc721_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc721_from_mv
 TO token_balances
 AS
 SELECT
@@ -60,8 +62,11 @@ SELECT
   insert_timestamp,
   is_deleted
 FROM token_transfers 
-WHERE token_type = 'erc721'
-UNION ALL
+WHERE token_type = 'erc721';
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc721_to_mv
+TO token_balances
+AS
 SELECT
   chain_id,
   token_type,
@@ -81,7 +86,7 @@ FROM token_transfers
 WHERE token_type = 'erc721';
 
 -- ERC1155
-CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc1155_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc1155_from_mv
 TO token_balances
 AS
 SELECT
@@ -100,8 +105,11 @@ SELECT
   insert_timestamp,
   is_deleted
 FROM token_transfers 
-WHERE token_type = 'erc1155'
-UNION ALL
+WHERE token_type = 'erc1155';
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc1155_to_mv
+TO token_balances
+AS
 SELECT
   chain_id,
   token_type,
@@ -121,7 +129,7 @@ FROM token_transfers
 WHERE token_type = 'erc1155';
 
 -- ERC6909
-CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc6909_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc6909_from_mv
 TO token_balances
 AS
 SELECT
@@ -140,8 +148,11 @@ SELECT
   insert_timestamp,
   is_deleted
 FROM token_transfers 
-WHERE token_type = 'erc6909'
-UNION ALL
+WHERE token_type = 'erc6909';
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_balances_erc6909_to_mv
+TO token_balances
+AS
 SELECT
   chain_id,
   token_type,
