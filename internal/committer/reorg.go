@@ -57,7 +57,7 @@ func getReorgRange() (int64, int64, error) {
 	endBlock = min(endBlock-5, startBlock+100) // lag by some blocks for safety
 
 	if startBlock >= endBlock {
-		return 0, 0, fmt.Errorf("start block is greater than end block")
+		return 0, 0, fmt.Errorf("start block is greater than end block (%d >= %d)", startBlock, endBlock)
 	}
 
 	return startBlock, endBlock, nil
