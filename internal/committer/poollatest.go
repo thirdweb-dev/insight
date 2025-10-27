@@ -17,7 +17,7 @@ func pollLatest() error {
 	// Initialize metrics labels
 	chainIdStr := libs.ChainIdStr
 	indexerName := config.Cfg.ZeetProjectName
-	isRightsizing := false
+	hasRightsized := false
 
 	for {
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
@@ -76,13 +76,13 @@ func pollLatest() error {
 		nextBlockNumber = expectedBlockNumber
 		metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 
-		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 && !isRightsizing {
-			isRightsizing = true
+		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 && !hasRightsized {
 			log.Debug().
 				Uint64("latest_block", latestBlock.Uint64()).
 				Uint64("next_commit_block", nextBlockNumber).
 				Msg("Latest block is close to next commit block. Resizing s3 committer")
 			libs.RightsizeS3Committer()
+			hasRightsized = true
 		}
 	}
 }
