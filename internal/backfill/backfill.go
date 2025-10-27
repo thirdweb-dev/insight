@@ -36,6 +36,7 @@ func RunBackfill() {
 	metrics.BackfillEndBlock.WithLabelValues(indexerName, chainIdStr).Set(float64(endBlockNumber))
 
 	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go saveBlockDataToS3(&wg)
 	channelValidBlockData(startBlockNumber, endBlockNumber)
 	wg.Wait()
@@ -66,8 +67,6 @@ func saveBlockDataToS3(wg *sync.WaitGroup) {
 			panic(r)
 		}
 	}()
-
-	wg.Add(1)
 	defer wg.Done()
 
 	for blockdata := range blockdataChannel {

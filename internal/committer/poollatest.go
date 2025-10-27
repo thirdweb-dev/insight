@@ -20,15 +20,14 @@ func pollLatest() error {
 
 	for {
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
-
-		// Update latest block number metric
-		metrics.CommitterLatestBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(latestBlock.Uint64()))
-
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to get latest block number, retrying...")
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
+		// Update latest block number metric
+		metrics.CommitterLatestBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(latestBlock.Uint64()))
+
 		if nextBlockNumber >= latestBlock.Uint64() {
 			time.Sleep(250 * time.Millisecond)
 			continue
