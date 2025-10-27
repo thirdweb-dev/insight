@@ -19,7 +19,7 @@ func processBlocks() {
 	indexerName := config.Cfg.ZeetProjectName
 
 	totalBytesInBatch := uint64(0)
-	blockBatch := make([]*common.BlockData, 0, 500)
+	blockBatch := make([]*common.BlockData, 0, config.Cfg.CommitterKafkaBatchSize)
 	defer func() {
 		releaseMemoryPermit(totalBytesInBatch)
 	}()
@@ -37,7 +37,7 @@ func processBlocks() {
 		if block.Acquired {
 			totalBytesInBatch += block.ByteSize
 		}
-		if len(blockBatch) == 500 {
+		if len(blockBatch) == config.Cfg.CommitterKafkaBatchSize {
 			if err := libs.KafkaPublisherV2.PublishBlockData(blockBatch); err != nil {
 				log.Panic().
 					Err(err).
@@ -56,7 +56,7 @@ func processBlocks() {
 				Uint64("memory_released_bytes", totalBytesInBatch).
 				Msg("Successfully published batch to Kafka")
 
-			blockBatch = make([]*common.BlockData, 0, 500)
+			blockBatch = make([]*common.BlockData, 0, config.Cfg.CommitterKafkaBatchSize)
 		}
 
 		nextBlockNumber++
