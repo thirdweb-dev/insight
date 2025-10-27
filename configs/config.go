@@ -60,6 +60,7 @@ type Config struct {
 	CommitterMaxMemoryMB             int       `env:"COMMITTER_MAX_MEMORY_MB" envDefault:"512"`
 	CommitterCompressionThresholdMB  int       `env:"COMMITTER_COMPRESSION_THRESHOLD_MB" envDefault:"50"`
 	CommitterKafkaBatchSize          int       `env:"COMMITTER_KAFKA_BATCH_SIZE" envDefault:"500"`
+	CommitterIsLive                  bool      `env:"COMMITTER_IS_LIVE" envDefault:"false"`
 	StagingS3Bucket                  string    `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
 	StagingS3Region                  string    `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
 	StagingS3AccessKeyID             string    `env:"STAGING_S3_ACCESS_KEY_ID"`

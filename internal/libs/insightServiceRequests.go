@@ -1,4 +1,4 @@
-package backfill
+package libs
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
-	"github.com/thirdweb-dev/indexer/internal/libs"
 )
 
 type DeployS3CommitterRequest struct {
@@ -17,6 +16,15 @@ type DeployS3CommitterRequest struct {
 }
 
 func DisableIndexerMaybeStartCommitter() {
+	makeS3CommitterRequest("deploy-s3-committer")
+}
+
+func RightsizeS3Committer() {
+	makeS3CommitterRequest("rightsize-s3-committer")
+}
+
+// makeS3CommitterRequest is a common function to make HTTP requests to the insight service
+func makeS3CommitterRequest(endpoint string) {
 	serviceURL := config.Cfg.InsightServiceUrl
 	apiKey := config.Cfg.InsightServiceApiKey
 	zeetDeploymentId := config.Cfg.ZeetDeploymentId
@@ -33,7 +41,7 @@ func DisableIndexerMaybeStartCommitter() {
 	}
 
 	// Create HTTP request
-	url := fmt.Sprintf("%s/service/chains/%s/deploy-s3-committer", serviceURL, libs.ChainIdStr)
+	url := fmt.Sprintf("%s/service/chains/%s/%s", serviceURL, ChainIdStr, endpoint)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create HTTP request")
@@ -52,12 +60,13 @@ func DisableIndexerMaybeStartCommitter() {
 	// Send request
 	log.Info().
 		Str("url", url).
+		Str("endpoint", endpoint).
 		Str("zeetDeploymentId", zeetDeploymentId).
-		Msg("Sending deploy-s3-committer request to disable indexer")
+		Msgf("Sending %s request", endpoint)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to send HTTP request")
+		log.Error().Err(err).Msgf("Failed to send %s request", endpoint)
 		return
 	}
 	defer resp.Body.Close()
@@ -66,10 +75,10 @@ func DisableIndexerMaybeStartCommitter() {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		log.Info().
 			Int("statusCode", resp.StatusCode).
-			Msg("Successfully sent deploy-s3-committer request. Indexer disabled")
+			Msgf("Successfully sent %s request", endpoint)
 	} else {
 		log.Error().
 			Int("statusCode", resp.StatusCode).
-			Msg("Deploy-s3-committer request failed. Could not disable indexer")
+			Msgf("%s request failed", endpoint)
 	}
 }
