@@ -74,5 +74,13 @@ func pollLatest() error {
 		// Update nextCommitBlockNumber for next iteration
 		nextBlockNumber = expectedBlockNumber
 		metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
+
+		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 {
+			log.Debug().
+				Uint64("latest_block", latestBlock.Uint64()).
+				Uint64("next_commit_block", nextBlockNumber).
+				Msg("Latest block is close to next commit block. Resizing s3 committer")
+			libs.RightsizeS3Committer()
+		}
 	}
 }
