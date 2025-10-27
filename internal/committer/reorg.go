@@ -16,6 +16,11 @@ func InitReorg() {
 }
 
 func RunReorgValidator() {
+	// indexer is not live, so we don't need to check for reorgs
+	if !config.Cfg.CommitterIsLive {
+		return
+	}
+
 	lastBlockCheck := int64(0)
 	for {
 		startBlock, endBlock, err := getReorgRange()
