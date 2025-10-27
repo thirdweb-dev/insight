@@ -94,4 +94,9 @@ var (
 		Name: "committer_rpc_retries_total",
 		Help: "The total number of RPC retries",
 	}, []string{"project_name", "chain_id"})
+
+	CommitterIsLive = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "committer_is_live",
+		Help: "Whether the committer is live",
+	}, []string{"project_name", "chain_id"})
 )

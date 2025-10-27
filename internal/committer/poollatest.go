@@ -76,6 +76,10 @@ func pollLatest() error {
 		nextBlockNumber = expectedBlockNumber
 		metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 
+		if config.Cfg.CommitterIsLive {
+			metrics.CommitterIsLive.WithLabelValues(indexerName, chainIdStr).Set(1)
+		}
+
 		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 && !hasRightsized {
 			log.Debug().
 				Uint64("latest_block", latestBlock.Uint64()).
