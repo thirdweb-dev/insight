@@ -17,6 +17,7 @@ func pollLatest() error {
 	// Initialize metrics labels
 	chainIdStr := libs.ChainIdStr
 	indexerName := config.Cfg.ZeetProjectName
+	isRightsizing := false
 
 	for {
 		latestBlock, err := libs.RpcClient.GetLatestBlockNumber(context.Background())
@@ -75,7 +76,8 @@ func pollLatest() error {
 		nextBlockNumber = expectedBlockNumber
 		metrics.CommitterNextBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(nextBlockNumber))
 
-		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 {
+		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 && !isRightsizing {
+			isRightsizing = true
 			log.Debug().
 				Uint64("latest_block", latestBlock.Uint64()).
 				Uint64("next_commit_block", nextBlockNumber).
