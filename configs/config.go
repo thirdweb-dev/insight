@@ -79,6 +79,7 @@ type Config struct {
 	RedisPassword                    string    `env:"REDIS_PASSWORD"`
 	RedisDB                          int       `env:"REDIS_DB" envDefault:"0"`
 	ValidationMode                   string    `env:"VALIDATION_MODE" envDefault:"minimal"`
+	CommitterStartFromBlock          int64     `env:"COMMITTER_START_FROM_BLOCK" envDefault:"0"`
 }
 
 var Cfg Config

@@ -102,6 +102,9 @@ func getLastTrackedBlockNumberAndBlockRangesFromS3() (int64, []types.BlockRange,
 		log.Error().Err(err).Msg("Failed to get max block number from ClickHouse")
 		return -1, nil, err
 	}
+	if maxBlockNumber == -1 && config.Cfg.CommitterStartFromBlock > 0 {
+		maxBlockNumber = config.Cfg.CommitterStartFromBlock - 1
+	}
 	log.Debug().Int64("max_block_number", maxBlockNumber).Msg("Retrieved max block number from ClickHouse.(-1 means nothing committed yet, start from 0)")
 
 	blockRanges, err := libs.GetBlockRangesFromS3(maxBlockNumber)
