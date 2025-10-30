@@ -247,16 +247,27 @@ func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDelet
 
 	publishStart := time.Now()
 
-	// Prepare messages for blocks, events, transactions and traces
-	blockMessages := make([]*kgo.Record, len(blockData))
+	// Filter out nil blocks and prepare messages
+	blockMessages := make([]*kgo.Record, 0, len(blockData))
 
-	for i, data := range blockData {
+	for _, data := range blockData {
+		// Skip nil blocks
+		if data == nil {
+			log.Warn().Msg("Skipping nil block in publishBlockData")
+			continue
+		}
+
 		// Block message
 		if blockMsg, err := p.createBlockDataMessage(data, isDeleted, isReorg); err == nil {
-			blockMessages[i] = blockMsg
+			blockMessages = append(blockMessages, blockMsg)
 		} else {
 			return fmt.Errorf("failed to create block message: %v", err)
 		}
+	}
+
+	if len(blockMessages) == 0 {
+		log.Warn().Msg("No valid blocks to publish after filtering")
+		return nil
 	}
 
 	if err := p.publishMessages(context.Background(), blockMessages); err != nil {
@@ -268,6 +279,10 @@ func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDelet
 }
 
 func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDeleted bool, isReorg bool) (*kgo.Record, error) {
+	if block == nil {
+		return nil, fmt.Errorf("block is nil")
+	}
+
 	timestamp := time.Now()
 
 	data := PublishableMessageBlockData{
