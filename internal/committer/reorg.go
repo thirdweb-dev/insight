@@ -25,7 +25,7 @@ func RunReorgValidator() {
 	for {
 		startBlock, endBlock, err := getReorgRange()
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to get reorg range")
+			log.Debug().Err(err).Msg("Failed to get reorg range")
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -59,7 +59,7 @@ func getReorgRange() (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to get max block number: %w", err)
 	}
 
-	endBlock = min(endBlock-100, startBlock+100) // lag by some blocks for safety
+	endBlock = min(endBlock-500, startBlock+100) // lag by some blocks for safety
 
 	if startBlock >= endBlock {
 		return 0, 0, fmt.Errorf("start block is greater than end block (%d >= %d)", startBlock, endBlock)
