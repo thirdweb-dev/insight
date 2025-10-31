@@ -30,7 +30,7 @@ func RunReorgValidator() {
 			continue
 		}
 
-		if endBlock == lastBlockCheck || endBlock-startBlock < 5 {
+		if endBlock == lastBlockCheck || endBlock-startBlock < 100 {
 			log.Debug().Msg("Not enough new blocks to check. Sleeping for 1 minute.")
 			time.Sleep(1 * time.Minute)
 			continue
@@ -59,7 +59,7 @@ func getReorgRange() (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to get max block number: %w", err)
 	}
 
-	endBlock = min(endBlock-5, startBlock+100) // lag by some blocks for safety
+	endBlock = min(endBlock-100, startBlock+100) // lag by some blocks for safety
 
 	if startBlock >= endBlock {
 		return 0, 0, fmt.Errorf("start block is greater than end block (%d >= %d)", startBlock, endBlock)
