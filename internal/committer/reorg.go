@@ -20,6 +20,9 @@ func RunReorgValidator() {
 	if !config.Cfg.CommitterIsLive {
 		return
 	}
+	if !config.Cfg.EnableReorgValidation {
+		return
+	}
 
 	lastBlockCheck := int64(0)
 	for {
