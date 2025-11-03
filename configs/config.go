@@ -79,6 +79,7 @@ type Config struct {
 	RedisPassword                    string    `env:"REDIS_PASSWORD"`
 	RedisDB                          int       `env:"REDIS_DB" envDefault:"0"`
 	ValidationMode                   string    `env:"VALIDATION_MODE" envDefault:"minimal"`
+	EnableReorgValidation            bool      `env:"ENABLE_REORG_VALIDATION" envDefault:"true"`
 }
 
 var Cfg Config
