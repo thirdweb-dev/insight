@@ -167,7 +167,7 @@ func GetBlockHeadersForReorgCheck(chainId uint64, startBlockNumber uint64, endBl
 	length := endBlockNumber - startBlockNumber + 1
 	blocksRaw := make([]*common.Block, length)
 
-	query := fmt.Sprintf("SELECT block_number, hash, parent_hash FROM %s.blocks FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
+	query := fmt.Sprintf("SELECT chain_id, block_number, hash, parent_hash FROM %s.blocks WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
