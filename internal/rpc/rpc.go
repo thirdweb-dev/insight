@@ -71,7 +71,16 @@ func Initialize() (IRPCClient, error) {
 		return nil, fmt.Errorf("RPC_URL environment variable is not set")
 	}
 	log.Debug().Msg("Initializing RPC")
-	rpcClient, dialErr := gethRpc.Dial(rpcUrl)
+
+	ctx := context.Background()
+
+	// Initialize RPC client with custom header to disable insight RPC tracking
+	rpcClient, dialErr := gethRpc.DialOptions(
+		ctx,
+		rpcUrl,
+		gethRpc.WithHeader("x-disable-insight-rpc", "true"),
+	)
+
 	if dialErr != nil {
 		return nil, dialErr
 	}
