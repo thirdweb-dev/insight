@@ -94,6 +94,9 @@ func LoadConfig(cfgFile string) error {
 		panic(err)
 	}
 
+	// Set default values for viper-managed configs
+	viper.SetDefault("rpc.blockReceipts.enabled", true)
+
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 		if err := viper.ReadInConfig(); err != nil {

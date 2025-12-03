@@ -181,19 +181,18 @@ func (rpc *Client) checkGetBlockByNumberSupport() error {
 }
 
 func (rpc *Client) checkGetBlockReceiptsSupport() error {
-	if config.Cfg.RPC.BlockReceipts.Enabled {
-		var getBlockReceiptsResult interface{}
-		receiptsErr := rpc.RPCClient.Call(&getBlockReceiptsResult, "eth_getBlockReceipts", "latest")
-		if receiptsErr != nil {
-			log.Warn().Err(receiptsErr).Msg("eth_getBlockReceipts method not supported")
-			return fmt.Errorf("eth_getBlockReceipts method not supported: %v", receiptsErr)
-		} else {
-			rpc.supportsBlockReceipts = true
-			log.Debug().Msg("eth_getBlockReceipts method supported")
-		}
-	} else {
+	// Always probe to see if the method is supported
+	var getBlockReceiptsResult interface{}
+	receiptsErr := rpc.RPCClient.Call(&getBlockReceiptsResult, "eth_getBlockReceipts", "latest")
+
+	if receiptsErr != nil {
+		// Method not supported by RPC endpoint
 		rpc.supportsBlockReceipts = false
-		log.Debug().Msg("eth_getBlockReceipts method disabled")
+		log.Warn().Err(receiptsErr).Msg("eth_getBlockReceipts method not supported by RPC endpoint")
+	} else {
+		// Method supported and enabled
+		rpc.supportsBlockReceipts = true
+		log.Info().Msg("eth_getBlockReceipts method enabled")
 	}
 	return nil
 }
