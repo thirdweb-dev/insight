@@ -29,7 +29,7 @@ func pollLatest() error {
 		// Update latest block number metric
 		metrics.CommitterLatestBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(latestBlock.Uint64()))
 
-		if nextBlockNumber >= latestBlock.Uint64() {
+		if nextBlockNumber+config.Cfg.CommitterLagByBlocks >= latestBlock.Uint64() {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
