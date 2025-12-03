@@ -181,6 +181,11 @@ func (rpc *Client) checkGetBlockByNumberSupport() error {
 }
 
 func (rpc *Client) checkGetBlockReceiptsSupport() error {
+	if config.Cfg.RPCDisableBlockReceipts {
+		rpc.supportsBlockReceipts = false
+		log.Warn().Msg("eth_getBlockReceipts method disabled by config")
+		return nil
+	}
 	// Always probe to see if the method is supported
 	var getBlockReceiptsResult interface{}
 	receiptsErr := rpc.RPCClient.Call(&getBlockReceiptsResult, "eth_getBlockReceipts", "latest")
