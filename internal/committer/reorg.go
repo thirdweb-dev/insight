@@ -225,6 +225,19 @@ func handleReorgForRange(startBlock uint64, endBlock uint64) error {
 		return fmt.Errorf("handleReorgForRange: failed to get old block data: %w", err)
 	}
 
+	nonNilOldBlocks := 0
+	for _, bd := range oldblockDataArray {
+		if bd != nil {
+			nonNilOldBlocks++
+		}
+	}
+	log.Debug().
+		Uint64("start_block", startBlock).
+		Uint64("end_block", endBlock).
+		Int("requested_old_blocks", len(oldblockDataArray)).
+		Int("non_nil_old_blocks", nonNilOldBlocks).
+		Msg("handleReorgForRange: loaded old block data from ClickHouse")
+
 	if err := libs.KafkaPublisherV2.PublishBlockDataReorg(newblockDataArray, oldblockDataArray); err != nil {
 		log.Error().
 			Err(err).

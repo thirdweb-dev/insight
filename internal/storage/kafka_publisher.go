@@ -116,6 +116,7 @@ func (p *KafkaPublisher) PublishBlockData(blockData []*common.BlockData) error {
 }
 
 func (p *KafkaPublisher) PublishBlockDataReorg(newBlockData []*common.BlockData, oldBlockData []*common.BlockData) error {
+	log.Debug().Int("new_block_data_count", len(newBlockData)).Int("old_block_data_count", len(oldBlockData)).Msg("PublishBlockDataReorg: Publishing block data reorg")
 	if err := p.publishBlockData(oldBlockData, true, true); err != nil {
 		return fmt.Errorf("failed to publish old block data: %v", err)
 	}
