@@ -33,15 +33,8 @@ func RunReorgValidator() {
 			continue
 		}
 
-		// Only skip when the current window is too small; allow re-checking the same
-		// endBlock so that once detectAndHandleReorgs advances lastValidBlock, we
-		// can move the window forward in the next iteration.
 		if endBlock-startBlock < 100 {
-			log.Debug().
-				Int64("last_block_check", lastBlockCheck).
-				Int64("start_block", startBlock).
-				Int64("end_block", endBlock).
-				Msg("Not enough new blocks to check. Sleeping for 1 minute.")
+			log.Debug().Int64("last_block_check", lastBlockCheck).Int64("start_block", startBlock).Int64("end_block", endBlock).Msg("Not enough new blocks to check. Sleeping for 1 minute.")
 			time.Sleep(1 * time.Minute)
 			continue
 		}
@@ -210,9 +203,6 @@ func handleReorgForRange(startBlock uint64, endBlock uint64) error {
 	if startBlock == 0 {
 		return nil
 	}
-
-	log.Debug().Msgf("Reorg detected from block %d to %d", startBlock, endBlock)
-	return nil
 
 	// will panic if any block is invalid
 	newblockDataArray := libblockdata.GetValidBlockDataInBatch(endBlock, startBlock)
