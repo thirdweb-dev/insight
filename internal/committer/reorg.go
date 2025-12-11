@@ -40,13 +40,13 @@ func RunReorgValidator() {
 		}
 
 		// Detect reorgs and handle them
-		err = detectAndHandleReorgs(startBlock, endBlock)
+		lastValidBlock, err := detectAndHandleReorgs(startBlock, endBlock)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to detect and handle reorgs")
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		lastBlockCheck = endBlock
+		lastBlockCheck = lastValidBlock
 	}
 }
 
@@ -91,18 +91,18 @@ func getLastValidBlock() (int64, error) {
 	return lastValidBlock, nil
 }
 
-func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
+func detectAndHandleReorgs(startBlock int64, endBlock int64) (int64, error) {
 	log.Debug().Msgf("Checking for reorgs from block %d to %d", startBlock, endBlock)
 
 	// Fetch block headers for the range
 	blockHeaders, err := libs.GetBlockHeadersForReorgCheck(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
 	if err != nil {
-		return fmt.Errorf("detectAndHandleReorgs: failed to get block headers: %w", err)
+		return 0, fmt.Errorf("detectAndHandleReorgs: failed to get block headers: %w", err)
 	}
 
 	if len(blockHeaders) == 0 {
 		log.Debug().Msg("detectAndHandleReorgs: No block headers found in range")
-		return nil
+		return 0, nil
 	}
 
 	// 1) Block verification: find reorg range from header continuity (existing behavior)
@@ -141,13 +141,13 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 	// and the number of transactions stored per block in ClickHouse.
 	txStart, txEnd, err := libs.GetTransactionMismatchRangeFromClickHouseV2(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
 	if err != nil {
-		return fmt.Errorf("detectAndHandleReorgs: transaction verification failed: %w", err)
+		return 0, fmt.Errorf("detectAndHandleReorgs: transaction verification failed: %w", err)
 	}
 
 	// 3) Logs verification: check for mismatches between logsBloom and logs stored in ClickHouse.
 	logsStart, logsEnd, err := libs.GetLogsMismatchRangeFromClickHouseV2(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
 	if err != nil {
-		return fmt.Errorf("detectAndHandleReorgs: logs verification failed: %w", err)
+		return 0, fmt.Errorf("detectAndHandleReorgs: logs verification failed: %w", err)
 	}
 
 	// 4) Combine all ranges:
@@ -186,16 +186,16 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 	if finalStart > -1 {
 		// We found at least one inconsistent range; reorg from min(start) to max(end).
 		if err := handleReorgForRange(uint64(finalStart), uint64(finalEnd)); err != nil {
-			return err
+			return 0, err
 		}
 		lastValidBlock = finalEnd
 	}
 	err = libs.SetReorgLastValidBlock(libs.ChainIdStr, lastValidBlock)
 	if err != nil {
-		return fmt.Errorf("detectAndHandleReorgs: failed to set last valid block: %w", err)
+		return 0, fmt.Errorf("detectAndHandleReorgs: failed to set last valid block: %w", err)
 	}
 
-	return nil
+	return lastValidBlock, nil
 }
 
 func handleReorgForRange(startBlock uint64, endBlock uint64) error {
