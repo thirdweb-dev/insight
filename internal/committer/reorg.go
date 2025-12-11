@@ -72,6 +72,8 @@ func getReorgRange() (int64, int64, error) {
 }
 
 func getLastValidBlock() (int64, error) {
+	return 23796980, nil
+
 	// Try to get last reorg checked block number
 	lastReorgBlock, err := libs.GetReorgLastValidBlock(libs.ChainIdStr)
 	if err != nil {
