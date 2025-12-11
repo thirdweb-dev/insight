@@ -72,8 +72,6 @@ func getReorgRange() (int64, int64, error) {
 }
 
 func getLastValidBlock() (int64, error) {
-	return 23796980, nil
-
 	// Try to get last reorg checked block number
 	lastReorgBlock, err := libs.GetReorgLastValidBlock(libs.ChainIdStr)
 	if err != nil {
@@ -205,6 +203,9 @@ func handleReorgForRange(startBlock uint64, endBlock uint64) error {
 	if startBlock == 0 {
 		return nil
 	}
+
+	log.Debug().Msgf("Reorg detected from block %d to %d", startBlock, endBlock)
+	return nil
 
 	// will panic if any block is invalid
 	newblockDataArray := libblockdata.GetValidBlockDataInBatch(endBlock, startBlock)
