@@ -105,7 +105,7 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 		return nil
 	}
 
-	// finding the reorg start and end block
+	// 1) Block verification: find reorg range from header continuity (existing behavior)
 	reorgStartBlock := int64(-1)
 	reorgEndBlock := int64(-1)
 	for i := 1; i < len(blockHeaders); i++ {
@@ -131,18 +131,68 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 	}
 
 	// set end to the last block if not set
+	lastHeaderBlock := blockHeaders[len(blockHeaders)-1].Number.Int64()
 	if reorgEndBlock == -1 {
-		reorgEndBlock = blockHeaders[len(blockHeaders)-1].Number.Int64()
+		// No header-based end detected; default to the last header for last-valid-block tracking.
+		reorgEndBlock = lastHeaderBlock
 	}
 
+	// 2) Transaction verification: check for mismatches between block.transaction_count
+	// and the number of transactions stored per block in ClickHouse.
+	txStart, txEnd, err := libs.GetTransactionMismatchRangeFromClickHouseV2(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
+	if err != nil {
+		return fmt.Errorf("detectAndHandleReorgs: transaction verification failed: %w", err)
+	}
+
+	// 3) Logs verification: check for mismatches between logsBloom and logs stored in ClickHouse.
+	logsStart, logsEnd, err := libs.GetLogsMismatchRangeFromClickHouseV2(libs.ChainId.Uint64(), uint64(startBlock), uint64(endBlock))
+	if err != nil {
+		return fmt.Errorf("detectAndHandleReorgs: logs verification failed: %w", err)
+	}
+
+	// 4) Combine all ranges:
+	// - If all three ranges (blocks, tx, logs) are empty, then there is no reorg.
+	// - Otherwise, take min(start) and max(end) across all non-empty ranges as the final reorg range.
+	finalStart := int64(-1)
+	finalEnd := int64(-1)
+
+	// block headers range
 	if reorgStartBlock > -1 {
-		if err := handleReorgForRange(uint64(reorgStartBlock), uint64(reorgEndBlock)); err != nil {
-			return err
+		finalStart = reorgStartBlock
+		finalEnd = reorgEndBlock
+	}
+
+	// transactions range
+	if txStart > -1 {
+		if finalStart == -1 || txStart < finalStart {
+			finalStart = txStart
+		}
+		if finalEnd == -1 || txEnd > finalEnd {
+			finalEnd = txEnd
 		}
 	}
 
-	// update last valid block. if there was no reorg, this will update to the last block
-	libs.SetReorgLastValidBlock(libs.ChainIdStr, reorgEndBlock)
+	// logs range
+	if logsStart > -1 {
+		if finalStart == -1 || logsStart < finalStart {
+			finalStart = logsStart
+		}
+		if finalEnd == -1 || logsEnd > finalEnd {
+			finalEnd = logsEnd
+		}
+	}
+
+	if finalStart > -1 {
+		// We found at least one inconsistent range; reorg from min(start) to max(end).
+		if err := handleReorgForRange(uint64(finalStart), uint64(finalEnd)); err != nil {
+			return err
+		}
+		libs.SetReorgLastValidBlock(libs.ChainIdStr, finalEnd)
+	} else {
+		// No inconsistencies across blocks, transactions, or logs; mark the last checked
+		// header block as the last valid block.
+		libs.SetReorgLastValidBlock(libs.ChainIdStr, lastHeaderBlock)
+	}
 
 	return nil
 }
