@@ -182,16 +182,17 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) error {
 		}
 	}
 
+	lastValidBlock := lastHeaderBlock
 	if finalStart > -1 {
 		// We found at least one inconsistent range; reorg from min(start) to max(end).
 		if err := handleReorgForRange(uint64(finalStart), uint64(finalEnd)); err != nil {
 			return err
 		}
-		libs.SetReorgLastValidBlock(libs.ChainIdStr, finalEnd)
-	} else {
-		// No inconsistencies across blocks, transactions, or logs; mark the last checked
-		// header block as the last valid block.
-		libs.SetReorgLastValidBlock(libs.ChainIdStr, lastHeaderBlock)
+		lastValidBlock = finalEnd
+	}
+	err = libs.SetReorgLastValidBlock(libs.ChainIdStr, lastValidBlock)
+	if err != nil {
+		return fmt.Errorf("detectAndHandleReorgs: failed to set last valid block: %w", err)
 	}
 
 	return nil
