@@ -268,41 +268,19 @@ func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDelet
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
 
-	log.Debug().
-		Uint64("chain_id", data.ChainId).
-		Uint64("block_number", block.Block.Number.Uint64()).
-		Int("tx_count", len(block.Transactions)).
-		Int("log_count", len(block.Logs)).
-		Int("trace_count", len(block.Traces)).
-		Bool("is_deleted", isDeleted).
-		Bool("is_reorg", isReorg).
-		Msg("KafkaPublisher Message: Block metadata")
+	if isReorg {
+		log.Debug().
+			Uint64("chain_id", data.ChainId).
+			Uint64("block_number", block.Block.Number.Uint64()).
+			Int("tx_count", len(block.Transactions)).
+			Int("log_count", len(block.Logs)).
+			Int("trace_count", len(block.Traces)).
+			Bool("is_deleted", isDeleted).
+			Bool("is_reorg", isReorg).
+			Msg("KafkaPublisher Message Reorg: Block metadata")
+	}
 
 	return p.createRecord(data.GetType(), data.ChainId, block.Block.Number.Uint64(), timestamp, isDeleted, isReorg, msgJson)
-}
-
-func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber uint64) (*kgo.Record, error) {
-	timestamp := time.Now()
-
-	data := PublishableMessageRevert{
-		ChainId:         chainId,
-		BlockNumber:     blockNumber,
-		IsDeleted:       0,
-		InsertTimestamp: timestamp,
-	}
-
-	msg := PublishableMessagePayload{
-		Data:      data,
-		Type:      data.GetType(),
-		Timestamp: timestamp,
-	}
-
-	msgJson, err := json.Marshal(msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal block data: %v", err)
-	}
-
-	return p.createRecord(data.GetType(), chainId, blockNumber, timestamp, false, false, msgJson)
 }
 
 func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, isDeleted bool, isReorg bool, msgJson []byte) (*kgo.Record, error) {
