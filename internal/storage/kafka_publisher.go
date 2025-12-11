@@ -232,10 +232,9 @@ func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDelet
 		return nil
 	}
 
-	// test code, uncomment later
-	// if err := p.publishMessages(context.Background(), blockMessages); err != nil {
-	// 	return fmt.Errorf("failed to publish block messages: %v", err)
-	// }
+	if err := p.publishMessages(context.Background(), blockMessages); err != nil {
+		return fmt.Errorf("failed to publish block messages: %v", err)
+	}
 
 	log.Debug().Str("metric", "publish_duration").Msgf("Publisher.PublishBlockData duration: %f", time.Since(publishStart).Seconds())
 	return nil

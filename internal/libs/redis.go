@@ -12,7 +12,7 @@ import (
 
 var RedisClient *redis.Client
 
-const RedisReorgLastValidBlock = "reorg_last_valid_debug"
+const RedisReorgLastValidBlock = "reorg_last_valid"
 
 // InitRedis initializes the Redis client
 func InitRedis() {
