@@ -33,8 +33,15 @@ func RunReorgValidator() {
 			continue
 		}
 
-		if endBlock == lastBlockCheck || endBlock-startBlock < 100 {
-			log.Debug().Int64("last_block_check", lastBlockCheck).Int64("start_block", startBlock).Int64("end_block", endBlock).Msg("Not enough new blocks to check. Sleeping for 1 minute.")
+		// Only skip when the current window is too small; allow re-checking the same
+		// endBlock so that once detectAndHandleReorgs advances lastValidBlock, we
+		// can move the window forward in the next iteration.
+		if endBlock-startBlock < 100 {
+			log.Debug().
+				Int64("last_block_check", lastBlockCheck).
+				Int64("start_block", startBlock).
+				Int64("end_block", endBlock).
+				Msg("Not enough new blocks to check. Sleeping for 1 minute.")
 			time.Sleep(1 * time.Minute)
 			continue
 		}
