@@ -44,6 +44,17 @@ var defaultTraceFields = []string{
 	"reward_type", "refund_address",
 }
 
+type blockTxAggregate struct {
+	BlockNumber *big.Int `ch:"block_number"`
+	TxCount     uint64   `ch:"tx_count"`
+}
+
+type blockLogAggregate struct {
+	BlockNumber *big.Int `ch:"block_number"`
+	LogCount    uint64   `ch:"log_count"`
+	MaxLogIndex uint64   `ch:"max_log_index"`
+}
+
 // only use this for backfill or getting old data.
 var ClickhouseConnV1 clickhouse.Conn
 
@@ -229,20 +240,6 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 				Msg("skipping block because chainId is nil")
 			continue
 		}
-		if blocksRaw[i].TransactionCount != uint64(len(transactionsRaw[i])) {
-			log.Info().
-				Any("transactionCount", blocksRaw[i].TransactionCount).
-				Any("transactionsRaw", transactionsRaw[i]).
-				Msg("skipping block because transactionCount does not match")
-			continue
-		}
-		if (blocksRaw[i].LogsBloom != "" && blocksRaw[i].LogsBloom != EMPTY_LOGS_BLOOM) && len(logsRaw[i]) == 0 {
-			log.Info().
-				Any("logsBloom", blocksRaw[i].LogsBloom).
-				Any("logsRaw", logsRaw[i]).
-				Msg("skipping block because logsBloom is not empty and logsRaw is empty")
-			continue
-		}
 		blockData[i] = &common.BlockData{
 			Block:        blocksRaw[i],
 			Transactions: transactionsRaw[i],
@@ -251,6 +248,162 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 		}
 	}
 	return blockData, nil
+}
+
+// GetTransactionMismatchRangeFromClickHouseV2 checks, for blocks in the given range,
+// where the stored transaction_count in the blocks table does not match the number
+// of transactions in the transactions table. It returns the minimum and maximum
+// block numbers that have a mismatch, or (-1, -1) if all blocks are consistent.
+func GetTransactionMismatchRangeFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) (int64, int64, error) {
+	if endBlockNumber < startBlockNumber {
+		return -1, -1, nil
+	}
+
+	blocksRaw, err := getBlocksFromV2(chainId, startBlockNumber, endBlockNumber)
+	if err != nil {
+		return -1, -1, fmt.Errorf("GetTransactionMismatchRangeFromClickHouseV2: failed to load blocks: %w", err)
+	}
+
+	// Aggregate transaction counts per block from the transactions table.
+	query := fmt.Sprintf(
+		"SELECT block_number, count() AS tx_count FROM %s.transactions FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d GROUP BY block_number ORDER BY block_number",
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		startBlockNumber,
+		endBlockNumber,
+	)
+
+	txAggRows, err := execQueryV2[blockTxAggregate](query)
+	if err != nil {
+		return -1, -1, fmt.Errorf("GetTransactionMismatchRangeFromClickHouseV2: failed to load tx aggregates: %w", err)
+	}
+
+	txCounts := make(map[uint64]uint64, len(txAggRows))
+	for _, row := range txAggRows {
+		if row.BlockNumber == nil {
+			continue
+		}
+		txCounts[row.BlockNumber.Uint64()] = row.TxCount
+	}
+
+	var mismatchStart int64 = -1
+	var mismatchEnd int64 = -1
+
+	for _, block := range blocksRaw {
+		if block.ChainId == nil || block.ChainId.Uint64() == 0 || block.Number == nil {
+			continue
+		}
+
+		bn := block.Number.Uint64()
+		expectedTxCount := block.TransactionCount
+		actualTxCount, hasTx := txCounts[bn]
+
+		mismatch := false
+		if expectedTxCount == 0 {
+			// Header says no transactions; ensure there are none in the table.
+			if hasTx && actualTxCount > 0 {
+				mismatch = true
+			}
+		} else {
+			// Header says there should be transactions.
+			if !hasTx || actualTxCount != expectedTxCount {
+				mismatch = true
+			}
+		}
+
+		if mismatch {
+			if mismatchStart == -1 || int64(bn) < mismatchStart {
+				mismatchStart = int64(bn)
+			}
+			if mismatchEnd == -1 || int64(bn) > mismatchEnd {
+				mismatchEnd = int64(bn)
+			}
+		}
+	}
+
+	return mismatchStart, mismatchEnd, nil
+}
+
+// GetLogsMismatchRangeFromClickHouseV2 checks, for blocks in the given range,
+// where logs in the logs table are inconsistent with the block's logs_bloom:
+// - logsBloom is non-empty but there are no logs for that block
+// - logsBloom is empty/zero but logs exist
+// - log indexes are not contiguous (count(*) != max(log_index)+1 when logs exist)
+// It returns the minimum and maximum block numbers that have a mismatch, or
+// (-1, -1) if all blocks are consistent.
+func GetLogsMismatchRangeFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) (int64, int64, error) {
+	if endBlockNumber < startBlockNumber {
+		return -1, -1, nil
+	}
+
+	blocksRaw, err := getBlocksFromV2(chainId, startBlockNumber, endBlockNumber)
+	if err != nil {
+		return -1, -1, fmt.Errorf("GetLogsMismatchRangeFromClickHouseV2: failed to load blocks: %w", err)
+	}
+
+	// Aggregate log counts and max log_index per block from the logs table.
+	query := fmt.Sprintf(
+		"SELECT block_number, count() AS log_count, max(log_index) AS max_log_index FROM %s.logs FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d GROUP BY block_number ORDER BY block_number",
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		startBlockNumber,
+		endBlockNumber,
+	)
+
+	logAggRows, err := execQueryV2[blockLogAggregate](query)
+	if err != nil {
+		return -1, -1, fmt.Errorf("GetLogsMismatchRangeFromClickHouseV2: failed to load log aggregates: %w", err)
+	}
+
+	logAggs := make(map[uint64]blockLogAggregate, len(logAggRows))
+	for _, row := range logAggRows {
+		if row.BlockNumber == nil {
+			continue
+		}
+		bn := row.BlockNumber.Uint64()
+		logAggs[bn] = row
+	}
+
+	var mismatchStart int64 = -1
+	var mismatchEnd int64 = -1
+
+	for _, block := range blocksRaw {
+		if block.ChainId == nil || block.ChainId.Uint64() == 0 || block.Number == nil {
+			continue
+		}
+
+		bn := block.Number.Uint64()
+		hasLogsBloom := block.LogsBloom != "" && block.LogsBloom != EMPTY_LOGS_BLOOM
+		logAgg, hasLogAgg := logAggs[bn]
+
+		mismatch := false
+
+		if hasLogsBloom {
+			// logsBloom indicates logs should exist
+			if !hasLogAgg || logAgg.LogCount == 0 {
+				mismatch = true
+			} else if logAgg.MaxLogIndex+1 != logAgg.LogCount {
+				// log_index should be contiguous from 0..log_count-1
+				mismatch = true
+			}
+		} else {
+			// logsBloom is empty/zero; there should be no logs
+			if hasLogAgg && logAgg.LogCount > 0 {
+				mismatch = true
+			}
+		}
+
+		if mismatch {
+			if mismatchStart == -1 || int64(bn) < mismatchStart {
+				mismatchStart = int64(bn)
+			}
+			if mismatchEnd == -1 || int64(bn) > mismatchEnd {
+				mismatchEnd = int64(bn)
+			}
+		}
+	}
+
+	return mismatchStart, mismatchEnd, nil
 }
 
 func getBlocksFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint64) ([]common.Block, error) {

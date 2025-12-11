@@ -116,6 +116,7 @@ func (p *KafkaPublisher) PublishBlockData(blockData []*common.BlockData) error {
 }
 
 func (p *KafkaPublisher) PublishBlockDataReorg(newBlockData []*common.BlockData, oldBlockData []*common.BlockData) error {
+	log.Debug().Int("new_block_data_count", len(newBlockData)).Int("old_block_data_count", len(oldBlockData)).Msg("PublishBlockDataReorg: Publishing block data reorg")
 	if err := p.publishBlockData(oldBlockData, true, true); err != nil {
 		return fmt.Errorf("failed to publish old block data: %v", err)
 	}
@@ -124,24 +125,6 @@ func (p *KafkaPublisher) PublishBlockDataReorg(newBlockData []*common.BlockData,
 		return fmt.Errorf("failed to publish new block data: %v", err)
 	}
 
-	return nil
-}
-
-func (p *KafkaPublisher) PublishReorg(oldData []*common.BlockData, newData []*common.BlockData) error {
-	chainId := newData[0].Block.ChainId.Uint64()
-	newHead := uint64(newData[0].Block.Number.Uint64())
-	// Publish revert the revert to the new head - 1, so that the new updated block data can be re-processed
-	if err := p.publishBlockRevert(chainId, newHead-1); err != nil {
-		return fmt.Errorf("failed to revert: %v", err)
-	}
-
-	if err := p.publishBlockData(oldData, true, true); err != nil {
-		return fmt.Errorf("failed to publish old block data: %v", err)
-	}
-
-	if err := p.publishBlockData(newData, false, true); err != nil {
-		return fmt.Errorf("failed to publish new block data: %v", err)
-	}
 	return nil
 }
 
@@ -219,27 +202,6 @@ func (p *KafkaPublisher) publishMessages(ctx context.Context, messages []*kgo.Re
 	return nil
 }
 
-func (p *KafkaPublisher) publishBlockRevert(chainId uint64, blockNumber uint64) error {
-	publishStart := time.Now()
-
-	// Prepare messages for blocks, events, transactions and traces
-	blockMessages := make([]*kgo.Record, 1)
-
-	// Block message
-	if blockMsg, err := p.createBlockRevertMessage(chainId, blockNumber); err == nil {
-		blockMessages[0] = blockMsg
-	} else {
-		return fmt.Errorf("failed to create block revert message: %v", err)
-	}
-
-	if err := p.publishMessages(context.Background(), blockMessages); err != nil {
-		return fmt.Errorf("failed to publish block revert messages: %v", err)
-	}
-
-	log.Debug().Str("metric", "publish_duration").Msgf("Publisher.PublishBlockData duration: %f", time.Since(publishStart).Seconds())
-	return nil
-}
-
 func (p *KafkaPublisher) publishBlockData(blockData []*common.BlockData, isDeleted bool, isReorg bool) error {
 	if len(blockData) == 0 {
 		return nil
@@ -306,31 +268,19 @@ func (p *KafkaPublisher) createBlockDataMessage(block *common.BlockData, isDelet
 		return nil, fmt.Errorf("failed to marshal block data: %v", err)
 	}
 
+	if isReorg {
+		log.Debug().
+			Uint64("chain_id", data.ChainId).
+			Uint64("block_number", block.Block.Number.Uint64()).
+			Int("tx_count", len(block.Transactions)).
+			Int("log_count", len(block.Logs)).
+			Int("trace_count", len(block.Traces)).
+			Bool("is_deleted", isDeleted).
+			Bool("is_reorg", isReorg).
+			Msg("KafkaPublisher Message Reorg: Block metadata")
+	}
+
 	return p.createRecord(data.GetType(), data.ChainId, block.Block.Number.Uint64(), timestamp, isDeleted, isReorg, msgJson)
-}
-
-func (p *KafkaPublisher) createBlockRevertMessage(chainId uint64, blockNumber uint64) (*kgo.Record, error) {
-	timestamp := time.Now()
-
-	data := PublishableMessageRevert{
-		ChainId:         chainId,
-		BlockNumber:     blockNumber,
-		IsDeleted:       0,
-		InsertTimestamp: timestamp,
-	}
-
-	msg := PublishableMessagePayload{
-		Data:      data,
-		Type:      data.GetType(),
-		Timestamp: timestamp,
-	}
-
-	msgJson, err := json.Marshal(msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal block data: %v", err)
-	}
-
-	return p.createRecord(data.GetType(), chainId, blockNumber, timestamp, false, false, msgJson)
 }
 
 func (p *KafkaPublisher) createRecord(msgType MessageType, chainId uint64, blockNumber uint64, timestamp time.Time, isDeleted bool, isReorg bool, msgJson []byte) (*kgo.Record, error) {
