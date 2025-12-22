@@ -7,11 +7,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	config "github.com/thirdweb-dev/indexer/configs"
 	"github.com/thirdweb-dev/indexer/internal/committer"
 )
-
-var committerStartBlock uint64
 
 var committerCmd = &cobra.Command{
 	Use:   "committer",
@@ -20,17 +17,8 @@ var committerCmd = &cobra.Command{
 	Run:   RunCommitter,
 }
 
-func init() {
-	committerCmd.Flags().Uint64Var(&committerStartBlock, "start-block", 0, "start committing from this block number (overrides ClickHouse max block when > 0)")
-}
-
 func RunCommitter(cmd *cobra.Command, args []string) {
 	fmt.Println("running committer")
-
-	if committerStartBlock > 0 {
-		config.Cfg.CommitterStartBlock = committerStartBlock
-		log.Info().Uint64("start_block", committerStartBlock).Msg("Committer start block override enabled")
-	}
 
 	// Start Prometheus metrics server
 	log.Info().Msg("Starting Metrics Server on port 2112")
