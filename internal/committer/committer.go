@@ -104,6 +104,20 @@ func getLastTrackedBlockNumberAndBlockRangesFromS3() (int64, []types.BlockRange,
 	}
 	log.Debug().Int64("max_block_number", maxBlockNumber).Msg("Retrieved max block number from ClickHouse.(-1 means nothing committed yet, start from 0)")
 
+	// Optional override: force the committer to start from a specific block number.
+	// We implement this by pretending ClickHouse max is (startBlock - 1), so both S3
+	// range scanning and live RPC polling begin at startBlock.
+	if config.Cfg.CommitterStartBlock > 0 {
+		overrideMax := int64(config.Cfg.CommitterStartBlock) - 1
+		if maxBlockNumber < overrideMax {
+			maxBlockNumber = overrideMax
+			log.Info().
+				Int64("clickhouse_max_block", maxBlockNumber).
+				Uint64("override_start_block", config.Cfg.CommitterStartBlock).
+				Msg("CommitterStartBlock override enabled; starting earlier than ClickHouse cursor")
+		}
+	}
+
 	blockRanges, err := libs.GetBlockRangesFromS3(maxBlockNumber)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get block ranges from S3")

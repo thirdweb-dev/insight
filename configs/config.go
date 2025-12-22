@@ -62,6 +62,10 @@ type Config struct {
 	CommitterKafkaBatchSize          int       `env:"COMMITTER_KAFKA_BATCH_SIZE" envDefault:"500"`
 	CommitterIsLive                  bool      `env:"COMMITTER_IS_LIVE" envDefault:"false"`
 	CommitterLagByBlocks             uint64    `env:"COMMITTER_LAG_BY_BLOCKS" envDefault:"0"`
+	// CommitterStartBlock, when set (>0), forces the committer to start publishing
+	// from this block number regardless of what ClickHouse says is already committed.
+	// This can cause duplicate publishing if ClickHouse already contains higher blocks.
+	CommitterStartBlock              uint64    `env:"COMMITTER_START_BLOCK" envDefault:"0"`
 	StagingS3Bucket                  string    `env:"STAGING_S3_BUCKET" envDefault:"thirdweb-insight-production"`
 	StagingS3Region                  string    `env:"STAGING_S3_REGION" envDefault:"us-west-2"`
 	StagingS3AccessKeyID             string    `env:"STAGING_S3_ACCESS_KEY_ID"`
