@@ -62,9 +62,9 @@ type Config struct {
 	CommitterKafkaBatchSize         int       `env:"COMMITTER_KAFKA_BATCH_SIZE" envDefault:"500"`
 	CommitterIsLive                 bool      `env:"COMMITTER_IS_LIVE" envDefault:"false"`
 	CommitterLagByBlocks            uint64    `env:"COMMITTER_LAG_BY_BLOCKS" envDefault:"0"`
-	// PollerLag subtracts this many blocks from the RPC head when the live committer
-	// decides how high to index, so the highest published block stays roughly this far
-	// behind the true chain tip (0 = follow effective head subject to CommitterLagByBlocks).
+	// PollerLag subtracts this many blocks from the RPC head only when COMMITTER_IS_LIVE
+	// is true, so the highest published block stays roughly this far behind the true tip.
+	// Ignored for non-live catch-up (effective head stays rpcLatest; CommitterLagByBlocks unchanged).
 	PollerLag uint64 `env:"POLLER_LAG" envDefault:"0"`
 	// CommitterStartBlock, when set (>0), forces the committer to start publishing
 	// from this block number regardless of what ClickHouse says is already committed.

@@ -28,10 +28,12 @@ func pollLatest() error {
 		}
 		rpcLatest := latestBlock.Uint64()
 		effectiveLatest := rpcLatest
-		if config.Cfg.PollerLag < rpcLatest {
-			effectiveLatest = rpcLatest - config.Cfg.PollerLag
-		} else {
-			effectiveLatest = 0
+		if config.Cfg.CommitterIsLive {
+			if config.Cfg.PollerLag < rpcLatest {
+				effectiveLatest = rpcLatest - config.Cfg.PollerLag
+			} else {
+				effectiveLatest = 0
+			}
 		}
 
 		// Update latest block number metric (RPC head, not poller-lag-adjusted)
