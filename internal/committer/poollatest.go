@@ -26,16 +26,26 @@ func pollLatest() error {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
-		// Update latest block number metric
-		metrics.CommitterLatestBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(latestBlock.Uint64()))
+		rpcLatest := latestBlock.Uint64()
+		effectiveLatest := rpcLatest
+		if config.Cfg.CommitterIsLive {
+			if config.Cfg.PollerLag < rpcLatest {
+				effectiveLatest = rpcLatest - config.Cfg.PollerLag
+			} else {
+				effectiveLatest = 0
+			}
+		}
 
-		if nextBlockNumber+config.Cfg.CommitterLagByBlocks >= latestBlock.Uint64() {
+		// Update latest block number metric (RPC head, not poller-lag-adjusted)
+		metrics.CommitterLatestBlockNumber.WithLabelValues(indexerName, chainIdStr).Set(float64(rpcLatest))
+
+		if nextBlockNumber+config.Cfg.CommitterLagByBlocks >= effectiveLatest {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
 
 		// will panic if any block is invalid
-		blockDataArray := libblockdata.GetValidBlockDataInBatch(latestBlock.Uint64(), nextBlockNumber)
+		blockDataArray := libblockdata.GetValidBlockDataInBatch(effectiveLatest, nextBlockNumber)
 
 		// Validate that all blocks are sequential and nothing is missing
 		expectedBlockNumber := nextBlockNumber
@@ -80,9 +90,10 @@ func pollLatest() error {
 			metrics.CommitterIsLive.WithLabelValues(indexerName, chainIdStr).Set(1)
 		}
 
-		if !config.Cfg.CommitterIsLive && latestBlock.Int64()-int64(nextBlockNumber) < 20 && !hasRightsized {
+		if !config.Cfg.CommitterIsLive && int64(effectiveLatest)-int64(nextBlockNumber) < 20 && !hasRightsized {
 			log.Debug().
-				Uint64("latest_block", latestBlock.Uint64()).
+				Uint64("rpc_latest_block", rpcLatest).
+				Uint64("effective_latest_block", effectiveLatest).
 				Uint64("next_commit_block", nextBlockNumber).
 				Msg("Latest block is close to next commit block. Resizing s3 committer")
 			libs.RightsizeS3Committer()
