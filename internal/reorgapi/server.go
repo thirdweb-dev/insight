@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -15,15 +16,20 @@ import (
 
 // PublishReorgRequest is the JSON body for POST /v1/reorg/publish.
 type PublishReorgRequest struct {
-	ChainID       uint64   `json:"chain_id"`
-	BlockNumbers  []uint64 `json:"block_numbers"`
+	ChainID      uint64   `json:"chain_id"`
+	BlockNumbers []uint64 `json:"block_numbers"`
 }
 
 type PublishReorgResponse struct {
-	OK            bool   `json:"ok"`
-	BlocksPublished int  `json:"blocks_published"`
-	Message       string `json:"message,omitempty"`
+	OK              bool   `json:"ok"`
+	BlocksPublished int    `json:"blocks_published"`
+	Message         string `json:"message,omitempty"`
 }
+
+var (
+	manualReorgMu         sync.Mutex
+	lastPublishedMaxBlock uint64 // blocks <= this were already published successfully (in-process resume cursor)
+)
 
 // RunHTTPServer starts a blocking HTTP server that publishes manual reorg batches to Kafka.
 func RunHTTPServer() error {
@@ -83,20 +89,48 @@ func handlePublishReorg(c *gin.Context) {
 		return
 	}
 
+	if !manualReorgMu.TryLock() {
+		c.JSON(http.StatusConflict, gin.H{"error": "a manual reorg publish is already running"})
+		return
+	}
+	defer manualReorgMu.Unlock()
+
 	sorted := slices.Clone(req.BlockNumbers)
 	slices.Sort(sorted)
 	sorted = slices.Compact(sorted)
+
+	work := make([]uint64, 0, len(sorted))
+	for _, bn := range sorted {
+		if bn > lastPublishedMaxBlock {
+			work = append(work, bn)
+		}
+	}
+	if len(work) == 0 {
+		c.JSON(http.StatusOK, PublishReorgResponse{
+			OK:              true,
+			BlocksPublished: 0,
+			Message:         fmt.Sprintf("nothing to publish: all requested blocks are at or below last published max (%d)", lastPublishedMaxBlock),
+		})
+		return
+	}
+	if len(work) < len(sorted) {
+		log.Info().
+			Uint64("last_published_max_block", lastPublishedMaxBlock).
+			Int("skipped", len(sorted)-len(work)).
+			Int("to_publish", len(work)).
+			Msg("manual reorg: skipping blocks already processed")
+	}
 
 	batchSize := config.Cfg.ReorgAPIClickhouseBatchSize
 	if batchSize == 0 {
 		batchSize = 10
 	}
-	totalBatches := (len(sorted) + int(batchSize) - 1) / int(batchSize)
+	totalBatches := (len(work) + int(batchSize) - 1) / int(batchSize)
 	var anyPartialOld bool
 	batchIdx := 0
-	for i := 0; i < len(sorted); i += int(batchSize) {
-		end := min(i+int(batchSize), len(sorted))
-		chunk := sorted[i:end]
+	for i := 0; i < len(work); i += int(batchSize) {
+		end := min(i+int(batchSize), len(work))
+		chunk := work[i:end]
 		batchIdx++
 		rangeStart := chunk[0]
 		rangeEnd := chunk[len(chunk)-1]
@@ -136,12 +170,14 @@ func handlePublishReorg(c *gin.Context) {
 			}
 		}
 
-		// PublishBlockDataReorg(new, old): tombstones for rows we had in CH, then inserts for full batch.
-		// Empty chunkOld → insert-only for this batch (no deletes).
 		if err := libs.KafkaPublisherV2.PublishBlockDataReorg(chunkNew, chunkOld); err != nil {
 			log.Error().Err(err).Msg("manual reorg: kafka")
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
+		}
+
+		if rangeEnd > lastPublishedMaxBlock {
+			lastPublishedMaxBlock = rangeEnd
 		}
 	}
 
@@ -151,7 +187,7 @@ func handlePublishReorg(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, PublishReorgResponse{
 		OK:              true,
-		BlocksPublished: len(sorted),
+		BlocksPublished: len(work),
 		Message:         msg,
 	})
 }
