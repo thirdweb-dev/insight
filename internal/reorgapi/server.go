@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
+	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 )
@@ -87,13 +88,28 @@ func handlePublishReorg(c *gin.Context) {
 	slices.Sort(sorted)
 	sorted = slices.Compact(sorted)
 
-	// Old snapshot for tombstones: may be shorter than sorted when FINAL has no row for some
-	// heights (empty/partial tables). PublishBlockDataReorg still publishes RPC data as reorg inserts for every block.
-	oldData, err := libs.GetBlockDataFromClickHouseForBlockNumbers(req.ChainID, sorted)
-	if err != nil {
-		log.Error().Err(err).Msg("manual reorg: clickhouse")
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	batchSize := config.Cfg.ReorgAPIClickhouseBatchSize
+	if batchSize == 0 {
+		batchSize = 10
+	}
+	var oldData []*common.BlockData
+	for i := 0; i < len(sorted); i += int(batchSize) {
+		end := min(i+int(batchSize), len(sorted))
+		chunk := sorted[i:end]
+		chunkOld, err := libs.GetBlockDataFromClickHouseForBlockNumbers(req.ChainID, chunk)
+		if err != nil {
+			log.Error().Err(err).Msg("manual reorg: clickhouse")
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		oldData = append(oldData, chunkOld...)
+	}
+	if len(oldData) < len(sorted) {
+		log.Info().
+			Uint64("chain_id", req.ChainID).
+			Int("requested_blocks", len(sorted)).
+			Int("found_in_clickhouse", len(oldData)).
+			Msg("manual reorg: some blocks had no FINAL row in ClickHouse; delete tombstones only for loaded heights")
 	}
 
 	newData, err := libblockdata.FetchBlockDataFromRPC(sorted)

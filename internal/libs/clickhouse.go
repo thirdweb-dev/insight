@@ -234,13 +234,8 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 
 	for i := range blockData {
 		b := blocksRaw[i]
-		expectedBlockNumber := startBlockNumber + uint64(i)
 		if b.Number == nil {
-			// No row returned for this height in the requested range (indexer gap or not committed).
-			log.Debug().
-				Uint64("chainId", chainId).
-				Uint64("blockNumber", expectedBlockNumber).
-				Msg("skipping slot: no block row returned for this block number")
+			// No row for this index in the dense [start,end] range (gap vs FINAL).
 			continue
 		}
 		if b.ChainId == nil || b.ChainId.Uint64() == 0 {
@@ -260,7 +255,76 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 	return blockData, nil
 }
 
-// GetBlockDataFromClickHouseForBlockNumbers loads stored block data for specific block numbers (non-contiguous ranges are merged into efficient queries).
+func joinUint64sForIN(nums []uint64) string {
+	var b strings.Builder
+	b.Grow(len(nums) * 12)
+	for i, n := range nums {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(strconv.FormatUint(n, 10))
+	}
+	return b.String()
+}
+
+func queryBlocksByBlockNumbers(chainId uint64, nums []uint64) ([]common.Block, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.blocks FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number",
+		strings.Join(defaultBlockFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Block](q)
+}
+
+func queryTransactionsByBlockNumbers(chainId uint64, nums []uint64) ([]common.Transaction, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.transactions FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
+		strings.Join(defaultTransactionFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Transaction](q)
+}
+
+func queryLogsByBlockNumbers(chainId uint64, nums []uint64) ([]common.Log, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.logs FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, log_index",
+		strings.Join(defaultLogFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Log](q)
+}
+
+func queryTracesByBlockNumbers(chainId uint64, nums []uint64) ([]common.Trace, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.traces FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
+		strings.Join(defaultTraceFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Trace](q)
+}
+
+// GetBlockDataFromClickHouseForBlockNumbers loads stored block data for specific block numbers using
+// block_number IN (...). Callers that send very large lists should chunk requests (e.g. reorg-api batches by REORG_API_CLICKHOUSE_BATCH_SIZE).
 func GetBlockDataFromClickHouseForBlockNumbers(chainId uint64, blockNumbers []uint64) ([]*common.BlockData, error) {
 	if len(blockNumbers) == 0 {
 		return nil, nil
@@ -269,61 +333,73 @@ func GetBlockDataFromClickHouseForBlockNumbers(chainId uint64, blockNumbers []ui
 	slices.Sort(nums)
 	nums = slices.Compact(nums)
 
-	ranges := contiguousUint64Ranges(nums)
-	byNumber := make(map[uint64]*common.BlockData, len(nums))
-	for _, r := range ranges {
-		start, end := r[0], r[1]
-		chunk, err := GetBlockDataFromClickHouseV2(chainId, start, end)
-		if err != nil {
-			return nil, fmt.Errorf("clickhouse range %d-%d: %w", start, end, err)
+	var blocks []common.Block
+	var txs []common.Transaction
+	var logs []common.Log
+	var traces []common.Trace
+	g := new(errgroup.Group)
+	g.Go(func() (err error) {
+		blocks, err = queryBlocksByBlockNumbers(chainId, nums)
+		return err
+	})
+	g.Go(func() (err error) {
+		txs, err = queryTransactionsByBlockNumbers(chainId, nums)
+		return err
+	})
+	g.Go(func() (err error) {
+		logs, err = queryLogsByBlockNumbers(chainId, nums)
+		return err
+	})
+	g.Go(func() (err error) {
+		traces, err = queryTracesByBlockNumbers(chainId, nums)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	blocksByNum := make(map[uint64]common.Block, len(blocks))
+	for _, b := range blocks {
+		if b.Number != nil {
+			blocksByNum[b.Number.Uint64()] = b
 		}
-		for _, bd := range chunk {
-			if bd == nil || bd.Block.ChainId == nil || bd.Block.ChainId.Uint64() == 0 || bd.Block.Number == nil {
-				continue
-			}
-			bn := bd.Block.Number.Uint64()
-			byNumber[bn] = bd
+	}
+	txByNum := make(map[uint64][]common.Transaction)
+	for _, t := range txs {
+		if t.BlockNumber != nil {
+			bn := t.BlockNumber.Uint64()
+			txByNum[bn] = append(txByNum[bn], t)
+		}
+	}
+	logsByNum := make(map[uint64][]common.Log)
+	for _, l := range logs {
+		if l.BlockNumber != nil {
+			bn := l.BlockNumber.Uint64()
+			logsByNum[bn] = append(logsByNum[bn], l)
+		}
+	}
+	tracesByNum := make(map[uint64][]common.Trace)
+	for _, tr := range traces {
+		if tr.BlockNumber != nil {
+			bn := tr.BlockNumber.Uint64()
+			tracesByNum[bn] = append(tracesByNum[bn], tr)
 		}
 	}
 
 	out := make([]*common.BlockData, 0, len(nums))
-	var missing []uint64
 	for _, bn := range nums {
-		bd, ok := byNumber[bn]
-		if !ok || bd == nil {
-			missing = append(missing, bn)
+		b, ok := blocksByNum[bn]
+		if !ok || b.ChainId == nil || b.Number == nil || b.ChainId.Uint64() == 0 {
 			continue
 		}
-		out = append(out, bd)
-	}
-	if len(missing) > 0 {
-		log.Info().
-			Uint64("chain_id", chainId).
-			Interface("missing_block_numbers", missing).
-			Int("found_blocks", len(out)).
-			Msg("manual reorg: no ClickHouse rows (FINAL) for some blocks; publishing RPC data as reorg inserts only for those (no delete tombstones)")
+		out = append(out, &common.BlockData{
+			Block:        b,
+			Transactions: txByNum[bn],
+			Logs:         logsByNum[bn],
+			Traces:       tracesByNum[bn],
+		})
 	}
 	return out, nil
-}
-
-func contiguousUint64Ranges(sorted []uint64) [][2]uint64 {
-	if len(sorted) == 0 {
-		return nil
-	}
-	var out [][2]uint64
-	start := sorted[0]
-	end := sorted[0]
-	for i := 1; i < len(sorted); i++ {
-		if sorted[i] == end+1 {
-			end = sorted[i]
-		} else {
-			out = append(out, [2]uint64{start, end})
-			start = sorted[i]
-			end = sorted[i]
-		}
-	}
-	out = append(out, [2]uint64{start, end})
-	return out
 }
 
 // GetTransactionMismatchRangeFromClickHouseV2 checks, for blocks in the given range,

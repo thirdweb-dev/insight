@@ -94,6 +94,8 @@ type Config struct {
 	ReorgAPIListenAddr string `env:"REORG_API_LISTEN_ADDR" envDefault:":8080"`
 	// ReorgAPIKey, when non-empty, requires requests to send Authorization: Bearer <ReorgAPIKey>.
 	ReorgAPIKey string `env:"REORG_API_KEY"`
+	// ReorgAPIClickhouseBatchSize is how many block numbers to load from ClickHouse per reorg-api sub-request (manual reorg publish).
+	ReorgAPIClickhouseBatchSize uint64 `env:"REORG_API_CLICKHOUSE_BATCH_SIZE" envDefault:"10"`
 }
 
 var Cfg Config
