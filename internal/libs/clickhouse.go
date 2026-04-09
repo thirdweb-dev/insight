@@ -236,12 +236,11 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 		b := blocksRaw[i]
 		expectedBlockNumber := startBlockNumber + uint64(i)
 		if b.Number == nil {
-			// No row in ClickHouse for this index: the range is denser than stored blocks
-			// (e.g. catch-up gap, not yet committed, or sparse query).
+			// No row returned for this height in the requested range (indexer gap or not committed).
 			log.Debug().
 				Uint64("chainId", chainId).
 				Uint64("blockNumber", expectedBlockNumber).
-				Msg("skipping slot: no block row in ClickHouse for this block number")
+				Msg("skipping slot: no block row returned for this block number")
 			continue
 		}
 		if b.ChainId == nil || b.ChainId.Uint64() == 0 {
@@ -298,7 +297,11 @@ func GetBlockDataFromClickHouseForBlockNumbers(chainId uint64, blockNumbers []ui
 		out = append(out, bd)
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("missing block data in ClickHouse for blocks: %v", missing)
+		log.Info().
+			Uint64("chain_id", chainId).
+			Interface("missing_block_numbers", missing).
+			Int("found_blocks", len(out)).
+			Msg("manual reorg: no ClickHouse rows (FINAL) for some blocks; publishing RPC data as reorg inserts only for those (no delete tombstones)")
 	}
 	return out, nil
 }

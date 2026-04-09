@@ -87,6 +87,8 @@ func handlePublishReorg(c *gin.Context) {
 	slices.Sort(sorted)
 	sorted = slices.Compact(sorted)
 
+	// Old snapshot for tombstones: may be shorter than sorted when FINAL has no row for some
+	// heights (empty/partial tables). PublishBlockDataReorg still publishes RPC data as reorg inserts for every block.
 	oldData, err := libs.GetBlockDataFromClickHouseForBlockNumbers(req.ChainID, sorted)
 	if err != nil {
 		log.Error().Err(err).Msg("manual reorg: clickhouse")
@@ -118,9 +120,13 @@ func handlePublishReorg(c *gin.Context) {
 		return
 	}
 
+	msg := "published old (deleted) then new blocks with reorg headers"
+	if len(oldData) < len(sorted) {
+		msg = "published reorg inserts for all blocks; delete tombstones only for blocks found in ClickHouse (some requested heights had no FINAL row)"
+	}
 	c.JSON(http.StatusOK, PublishReorgResponse{
 		OK:              true,
 		BlocksPublished: len(sorted),
-		Message:         "published old (deleted) then new blocks with reorg headers",
+		Message:         msg,
 	})
 }
