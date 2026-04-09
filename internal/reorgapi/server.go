@@ -93,9 +93,22 @@ func handlePublishReorg(c *gin.Context) {
 		batchSize = 10
 	}
 	var oldData []*common.BlockData
+	totalBatches := (len(sorted) + int(batchSize) - 1) / int(batchSize)
+	batchIdx := 0
 	for i := 0; i < len(sorted); i += int(batchSize) {
 		end := min(i+int(batchSize), len(sorted))
 		chunk := sorted[i:end]
+		batchIdx++
+		rangeStart := chunk[0]
+		rangeEnd := chunk[len(chunk)-1]
+		log.Info().
+			Uint64("chain_id", req.ChainID).
+			Int("batch", batchIdx).
+			Int("batch_total", totalBatches).
+			Uint64("block_range_start", rangeStart).
+			Uint64("block_range_end", rangeEnd).
+			Int("batch_block_count", len(chunk)).
+			Msg("manual reorg: loading ClickHouse snapshot for block range")
 		chunkOld, err := libs.GetBlockDataFromClickHouseForBlockNumbers(req.ChainID, chunk)
 		if err != nil {
 			log.Error().Err(err).Msg("manual reorg: clickhouse")
