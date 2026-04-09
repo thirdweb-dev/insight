@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	config "github.com/thirdweb-dev/indexer/configs"
-	"github.com/thirdweb-dev/indexer/internal/common"
 	"github.com/thirdweb-dev/indexer/internal/libs"
 	"github.com/thirdweb-dev/indexer/internal/libs/libblockdata"
 )
@@ -92,8 +91,8 @@ func handlePublishReorg(c *gin.Context) {
 	if batchSize == 0 {
 		batchSize = 10
 	}
-	var oldData []*common.BlockData
 	totalBatches := (len(sorted) + int(batchSize) - 1) / int(batchSize)
+	var anyPartialOld bool
 	batchIdx := 0
 	for i := 0; i < len(sorted); i += int(batchSize) {
 		end := min(i+int(batchSize), len(sorted))
@@ -108,50 +107,47 @@ func handlePublishReorg(c *gin.Context) {
 			Uint64("block_range_start", rangeStart).
 			Uint64("block_range_end", rangeEnd).
 			Int("batch_block_count", len(chunk)).
-			Msg("manual reorg: loading ClickHouse snapshot for block range")
+			Msg("manual reorg: processing batch (ClickHouse → RPC → Kafka)")
+
 		chunkOld, err := libs.GetBlockDataFromClickHouseForBlockNumbers(req.ChainID, chunk)
 		if err != nil {
 			log.Error().Err(err).Msg("manual reorg: clickhouse")
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		oldData = append(oldData, chunkOld...)
-	}
-	if len(oldData) < len(sorted) {
-		log.Info().
-			Uint64("chain_id", req.ChainID).
-			Int("requested_blocks", len(sorted)).
-			Int("found_in_clickhouse", len(oldData)).
-			Msg("manual reorg: some blocks had no FINAL row in ClickHouse; delete tombstones only for loaded heights")
-	}
+		if len(chunkOld) < len(chunk) {
+			anyPartialOld = true
+		}
 
-	newData, err := libblockdata.FetchBlockDataFromRPC(sorted)
-	if err != nil {
-		log.Error().Err(err).Msg("manual reorg: rpc")
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
+		chunkNew, err := libblockdata.FetchBlockDataFromRPC(chunk)
+		if err != nil {
+			log.Error().Err(err).Msg("manual reorg: rpc")
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		if len(chunkNew) != len(chunk) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal: rpc result length mismatch"})
+			return
+		}
+		for j, bn := range chunk {
+			if chunkNew[j] == nil || chunkNew[j].Block.Number == nil || chunkNew[j].Block.Number.Uint64() != bn {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("rpc block order mismatch at index %d", j)})
+				return
+			}
+		}
 
-	if len(newData) != len(sorted) {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal: rpc result length mismatch"})
-		return
-	}
-	for i, bn := range sorted {
-		if newData[i] == nil || newData[i].Block.Number == nil || newData[i].Block.Number.Uint64() != bn {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("rpc block order mismatch at index %d", i)})
+		// PublishBlockDataReorg(new, old): tombstones for rows we had in CH, then inserts for full batch.
+		// Empty chunkOld → insert-only for this batch (no deletes).
+		if err := libs.KafkaPublisherV2.PublishBlockDataReorg(chunkNew, chunkOld); err != nil {
+			log.Error().Err(err).Msg("manual reorg: kafka")
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
 	}
 
-	if err := libs.KafkaPublisherV2.PublishBlockDataReorg(newData, oldData); err != nil {
-		log.Error().Err(err).Msg("manual reorg: kafka")
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-
-	msg := "published old (deleted) then new blocks with reorg headers"
-	if len(oldData) < len(sorted) {
-		msg = "published reorg inserts for all blocks; delete tombstones only for blocks found in ClickHouse (some requested heights had no FINAL row)"
+	msg := "published reorg batches (per batch: delete old from CH if present, then insert new from RPC)"
+	if anyPartialOld {
+		msg = "published reorg batches; at least one batch had fewer ClickHouse rows than requested (FINAL); Kafka inserts still sent for every block in those batches"
 	}
 	c.JSON(http.StatusOK, PublishReorgResponse{
 		OK:              true,
