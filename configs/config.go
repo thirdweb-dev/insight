@@ -16,10 +16,11 @@ type LogConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers   string `mapstructure:"brokers"`
-	Username  string `mapstructure:"username"`
-	Password  string `mapstructure:"password"`
-	EnableTLS bool   `mapstructure:"enableTLS"`
+	Brokers      string `mapstructure:"brokers"`
+	Username     string `mapstructure:"username"`
+	Password     string `mapstructure:"password"`
+	EnableTLS    bool   `mapstructure:"enableTLS"`
+	ProducerRole string
 }
 
 type RPCBatchRequestConfig struct {

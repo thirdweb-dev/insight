@@ -61,13 +61,17 @@ func (b PublishableMessageRevert) GetType() MessageType {
 func NewKafkaPublisher(cfg *config.KafkaConfig) (*KafkaPublisher, error) {
 	brokers := strings.Split(cfg.Brokers, ",")
 	chainID := config.Cfg.RPC.ChainID
+	role := strings.TrimSpace(cfg.ProducerRole)
+	if role == "" {
+		role = "default"
+	}
 
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.AllowAutoTopicCreation(),
 		kgo.ProducerBatchCompression(kgo.ZstdCompression()),
-		kgo.ClientID(fmt.Sprintf("insight-indexer-kafka-storage-%s", chainID)),
-		kgo.TransactionalID(fmt.Sprintf("insight-producer-%s", chainID)),
+		kgo.ClientID(fmt.Sprintf("insight-indexer-kafka-storage-%s-%s", chainID, role)),
+		kgo.TransactionalID(fmt.Sprintf("insight-producer-%s-%s", chainID, role)),
 		kgo.MaxBufferedBytes(2 * 1024 * 1024 * 1024), // 2GB
 		kgo.MaxBufferedRecords(1_000_000),
 		kgo.ProducerBatchMaxBytes(100 * 1024 * 1024), // 100MB
