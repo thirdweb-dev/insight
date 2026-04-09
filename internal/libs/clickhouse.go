@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -248,6 +249,68 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 		}
 	}
 	return blockData, nil
+}
+
+// GetBlockDataFromClickHouseForBlockNumbers loads stored block data for specific block numbers (non-contiguous ranges are merged into efficient queries).
+func GetBlockDataFromClickHouseForBlockNumbers(chainId uint64, blockNumbers []uint64) ([]*common.BlockData, error) {
+	if len(blockNumbers) == 0 {
+		return nil, nil
+	}
+	nums := slices.Clone(blockNumbers)
+	slices.Sort(nums)
+	nums = slices.Compact(nums)
+
+	ranges := contiguousUint64Ranges(nums)
+	byNumber := make(map[uint64]*common.BlockData, len(nums))
+	for _, r := range ranges {
+		start, end := r[0], r[1]
+		chunk, err := GetBlockDataFromClickHouseV2(chainId, start, end)
+		if err != nil {
+			return nil, fmt.Errorf("clickhouse range %d-%d: %w", start, end, err)
+		}
+		for _, bd := range chunk {
+			if bd == nil || bd.Block.ChainId == nil || bd.Block.ChainId.Uint64() == 0 || bd.Block.Number == nil {
+				continue
+			}
+			bn := bd.Block.Number.Uint64()
+			byNumber[bn] = bd
+		}
+	}
+
+	out := make([]*common.BlockData, 0, len(nums))
+	var missing []uint64
+	for _, bn := range nums {
+		bd, ok := byNumber[bn]
+		if !ok || bd == nil {
+			missing = append(missing, bn)
+			continue
+		}
+		out = append(out, bd)
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing block data in ClickHouse for blocks: %v", missing)
+	}
+	return out, nil
+}
+
+func contiguousUint64Ranges(sorted []uint64) [][2]uint64 {
+	if len(sorted) == 0 {
+		return nil
+	}
+	var out [][2]uint64
+	start := sorted[0]
+	end := sorted[0]
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i] == end+1 {
+			end = sorted[i]
+		} else {
+			out = append(out, [2]uint64{start, end})
+			start = sorted[i]
+			end = sorted[i]
+		}
+	}
+	out = append(out, [2]uint64{start, end})
+	return out
 }
 
 // GetTransactionMismatchRangeFromClickHouseV2 checks, for blocks in the given range,

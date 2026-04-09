@@ -33,6 +33,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "optional config file path (defaults to env-only when unset)")
 	rootCmd.AddCommand(committerCmd)
 	rootCmd.AddCommand(backfillCmd)
+	rootCmd.AddCommand(reorgAPICmd)
 }
 
 func initConfig() {
