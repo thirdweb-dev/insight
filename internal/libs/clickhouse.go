@@ -269,7 +269,7 @@ func queryBlocksByBlockNumbers(chainId uint64, nums []uint64) ([]common.Block, e
 		return nil, nil
 	}
 	q := fmt.Sprintf(
-		"SELECT %s FROM %s.blocks FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number",
+		"SELECT %s FROM %s.blocks WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number",
 		strings.Join(defaultBlockFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
@@ -283,7 +283,7 @@ func queryTransactionsByBlockNumbers(chainId uint64, nums []uint64) ([]common.Tr
 		return nil, nil
 	}
 	q := fmt.Sprintf(
-		"SELECT %s FROM %s.transactions FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
+		"SELECT %s FROM %s.transactions WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
 		strings.Join(defaultTransactionFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
@@ -297,7 +297,7 @@ func queryLogsByBlockNumbers(chainId uint64, nums []uint64) ([]common.Log, error
 		return nil, nil
 	}
 	q := fmt.Sprintf(
-		"SELECT %s FROM %s.logs FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, log_index",
+		"SELECT %s FROM %s.logs WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, log_index",
 		strings.Join(defaultLogFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
@@ -311,7 +311,7 @@ func queryTracesByBlockNumbers(chainId uint64, nums []uint64) ([]common.Trace, e
 		return nil, nil
 	}
 	q := fmt.Sprintf(
-		"SELECT %s FROM %s.traces FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
+		"SELECT %s FROM %s.traces WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
 		strings.Join(defaultTraceFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
