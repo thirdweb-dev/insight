@@ -16,8 +16,9 @@ import (
 
 // PublishReorgRequest is the JSON body for POST /v1/reorg/publish.
 type PublishReorgRequest struct {
-	ChainID      uint64   `json:"chain_id"`
-	BlockNumbers []uint64 `json:"block_numbers"`
+	ChainID              uint64   `json:"chain_id"`
+	BlockNumbers         []uint64 `json:"block_numbers"`
+	SkipIdempotencyCheck bool     `json:"skip_idempotency_check"`
 }
 
 type PublishReorgResponse struct {
@@ -27,8 +28,7 @@ type PublishReorgResponse struct {
 }
 
 var (
-	manualReorgMu         sync.Mutex
-	lastPublishedMaxBlock uint64 // blocks <= this were already published successfully (in-process resume cursor)
+	manualReorgMu sync.Mutex
 )
 
 // RunHTTPServer starts a blocking HTTP server that publishes manual reorg batches to Kafka.
@@ -99,26 +99,48 @@ func handlePublishReorg(c *gin.Context) {
 	slices.Sort(sorted)
 	sorted = slices.Compact(sorted)
 
-	work := make([]uint64, 0, len(sorted))
-	for _, bn := range sorted {
-		if bn > lastPublishedMaxBlock {
-			work = append(work, bn)
-		}
-	}
-	if len(work) == 0 {
-		c.JSON(http.StatusOK, PublishReorgResponse{
-			OK:              true,
-			BlocksPublished: 0,
-			Message:         fmt.Sprintf("nothing to publish: all requested blocks are at or below last published max (%d)", lastPublishedMaxBlock),
-		})
-		return
-	}
-	if len(work) < len(sorted) {
+	var lastPublishedMaxBlock uint64
+	var work []uint64
+	if req.SkipIdempotencyCheck {
+		work = sorted
 		log.Info().
-			Uint64("last_published_max_block", lastPublishedMaxBlock).
-			Int("skipped", len(sorted)-len(work)).
-			Int("to_publish", len(work)).
-			Msg("manual reorg: skipping blocks already processed")
+			Uint64("chain_id", req.ChainID).
+			Int("requested", len(sorted)).
+			Msg("manual reorg: skip_idempotency_check enabled; processing all requested blocks")
+	} else {
+		if libs.RedisClient == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "redis is not initialized"})
+			return
+		}
+		var err error
+		lastPublishedMaxBlock, err = libs.GetReorgAPIMaxProcessedBlock(libs.ChainIdStr)
+		if err != nil {
+			log.Error().Err(err).Msg("manual reorg: redis get max processed block")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read idempotency cursor from redis"})
+			return
+		}
+
+		work = make([]uint64, 0, len(sorted))
+		for _, bn := range sorted {
+			if bn > lastPublishedMaxBlock {
+				work = append(work, bn)
+			}
+		}
+		if len(work) == 0 {
+			c.JSON(http.StatusOK, PublishReorgResponse{
+				OK:              true,
+				BlocksPublished: 0,
+				Message:         fmt.Sprintf("nothing to publish: all requested blocks are at or below last published max (%d)", lastPublishedMaxBlock),
+			})
+			return
+		}
+		if len(work) < len(sorted) {
+			log.Info().
+				Uint64("last_published_max_block", lastPublishedMaxBlock).
+				Int("skipped", len(sorted)-len(work)).
+				Int("to_publish", len(work)).
+				Msg("manual reorg: skipping blocks already processed")
+		}
 	}
 
 	batchSize := config.Cfg.ReorgAPIClickhouseBatchSize
@@ -176,8 +198,13 @@ func handlePublishReorg(c *gin.Context) {
 			return
 		}
 
-		if rangeEnd > lastPublishedMaxBlock {
+		if !req.SkipIdempotencyCheck && rangeEnd > lastPublishedMaxBlock {
 			lastPublishedMaxBlock = rangeEnd
+			if err := libs.SetReorgAPIMaxProcessedBlock(libs.ChainIdStr, lastPublishedMaxBlock); err != nil {
+				log.Error().Err(err).Msg("manual reorg: redis set max processed block")
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update idempotency cursor in redis"})
+				return
+			}
 		}
 	}
 

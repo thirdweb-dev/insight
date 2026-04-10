@@ -26,6 +26,7 @@ func runReorgAPI(cmd *cobra.Command, args []string) {
 	libs.InitRPCClient()
 	libs.InitNewClickHouseV2()
 	libs.InitKafkaV2ForRole("reorg-api")
+	libs.InitRedis()
 
 	log.Info().Str("chain_id", libs.ChainIdStr).Msg("starting reorg-api")
 
