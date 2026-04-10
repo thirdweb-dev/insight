@@ -5,11 +5,13 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	config "github.com/thirdweb-dev/indexer/configs"
@@ -248,6 +250,153 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 		}
 	}
 	return blockData, nil
+}
+
+func joinUint64sForIN(nums []uint64) string {
+	var b strings.Builder
+	b.Grow(len(nums) * 12)
+	for i, n := range nums {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(strconv.FormatUint(n, 10))
+	}
+	return b.String()
+}
+
+func queryBlocksByBlockNumbers(chainId uint64, nums []uint64) ([]common.Block, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.blocks FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number",
+		strings.Join(defaultBlockFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Block](q)
+}
+
+func queryTransactionsByBlockNumbers(chainId uint64, nums []uint64) ([]common.Transaction, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.transactions FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
+		strings.Join(defaultTransactionFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Transaction](q)
+}
+
+func queryLogsByBlockNumbers(chainId uint64, nums []uint64) ([]common.Log, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.logs FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, log_index",
+		strings.Join(defaultLogFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Log](q)
+}
+
+func queryTracesByBlockNumbers(chainId uint64, nums []uint64) ([]common.Trace, error) {
+	if len(nums) == 0 {
+		return nil, nil
+	}
+	q := fmt.Sprintf(
+		"SELECT %s FROM %s.traces FINAL WHERE chain_id = %d AND block_number IN (%s) ORDER BY block_number, transaction_index",
+		strings.Join(defaultTraceFields, ", "),
+		config.Cfg.CommitterClickhouseDatabase,
+		chainId,
+		joinUint64sForIN(nums),
+	)
+	return execQueryV2[common.Trace](q)
+}
+
+// GetBlockDataFromClickHouseForBlockNumbers loads stored block data for specific block numbers using
+// block_number IN (...). Callers that send very large lists should chunk requests (e.g. reorg-api batches by REORG_API_CLICKHOUSE_BATCH_SIZE).
+func GetBlockDataFromClickHouseForBlockNumbers(chainId uint64, blockNumbers []uint64) ([]*common.BlockData, error) {
+	if len(blockNumbers) == 0 {
+		return nil, nil
+	}
+	nums := slices.Clone(blockNumbers)
+	slices.Sort(nums)
+	nums = slices.Compact(nums)
+
+	var blocks []common.Block
+	var txs []common.Transaction
+	var logs []common.Log
+	var traces []common.Trace
+	g := new(errgroup.Group)
+	g.Go(func() (err error) {
+		blocks, err = queryBlocksByBlockNumbers(chainId, nums)
+		return err
+	})
+	g.Go(func() (err error) {
+		txs, err = queryTransactionsByBlockNumbers(chainId, nums)
+		return err
+	})
+	g.Go(func() (err error) {
+		logs, err = queryLogsByBlockNumbers(chainId, nums)
+		return err
+	})
+	g.Go(func() (err error) {
+		traces, err = queryTracesByBlockNumbers(chainId, nums)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	blocksByNum := make(map[uint64]common.Block, len(blocks))
+	for _, b := range blocks {
+		if b.Number != nil {
+			blocksByNum[b.Number.Uint64()] = b
+		}
+	}
+	txByNum := make(map[uint64][]common.Transaction)
+	for _, t := range txs {
+		if t.BlockNumber != nil {
+			bn := t.BlockNumber.Uint64()
+			txByNum[bn] = append(txByNum[bn], t)
+		}
+	}
+	logsByNum := make(map[uint64][]common.Log)
+	for _, l := range logs {
+		if l.BlockNumber != nil {
+			bn := l.BlockNumber.Uint64()
+			logsByNum[bn] = append(logsByNum[bn], l)
+		}
+	}
+	tracesByNum := make(map[uint64][]common.Trace)
+	for _, tr := range traces {
+		if tr.BlockNumber != nil {
+			bn := tr.BlockNumber.Uint64()
+			tracesByNum[bn] = append(tracesByNum[bn], tr)
+		}
+	}
+
+	out := make([]*common.BlockData, 0, len(nums))
+	for _, bn := range nums {
+		b, ok := blocksByNum[bn]
+		if !ok || b.ChainId == nil || b.Number == nil || b.ChainId.Uint64() == 0 {
+			continue
+		}
+		out = append(out, &common.BlockData{
+			Block:        b,
+			Transactions: txByNum[bn],
+			Logs:         logsByNum[bn],
+			Traces:       tracesByNum[bn],
+		})
+	}
+	return out, nil
 }
 
 // GetTransactionMismatchRangeFromClickHouseV2 checks, for blocks in the given range,

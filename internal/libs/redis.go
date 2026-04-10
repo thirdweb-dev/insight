@@ -13,6 +13,7 @@ import (
 var RedisClient *redis.Client
 
 const RedisReorgLastValidBlock = "reorg_last_valid"
+const RedisReorgAPIMaxProcessedBlock = "reorg_api_max_processed_block"
 
 // InitRedis initializes the Redis client
 func InitRedis() {
@@ -49,6 +50,29 @@ func GetReorgLastValidBlock(chainID string) (int64, error) {
 
 func SetReorgLastValidBlock(chainID string, blockNumber int64) error {
 	return RedisClient.HSet(context.Background(), RedisReorgLastValidBlock, chainID, blockNumber).Err()
+}
+
+func GetReorgAPIMaxProcessedBlock(chainID string) (uint64, error) {
+	result, err := RedisClient.HGet(context.Background(), RedisReorgAPIMaxProcessedBlock, chainID).Result()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseUint(result, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+func SetReorgAPIMaxProcessedBlock(chainID string, blockNumber uint64) error {
+	return RedisClient.HSet(context.Background(), RedisReorgAPIMaxProcessedBlock, chainID, strconv.FormatUint(blockNumber, 10)).Err()
+}
+
+func ClearReorgAPIMaxProcessedBlock(chainID string) error {
+	return RedisClient.HDel(context.Background(), RedisReorgAPIMaxProcessedBlock, chainID).Err()
 }
 
 // CloseRedis closes the Redis client

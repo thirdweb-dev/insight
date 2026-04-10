@@ -271,6 +271,152 @@ func getValidBlockDataFromRpcBatch(blockNumbers []uint64) []*common.BlockData {
 	return blockData
 }
 
+// fetchBlockDataFromRpcBatch fetches full block data from RPC with retries; returns an error instead of panicking.
+func fetchBlockDataFromRpcBatch(blockNumbers []uint64) ([]*common.BlockData, error) {
+	var rpcResults []rpc.GetFullBlockResult
+	chainIdStr := libs.ChainIdStr
+	indexerName := config.Cfg.ZeetProjectName
+
+	// Initial fetch
+	rpcResults = libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(blockNumbers))
+
+	metrics.CommitterRPCRowsToFetch.WithLabelValues(indexerName, chainIdStr).Set(float64(len(blockNumbers)))
+
+	// Create array of failed block numbers for retry
+	failedBlockNumbers := make([]uint64, 0)
+	for i, result := range rpcResults {
+		if result.Error != nil {
+			log.Error().Uint64("block_number", blockNumbers[i]).Err(result.Error).Msg("Failed to fetch block data from RPC")
+			failedBlockNumbers = append(failedBlockNumbers, blockNumbers[i])
+		}
+	}
+
+	// Retry only failed blocks up to 3 times
+	for retry := range 3 {
+		if len(failedBlockNumbers) == 0 {
+			break // All blocks succeeded
+		}
+
+		// Track retry metric
+		metrics.CommitterRPCRetries.WithLabelValues(indexerName, chainIdStr).Set(float64(len(failedBlockNumbers)))
+
+		log.Warn().
+			Int("retry", retry+1).
+			Int("failed_count", len(failedBlockNumbers)).
+			Msg("Retrying failed block fetches...")
+
+		// Retry only the failed blocks
+		retryResults := libs.RpcClient.GetFullBlocks(context.Background(), blockNumbersToBigInt(failedBlockNumbers))
+
+		// Update rpcResults with successful ones and create new failed array
+		newFailedBlockNumbers := make([]uint64, 0)
+		retryIndex := 0
+
+		for i, result := range rpcResults {
+			if result.Error != nil {
+				// This was a failed block, check if retry succeeded
+				if retryIndex < len(retryResults) && retryResults[retryIndex].Error == nil {
+					// Retry succeeded - update the result
+					rpcResults[i] = retryResults[retryIndex]
+				} else {
+					// Still failed - add to new failed array
+					newFailedBlockNumbers = append(newFailedBlockNumbers, blockNumbers[i])
+				}
+				retryIndex++
+			}
+		}
+
+		failedBlockNumbers = newFailedBlockNumbers
+
+		// Add delay between retries
+		if len(failedBlockNumbers) > 0 && retry < 2 {
+			time.Sleep(time.Duration(retry+1) * 100 * time.Millisecond)
+		}
+	}
+
+	// Check if any blocks still failed after all retries
+	if len(failedBlockNumbers) > 0 {
+		return nil, fmt.Errorf("failed to fetch %d block(s) from RPC after 3 retries", len(failedBlockNumbers))
+	}
+
+	blockData := make([]*common.BlockData, len(rpcResults))
+	for i, result := range rpcResults {
+		blockData[i] = &result.Data
+		rpcResults[i] = rpc.GetFullBlockResult{} // free memory
+	}
+
+	for i, block := range blockData {
+		if isValid, _ := Validate(block); !isValid {
+			bn := uint64(0)
+			if i < len(blockNumbers) {
+				bn = blockNumbers[i]
+			}
+			return nil, fmt.Errorf("validation failed for block %d (batch index %d)", bn, i)
+		}
+	}
+
+	return blockData, nil
+}
+
+// FetchBlockDataFromRPC fetches and validates block data from RPC, returning an error on failure (for HTTP/tools).
+func FetchBlockDataFromRPC(blockNumbers []uint64) ([]*common.BlockData, error) {
+	rpcBatchSize := config.Cfg.RPCBatchSize
+	totalBlocks := len(blockNumbers)
+	if totalBlocks == 0 {
+		return nil, nil
+	}
+	blockData := make([]*common.BlockData, totalBlocks)
+	numBatches := (totalBlocks + int(rpcBatchSize) - 1) / int(rpcBatchSize)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+
+	maxConcurrentBatches := 4
+	semaphore := make(chan struct{}, maxConcurrentBatches)
+
+	for batchIndex := range numBatches {
+		wg.Add(1)
+		go func(batchIdx int) {
+			defer wg.Done()
+
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			start := batchIdx * int(rpcBatchSize)
+			end := min(start+int(rpcBatchSize), totalBlocks)
+
+			batchBlockNumbers := blockNumbers[start:end]
+			batchResults, err := fetchBlockDataFromRpcBatch(batchBlockNumbers)
+			if err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("batch starting at block %d: %w", batchBlockNumbers[0], err)
+				}
+				mu.Unlock()
+				return
+			}
+
+			for i, result := range batchResults {
+				blockData[start+i] = result
+			}
+
+			log.Debug().
+				Int("batch", batchIdx).
+				Int("start", start).
+				Int("end", end).
+				Int("batch_size", len(batchBlockNumbers)).
+				Msg("Completed RPC batch fetch (FetchBlockDataFromRPC)")
+		}(batchIndex)
+	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return blockData, nil
+}
+
 func blockNumbersToBigInt(blockNumbers []uint64) []*big.Int {
 	bigInts := make([]*big.Int, len(blockNumbers))
 	for i, blockNumber := range blockNumbers {

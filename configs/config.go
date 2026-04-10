@@ -16,10 +16,11 @@ type LogConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers   string `mapstructure:"brokers"`
-	Username  string `mapstructure:"username"`
-	Password  string `mapstructure:"password"`
-	EnableTLS bool   `mapstructure:"enableTLS"`
+	Brokers      string `mapstructure:"brokers"`
+	Username     string `mapstructure:"username"`
+	Password     string `mapstructure:"password"`
+	EnableTLS    bool   `mapstructure:"enableTLS"`
+	ProducerRole string
 }
 
 type RPCBatchRequestConfig struct {
@@ -90,6 +91,12 @@ type Config struct {
 	RedisDB                          int    `env:"REDIS_DB" envDefault:"0"`
 	ValidationMode                   string `env:"VALIDATION_MODE" envDefault:"minimal"`
 	EnableReorgValidation            bool   `env:"ENABLE_REORG_VALIDATION" envDefault:"true"`
+	// ReorgAPIListenAddr is the bind address for the manual reorg publish HTTP server (reorg-api command).
+	ReorgAPIListenAddr string `env:"REORG_API_LISTEN_ADDR" envDefault:":8080"`
+	// ReorgAPIKey, when non-empty, requires requests to send Authorization: Bearer <ReorgAPIKey>.
+	ReorgAPIKey string `env:"REORG_API_KEY"`
+	// ReorgAPIClickhouseBatchSize is how many block numbers to load from ClickHouse per reorg-api sub-request (manual reorg publish).
+	ReorgAPIClickhouseBatchSize uint64 `env:"REORG_API_CLICKHOUSE_BATCH_SIZE" envDefault:"10"`
 }
 
 var Cfg Config
