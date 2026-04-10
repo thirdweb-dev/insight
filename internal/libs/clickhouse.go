@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -211,38 +212,34 @@ func GetBlockDataFromClickHouseV2(chainId uint64, startBlockNumber uint64, endBl
 	logsRaw := make([][]common.Log, length)
 	tracesRaw := make([][]common.Trace, length)
 
-	g := new(errgroup.Group)
-	g.Go(func() (err error) {
-		blocksRaw, err = getBlocksFromV2(chainId, startBlockNumber, endBlockNumber)
-		return err
-	})
-	g.Go(func() (err error) {
-		transactionsRaw, err = getTransactionsFromV2(chainId, startBlockNumber, endBlockNumber)
-		return err
-	})
-	g.Go(func() (err error) {
-		logsRaw, err = getLogsFromV2(chainId, startBlockNumber, endBlockNumber)
-		return err
-	})
-	g.Go(func() (err error) {
-		tracesRaw, err = getTracesFromV2(chainId, startBlockNumber, endBlockNumber)
-		return err
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		blocksRaw, _ = getBlocksFromV2(chainId, startBlockNumber, endBlockNumber)
+	}()
+
+	go func() {
+		defer wg.Done()
+		transactionsRaw, _ = getTransactionsFromV2(chainId, startBlockNumber, endBlockNumber)
+	}()
+
+	go func() {
+		defer wg.Done()
+		logsRaw, _ = getLogsFromV2(chainId, startBlockNumber, endBlockNumber)
+	}()
+
+	go func() {
+		defer wg.Done()
+		tracesRaw, _ = getTracesFromV2(chainId, startBlockNumber, endBlockNumber)
+	}()
+	wg.Wait()
 
 	for i := range blockData {
-		b := blocksRaw[i]
-		if b.Number == nil {
-			// No row for this index in the dense [start,end] range (gap vs FINAL).
-			continue
-		}
-		if b.ChainId == nil || b.ChainId.Uint64() == 0 {
-			log.Warn().
-				Uint64("chainId", chainId).
-				Uint64("blockNumber", b.Number.Uint64()).
-				Msg("skipping block: chain_id missing or zero on ClickHouse row")
+		if blocksRaw[i].ChainId == nil || blocksRaw[i].ChainId.Uint64() == 0 {
+			log.Info().
+				Any("chainId", blocksRaw[i].ChainId).
+				Msg("skipping block because chainId is nil")
 			continue
 		}
 		blockData[i] = &common.BlockData{
