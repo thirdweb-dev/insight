@@ -415,7 +415,7 @@ func GetTransactionMismatchRangeFromClickHouseV2(chainId uint64, startBlockNumbe
 
 	// Aggregate transaction counts per block from the transactions table.
 	query := fmt.Sprintf(
-		"SELECT block_number, count() AS tx_count FROM %s.transactions FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d GROUP BY block_number ORDER BY block_number",
+		"SELECT block_number, count() AS tx_count FROM %s.transactions WHERE chain_id = %d AND block_number BETWEEN %d AND %d GROUP BY block_number ORDER BY block_number",
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
@@ -492,7 +492,7 @@ func GetLogsMismatchRangeFromClickHouseV2(chainId uint64, startBlockNumber uint6
 
 	// Aggregate log counts and max log_index per block from the logs table.
 	query := fmt.Sprintf(
-		"SELECT block_number, count() AS log_count, max(log_index) AS max_log_index FROM %s.logs FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d GROUP BY block_number ORDER BY block_number",
+		"SELECT block_number, count() AS log_count, max(log_index) AS max_log_index FROM %s.logs WHERE chain_id = %d AND block_number BETWEEN %d AND %d GROUP BY block_number ORDER BY block_number",
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
 		startBlockNumber,
@@ -560,7 +560,7 @@ func getBlocksFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 	length := endBlockNumber - startBlockNumber + 1
 	blocksRaw := make([]common.Block, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.blocks FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
+	query := fmt.Sprintf("SELECT %s FROM %s.blocks WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		strings.Join(defaultBlockFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
@@ -589,7 +589,7 @@ func getTransactionsFromV2(chainId uint64, startBlockNumber uint64, endBlockNumb
 	length := endBlockNumber - startBlockNumber + 1
 	transactionsRaw := make([][]common.Transaction, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.transactions FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, transaction_index",
+	query := fmt.Sprintf("SELECT %s FROM %s.transactions WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, transaction_index",
 		strings.Join(defaultTransactionFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
@@ -618,7 +618,7 @@ func getLogsFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uint6
 	length := endBlockNumber - startBlockNumber + 1
 	logsRaw := make([][]common.Log, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.logs FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, log_index",
+	query := fmt.Sprintf("SELECT %s FROM %s.logs WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number, log_index",
 		strings.Join(defaultLogFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
@@ -647,7 +647,7 @@ func getTracesFromV2(chainId uint64, startBlockNumber uint64, endBlockNumber uin
 	length := endBlockNumber - startBlockNumber + 1
 	tracesRaw := make([][]common.Trace, length)
 
-	query := fmt.Sprintf("SELECT %s FROM %s.traces FINAL WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
+	query := fmt.Sprintf("SELECT %s FROM %s.traces WHERE chain_id = %d AND block_number BETWEEN %d AND %d order by block_number",
 		strings.Join(defaultTraceFields, ", "),
 		config.Cfg.CommitterClickhouseDatabase,
 		chainId,
