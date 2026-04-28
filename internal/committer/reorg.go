@@ -108,7 +108,35 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) (int64, error) {
 	// 1) Block verification: find reorg range from header continuity (existing behavior)
 	reorgStartBlock := int64(-1)
 	reorgEndBlock := int64(-1)
+	missingStartBlock := int64(-1)
+	missingEndBlock := int64(-1)
+	missingBlockCount := 0
+	lastHeaderBlock := startBlock - 1
+
+	for i, blockHeader := range blockHeaders {
+		expectedBlockNumber := startBlock + int64(i)
+		if blockHeader == nil || blockHeader.Number == nil {
+			if missingStartBlock == -1 {
+				missingStartBlock = expectedBlockNumber
+			}
+			missingEndBlock = expectedBlockNumber
+			missingBlockCount++
+			continue
+		}
+		lastHeaderBlock = blockHeader.Number.Int64()
+	}
+	if missingStartBlock > -1 {
+		log.Warn().
+			Int64("missing_start_block", missingStartBlock).
+			Int64("missing_end_block", missingEndBlock).
+			Int("missing_block_count", missingBlockCount).
+			Msg("Reorg: missing block headers in ClickHouse; scheduling repair from RPC")
+	}
+
 	for i := 1; i < len(blockHeaders); i++ {
+		if blockHeaders[i] == nil || blockHeaders[i].Number == nil || blockHeaders[i-1] == nil || blockHeaders[i-1].Number == nil {
+			continue
+		}
 		if blockHeaders[i].Number.Int64() != blockHeaders[i-1].Number.Int64()+1 {
 			// non-sequential block numbers
 			reorgStartBlock = blockHeaders[i-1].Number.Int64()
@@ -131,7 +159,6 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) (int64, error) {
 	}
 
 	// set end to the last block if not set
-	lastHeaderBlock := blockHeaders[len(blockHeaders)-1].Number.Int64()
 	if reorgEndBlock == -1 {
 		// No header-based end detected; default to the last header for last-valid-block tracking.
 		reorgEndBlock = lastHeaderBlock
@@ -160,6 +187,16 @@ func detectAndHandleReorgs(startBlock int64, endBlock int64) (int64, error) {
 	if reorgStartBlock > -1 {
 		finalStart = reorgStartBlock
 		finalEnd = reorgEndBlock
+	}
+
+	// missing ClickHouse block headers range
+	if missingStartBlock > -1 {
+		if finalStart == -1 || missingStartBlock < finalStart {
+			finalStart = missingStartBlock
+		}
+		if finalEnd == -1 || missingEndBlock > finalEnd {
+			finalEnd = missingEndBlock
+		}
 	}
 
 	// transactions range
