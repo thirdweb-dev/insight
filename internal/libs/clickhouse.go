@@ -193,6 +193,10 @@ func GetBlockHeadersForReorgCheck(chainId uint64, startBlockNumber uint64, endBl
 
 	// just to make sure the blocks are in the correct order
 	for _, block := range blocks {
+		if block.Number == nil {
+			log.Warn().Msg("GetBlockHeadersForReorgCheck: skipping block header with nil block number")
+			continue
+		}
 		idx := block.Number.Uint64() - sb
 		if idx >= length {
 			log.Error().Msgf("Block number %s is out of range", block.Number.String())
