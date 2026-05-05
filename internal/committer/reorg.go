@@ -62,7 +62,7 @@ func getReorgRange() (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to get max block number: %w", err)
 	}
 
-	endBlock = min(endBlock-500, startBlock+100) // lag by some blocks for safety
+	endBlock = min(endBlock-int64(config.Cfg.ReorgLagByBlocks), startBlock+100)
 
 	if startBlock >= endBlock {
 		return 0, 0, fmt.Errorf("start block is greater than end block (%d >= %d)", startBlock, endBlock)
