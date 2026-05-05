@@ -91,6 +91,8 @@ type Config struct {
 	RedisDB                          int    `env:"REDIS_DB" envDefault:"0"`
 	ValidationMode                   string `env:"VALIDATION_MODE" envDefault:"minimal"`
 	EnableReorgValidation            bool   `env:"ENABLE_REORG_VALIDATION" envDefault:"true"`
+	// ReorgLagByBlocks keeps reorg validation this many ClickHouse blocks behind the latest committed block.
+	ReorgLagByBlocks uint64 `env:"REORG_LAG_BY_BLOCKS" envDefault:"500"`
 	// ReorgAPIListenAddr is the bind address for the manual reorg publish HTTP server (reorg-api command).
 	ReorgAPIListenAddr string `env:"REORG_API_LISTEN_ADDR" envDefault:":8080"`
 	// ReorgAPIKey, when non-empty, requires requests to send Authorization: Bearer <ReorgAPIKey>.
