@@ -294,6 +294,10 @@ func (rpc *Client) GetFullBlocks(ctx context.Context, blockNumbers []*big.Int) [
 		blocks = rpc.fetchTransactionsForChain296(ctx, blocks)
 	}
 
+	if rpc.chainID != nil && rpc.chainID.Uint64() == 2020 && rpc.supportsBlockReceipts {
+		receipts = rpc.fallbackBlockReceiptsForChain2020(ctx, blocks, receipts)
+	}
+
 	return SerializeFullBlocks(rpc.chainID, blocks, logs, traces, receipts)
 }
 
@@ -460,4 +464,90 @@ func (rpc *Client) fetchTransactionsInBatches(ctx context.Context, txHashes []st
 	}
 
 	return results
+}
+
+func (rpc *Client) fallbackBlockReceiptsForChain2020(ctx context.Context, blocks []RPCFetchBatchResult[*big.Int, common.RawBlock], receipts []RPCFetchBatchResult[*big.Int, common.RawReceipts]) []RPCFetchBatchResult[*big.Int, common.RawReceipts] {
+	blockByNumber := mapBatchResultsByBlockNumber[common.RawBlock](blocks)
+
+	for i := range receipts {
+		if receipts[i].Error == nil || !isChain2020BlockReceiptsError(receipts[i].Error) {
+			continue
+		}
+
+		blockNumber := receipts[i].Key.String()
+		block, ok := blockByNumber[blockNumber]
+		if !ok || block.Error != nil || block.Result == nil {
+			log.Warn().
+				Err(receipts[i].Error).
+				Str("block_number", blockNumber).
+				Msg("Skipping chain 2020 eth_getBlockReceipts fallback because block data is unavailable")
+			continue
+		}
+
+		txHashes := extractTransactionHashes(block.Result)
+		if len(txHashes) == 0 {
+			receipts[i].Result = common.RawReceipts{}
+			receipts[i].Error = nil
+			continue
+		}
+
+		txReceiptResults := RPCFetchSingleBatch[string, common.RawReceipt](rpc, ctx, txHashes, "eth_getTransactionReceipt", GetTransactionParams)
+		rawReceipts := make(common.RawReceipts, 0, len(txReceiptResults))
+		var fallbackErr error
+		for _, txReceipt := range txReceiptResults {
+			if txReceipt.Error != nil {
+				fallbackErr = txReceipt.Error
+				break
+			}
+			rawReceipts = append(rawReceipts, txReceipt.Result)
+		}
+		if fallbackErr != nil {
+			log.Error().
+				Err(fallbackErr).
+				Str("block_number", blockNumber).
+				Int("transaction_count", len(txHashes)).
+				Msg("Chain 2020 eth_getTransactionReceipt fallback failed")
+			continue
+		}
+
+		log.Warn().
+			Str("block_number", blockNumber).
+			Int("receipt_count", len(rawReceipts)).
+			Msg("Recovered chain 2020 block receipts using eth_getTransactionReceipt fallback")
+
+		receipts[i].Result = rawReceipts
+		receipts[i].Error = nil
+	}
+
+	return receipts
+}
+
+func isChain2020BlockReceiptsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "could not find l1 block info tx in the L2 block")
+}
+
+func extractTransactionHashes(block common.RawBlock) []string {
+	rawTransactions, ok := block["transactions"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	txHashes := make([]string, 0, len(rawTransactions))
+	for _, rawTx := range rawTransactions {
+		switch tx := rawTx.(type) {
+		case string:
+			if tx != "" {
+				txHashes = append(txHashes, tx)
+			}
+		case map[string]interface{}:
+			if hash, ok := tx["hash"].(string); ok && hash != "" {
+				txHashes = append(txHashes, hash)
+			}
+		}
+	}
+
+	return txHashes
 }
